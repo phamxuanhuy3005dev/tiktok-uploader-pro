@@ -1,0 +1,10 @@
+node_modules
+out
+dist
+data/*.db*
+data/*.db-shm
+data/*.db-wal
+profiles/*
+!profiles/.gitkeep
+.DS_Store
+*.log
