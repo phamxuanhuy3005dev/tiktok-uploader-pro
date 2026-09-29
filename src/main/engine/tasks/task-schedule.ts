@@ -137,7 +137,6 @@ export async function applySchedule(
       await dateInput.click({ clickCount: 3 });
       await dateInput.fill(dateStr);
       await page.keyboard.press('Enter');
-      await page.keyboard.press('Escape');
       await page.waitForTimeout(400);
 
       // Điền Time
@@ -146,8 +145,10 @@ export async function applySchedule(
       await timeInput.click({ clickCount: 3 });
       await timeInput.fill(timeStr);
       await page.keyboard.press('Enter');
-      await page.keyboard.press('Escape');
       await page.waitForTimeout(500);
+
+      // Bấm ra ngoài vùng form để đóng popover ngày giờ mà không kích hoạt phím Escape
+      await page.locator('body').click({ position: { x: 10, y: 10 } }).catch(() => {});
 
       log(`Đã điền lịch thành công: ${dateStr} ${timeStr}`);
     } else {

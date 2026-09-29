@@ -3,7 +3,7 @@ import path from 'path';
 import { ProfileRecord, profileRepo, logRepo } from '../db/database';
 import { launchProfileContext, closeProfileContext } from './browser-pool';
 import { checkExistingScheduledTime } from './tasks/task-content';
-import { navigateToUpload, attachVideoFile } from './tasks/task-navigate';
+import { navigateToUpload, attachVideoFile, registerAutoDismissHandlers } from './tasks/task-navigate';
 import { attachFavoriteMusic } from './tasks/task-music';
 import { applySchedule } from './tasks/task-schedule';
 import { processCaption, submitAndConfirmPost } from './tasks/task-finalize';
@@ -68,6 +68,7 @@ export async function runUploadPipeline(
   // 2. Khởi chạy trình duyệt
   currentStep = 'LAUNCH_BROWSER';
   const { context, page } = await launchProfileContext(profile, false);
+  registerAutoDismissHandlers(page, (m) => log(m));
 
   try {
     // BƯỚC 0: Kiểm tra bài đăng hiện tại & phát hiện mốc thời gian đã lên lịch trước đó

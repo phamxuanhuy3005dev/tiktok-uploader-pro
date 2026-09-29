@@ -2,6 +2,58 @@ import { Page } from 'playwright';
 import { handleCaptchaWait, isCaptchaActive } from './task-captcha';
 
 /**
+ * Đăng ký bộ xử lý tự động ngầm của Playwright (page.addLocatorHandler)
+ * Chạy nền liên tục để tự động bấm nút đóng popup/modal ngay khi chúng xuất hiện
+ * mà không cần phải chờ hoặc gọi hàm thủ công.
+ */
+export function registerAutoDismissHandlers(page: Page, log?: (msg: string) => void): void {
+  try {
+    if (typeof page.addLocatorHandler !== 'function') return;
+
+    // 1. Tự động đóng popup "Are you sure you want to exit?" -> Click Cancel
+    page.addLocatorHandler(
+      page
+        .locator(
+          'div:has-text("Are you sure you want to exit") button:has-text("Cancel"), [class*="Modal"]:has-text("exit") button:has-text("Cancel"), div[role="dialog"]:has-text("exit") button:has-text("Cancel")'
+        )
+        .first(),
+      async (cancelBtn) => {
+        if (log) log('[Playwright AutoDismiss] Tự động bấm Cancel để ở lại màn hình upload.');
+        await cancelBtn.click({ force: true }).catch(() => {});
+      }
+    );
+
+    // 2. Tự động đóng "Turn on automatic content checks" -> Click Cancel
+    page.addLocatorHandler(
+      page
+        .locator(
+          'div[role="dialog"]:has-text("content checks") button:has-text("Cancel"), div:has-text("automatic content checks") button:has-text("Cancel")'
+        )
+        .first(),
+      async (cancelBtn) => {
+        if (log) log('[Playwright AutoDismiss] Tự động bấm Cancel popup content checks.');
+        await cancelBtn.click({ force: true }).catch(() => {});
+      }
+    );
+
+    // 3. Tự động đóng Joyride tutorial và Phone mode -> Click Got it
+    page.addLocatorHandler(
+      page
+        .locator(
+          'div:has-text("Phone mode") button:has-text("Got it"), .react-joyride__tooltip button:has-text("Got it"), [class*="tutorial-tooltip"] button:has-text("Got it")'
+        )
+        .first(),
+      async (gotItBtn) => {
+        if (log) log('[Playwright AutoDismiss] Tự động đóng tooltip hướng dẫn.');
+        await gotItBtn.click({ force: true }).catch(() => {});
+      }
+    );
+  } catch (err: any) {
+    if (log) log(`Không thể đăng ký addLocatorHandler: ${err.message}`);
+  }
+}
+
+/**
  * Xử lý tự động đóng tất cả các loại popup/modal/hướng dẫn của TikTok Studio
  * Tuyệt đối không bấm nhầm vào Captcha hoặc nút Discard/Exit làm hỏng video.
  */
