@@ -56,7 +56,29 @@ export async function dismissPopups(page: Page, log?: (msg: string) => void): Pr
       }
     }
 
-    // 3. Popup xác nhận Discard / Exit -> Luôn chọn Stay/Cancel/Not now, KHÔNG BAO GIỜ chọn Discard
+    // 3. Banner bản nháp cũ chưa lưu ("A video you were editing wasn't saved")
+    const draftBannerDiscard = page
+      .locator(
+        'div:has-text("wasn’t saved") button:has-text("Discard"), div:has-text("wasn\'t saved") button:has-text("Discard")'
+      )
+      .first();
+    if (await draftBannerDiscard.isVisible({ timeout: 250 }).catch(() => false)) {
+      if (log) log('Phát hiện bản nháp chưa lưu từ lần trước. Đang bấm Discard để làm sạch form...');
+      await draftBannerDiscard.click({ force: true }).catch(() => {});
+      await page.waitForTimeout(400);
+
+      const confirmDiscard = page
+        .locator('div[role="dialog"]:has-text("Discard") button:has-text("Discard")')
+        .first();
+      if (await confirmDiscard.isVisible({ timeout: 800 }).catch(() => false)) {
+        await confirmDiscard.click({ force: true }).catch(() => {});
+        if (log) log('Đã xác nhận xoá bản nháp cũ thành công.');
+        await page.waitForTimeout(500);
+      }
+      dismissedAny = true;
+    }
+
+    // 4. Popup xác nhận Discard / Exit khác -> Luôn chọn Stay/Cancel/Not now, KHÔNG chọn Discard
     const exitCancelBtn = page
       .locator(
         'div[role="dialog"]:has-text("Discard") button:has-text("Not now"), div[role="dialog"]:has-text("Discard") button:has-text("Cancel"), div[role="dialog"]:has-text("exit") button:has-text("Cancel")'
@@ -68,7 +90,7 @@ export async function dismissPopups(page: Page, log?: (msg: string) => void): Pr
       await page.waitForTimeout(300);
     }
 
-    // 4. Dọn dẹp overlay mờ nếu bị kẹt sau khi modal đã đóng (tránh chặn click)
+    // 5. Dọn dẹp overlay mờ nếu bị kẹt sau khi modal đã đóng (tránh chặn click)
     await page.evaluate(() => {
       const overlays = document.querySelectorAll('.TUXModal-overlay, [data-floating-ui-portal]');
       overlays.forEach((o) => {
@@ -117,13 +139,20 @@ export async function navigateToUpload(
           throw new Error('Tài khoản chưa đăng nhập TikTok! Vui lòng mở profile để đăng nhập.');
         }
 
-        const hasUploadComponent = await page
-          .locator('input[type="file"], [data-e2e="upload-video-button"], button.upload-stage-btn, button:has-text("Select videos")')
+        // Kiểm tra xem đã có input[type="file"] trong DOM HOẶC nút Select videos hiển thị HOẶC đã ở form edit
+        const hasFileInput = (await page.locator('input[type="file"]').count().catch(() => 0)) > 0;
+        const hasUploadButton = await page
+          .locator('button.upload-stage-btn, [data-e2e="upload-video-button"], button:has-text("Select videos")')
           .first()
-          .isVisible({ timeout: 1000 })
+          .isVisible({ timeout: 500 })
+          .catch(() => false);
+        const hasForm = await page
+          .locator('button[data-e2e="post_video_button"], button:has-text("Post"), .caption-editor')
+          .first()
+          .isVisible({ timeout: 500 })
           .catch(() => false);
 
-        if (hasUploadComponent) {
+        if (hasFileInput || hasUploadButton || hasForm) {
           ready = true;
           break;
         }
@@ -153,44 +182,46 @@ export async function attachVideoFile(
   log(`Đang đính kèm file video: ${videoPath}`);
   let attached = false;
 
-  // Chiến lược 1: Intercept filechooser qua nút bấm "Select videos"
-  const uploadButtonSelectors = [
-    'button.upload-stage-btn',
-    '[data-e2e="upload-video-button"]',
-    'button:has-text("Select videos")',
-    '.upload-stage-btn',
-    'button[class*="upload"]'
-  ];
-
-  for (const sel of uploadButtonSelectors) {
-    const btn = page.locator(sel).first();
-    if (await btn.isVisible({ timeout: 2500 }).catch(() => false)) {
-      try {
-        log(`Tìm thấy nút tải video: ${sel}. Đang mở hộp thoại chọn file...`);
-        const [fileChooser] = await Promise.all([
-          page.waitForEvent('filechooser', { timeout: 15000 }),
-          btn.click()
-        ]);
-        await fileChooser.setFiles(videoPath);
-        attached = true;
-        log('Đã chọn file thành công qua hộp thoại hệ thống.');
-        break;
-      } catch (err: any) {
-        log(`Chiến lược 1 (${sel}) gặp lỗi: ${err.message}. Thử selector tiếp theo...`);
-      }
-    }
-  }
-
-  // Chiến lược 2: Gắn trực tiếp qua input[type="file"]
-  if (!attached) {
-    try {
-      log('Chiến lược 2: Đính kèm trực tiếp vào input[type="file"]...');
-      const fileInput = page.locator('input[type="file"]').first();
+  // Chiến lược 1: Đính kèm trực tiếp qua input[type="file"] (nhanh nhất và chuẩn nhất của Playwright)
+  try {
+    const fileInput = page.locator('input[type="file"]').first();
+    if ((await fileInput.count()) > 0) {
+      log('Đang nạp file trực tiếp qua input[type="file"]...');
       await fileInput.setInputFiles(videoPath);
       attached = true;
-      log('Đã gắn file trực tiếp vào input[type="file"].');
-    } catch (err: any) {
-      log(`Chiến lược 2 gặp lỗi: ${err.message}`);
+      log('Đã nạp file video thành công.');
+    }
+  } catch (err: any) {
+    log(`Nạp file trực tiếp qua input[type="file"] gặp lỗi: ${err.message}. Chuyển sang chiến lược dự phòng...`);
+  }
+
+  // Chiến lược 2: Intercept filechooser qua nút bấm "Select videos" (dự phòng)
+  if (!attached) {
+    const uploadButtonSelectors = [
+      'button.upload-stage-btn',
+      '[data-e2e="upload-video-button"]',
+      'button:has-text("Select videos")',
+      '.upload-stage-btn',
+      'button[class*="upload"]'
+    ];
+
+    for (const sel of uploadButtonSelectors) {
+      const btn = page.locator(sel).first();
+      if (await btn.isVisible({ timeout: 2500 }).catch(() => false)) {
+        try {
+          log(`Tìm thấy nút tải video: ${sel}. Đang mở hộp thoại chọn file...`);
+          const [fileChooser] = await Promise.all([
+            page.waitForEvent('filechooser', { timeout: 15000 }),
+            btn.click()
+          ]);
+          await fileChooser.setFiles(videoPath);
+          attached = true;
+          log('Đã chọn file thành công qua hộp thoại.');
+          break;
+        } catch (err: any) {
+          log(`Chiến lược dự phòng (${sel}) gặp lỗi: ${err.message}`);
+        }
+      }
     }
   }
 
