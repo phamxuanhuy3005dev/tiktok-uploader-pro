@@ -69,7 +69,7 @@ export async function checkExistingScheduledTime(
     const hasScheduledTab = await scheduledTab.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (!hasScheduledTab) {
-      log('Kênh hiện chưa có video nào trong hàng chờ Lên lịch (Scheduled: 0).');
+      log('[Lịch hẹn cũ trên kênh] Kênh hiện không có video nào đang hẹn giờ trên TikTok Studio. Sẽ lên lịch đăng mới bắt đầu từ thời điểm hiện tại.');
       return summary;
     }
 

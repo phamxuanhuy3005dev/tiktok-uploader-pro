@@ -182,46 +182,95 @@ export async function attachVideoFile(
   log(`Đang đính kèm file video: ${videoPath}`);
   let attached = false;
 
-  // Chiến lược 1: Đính kèm trực tiếp qua input[type="file"] (nhanh nhất và chuẩn nhất của Playwright)
+  await dismissPopups(page, log);
+
+  // Kiểm tra nếu trang đang ở form edit cũ và có nút "Replace"
   try {
-    const fileInput = page.locator('input[type="file"]').first();
-    if ((await fileInput.count()) > 0) {
-      log('Đang nạp file trực tiếp qua input[type="file"]...');
-      await fileInput.setInputFiles(videoPath);
+    const replaceBtn = page.locator('button:has-text("Replace"), button[class*="replace"]').first();
+    if (await replaceBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+      log('Phát hiện màn hình chỉnh sửa cũ có nút Replace. Đang thay thế bằng video mới...');
+      const [fileChooser] = await Promise.all([
+        page.waitForEvent('filechooser', { timeout: 20000 }),
+        replaceBtn.click()
+      ]);
+      await fileChooser.setFiles(videoPath);
       attached = true;
-      log('Đã nạp file video thành công.');
+      log('Đã thay thế video thành công qua nút Replace.');
     }
   } catch (err: any) {
-    log(`Nạp file trực tiếp qua input[type="file"] gặp lỗi: ${err.message}. Chuyển sang chiến lược dự phòng...`);
+    log(`Không dùng được nút Replace: ${err.message}`);
   }
 
-  // Chiến lược 2: Intercept filechooser qua nút bấm "Select videos" (dự phòng)
+  // Chiến lược 1: Intercept filechooser qua nút bấm Upload (chuẩn theo tiktok-at)
   if (!attached) {
     const uploadButtonSelectors = [
-      'button.upload-stage-btn',
       '[data-e2e="upload-video-button"]',
+      'button.upload-stage-btn',
       'button:has-text("Select videos")',
       '.upload-stage-btn',
       'button[class*="upload"]'
     ];
 
     for (const sel of uploadButtonSelectors) {
-      const btn = page.locator(sel).first();
-      if (await btn.isVisible({ timeout: 2500 }).catch(() => false)) {
-        try {
+      try {
+        const el = await page.waitForSelector(sel, { timeout: 5000, state: 'visible' }).catch(() => null);
+        if (el) {
           log(`Tìm thấy nút tải video: ${sel}. Đang mở hộp thoại chọn file...`);
           const [fileChooser] = await Promise.all([
-            page.waitForEvent('filechooser', { timeout: 15000 }),
-            btn.click()
+            page.waitForEvent('filechooser', { timeout: 20000 }),
+            el.click()
           ]);
           await fileChooser.setFiles(videoPath);
           attached = true;
-          log('Đã chọn file thành công qua hộp thoại.');
+          log(`Chiến lược 1 thành công qua ${sel}.`);
           break;
-        } catch (err: any) {
-          log(`Chiến lược dự phòng (${sel}) gặp lỗi: ${err.message}`);
         }
+      } catch (err: any) {
+        log(`Selector ${sel} gặp lỗi: ${err.message}. Thử selector tiếp theo...`);
       }
+    }
+  }
+
+  // Chiến lược 2: Unhide input[type="file"] và trigger click (giống tiktok-at)
+  if (!attached) {
+    try {
+      log('Chiến lược 2: Hiển thị input[type="file"] và kích hoạt chọn file...');
+      await page.evaluate(() => {
+        const input = document.querySelector('input[type="file"]') as HTMLElement | null;
+        if (input) {
+          input.style.display = 'block';
+          input.style.visibility = 'visible';
+          input.style.opacity = '1';
+          input.style.position = 'fixed';
+          input.style.top = '0';
+          input.style.left = '0';
+          input.style.zIndex = '99999';
+        }
+      });
+      await page.waitForTimeout(500);
+
+      const [fileChooser] = await Promise.all([
+        page.waitForEvent('filechooser', { timeout: 10000 }),
+        page.click('input[type="file"]')
+      ]);
+      await fileChooser.setFiles(videoPath);
+      attached = true;
+      log('Chiến lược 2 thành công.');
+    } catch (err: any) {
+      log(`Chiến lược 2 gặp lỗi: ${err.message}`);
+    }
+  }
+
+  // Chiến lược 3: Đính kèm trực tiếp Playwright setInputFiles
+  if (!attached) {
+    try {
+      log('Chiến lược 3: Đính kèm trực tiếp vào input[type="file"]...');
+      const fileInput = page.locator('input[type="file"]').first();
+      await fileInput.setInputFiles(videoPath);
+      attached = true;
+      log('Chiến lược 3 thành công.');
+    } catch (err: any) {
+      log(`Chiến lược 3 gặp lỗi: ${err.message}`);
     }
   }
 
