@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { ProfileRecord, profileRepo, logRepo } from '../db/database';
 import { launchProfileContext, closeProfileContext } from './browser-pool';
+import { checkExistingScheduledTime } from './tasks/task-content';
 import { navigateToUpload, attachVideoFile } from './tasks/task-navigate';
 import { attachFavoriteMusic } from './tasks/task-music';
 import { applySchedule } from './tasks/task-schedule';
@@ -62,12 +63,26 @@ export async function runUploadPipeline(
   let uploadedCount = 0;
   let failedCount = 0;
   let lastScheduledDate: Date | null = null;
+  let hasExistingBatch = false;
 
   // 2. Khởi chạy trình duyệt
   currentStep = 'LAUNCH_BROWSER';
   const { context, page } = await launchProfileContext(profile, false);
 
   try {
+    // BƯỚC 0: Kiểm tra bài đăng hiện tại & phát hiện mốc thời gian đã lên lịch trước đó
+    if (profile.schedule_mode !== 'immediate') {
+      currentStep = 'CHECKING_CONTENT';
+      const contentSummary = await checkExistingScheduledTime(page, (m) => log(m));
+      if (contentSummary.hasScheduledPosts && contentSummary.latestScheduledDate) {
+        lastScheduledDate = contentSummary.latestScheduledDate;
+        hasExistingBatch = true;
+        log(
+          `Đã phát hiện lịch có sẵn. Tất cả video mới sẽ được lên lịch nối tiếp từ mốc: ${lastScheduledDate.toLocaleString('vi-VN')}`
+        );
+      }
+    }
+
     for (let i = 0; i < videoFiles.length; i++) {
       const videoFileName = videoFiles[i];
       currentVideoName = videoFileName;
@@ -106,7 +121,8 @@ export async function runUploadPipeline(
           profile,
           uploadedCount,
           (m) => log(m),
-          lastScheduledDate
+          lastScheduledDate,
+          hasExistingBatch
         );
 
         // BƯỚC 6: Bấm đăng, bắt Video ID và lưu trữ sang done/

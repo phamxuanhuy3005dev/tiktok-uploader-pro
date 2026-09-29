@@ -49,6 +49,8 @@ export async function detectCaptcha(page: Page): Promise<boolean> {
   }
 }
 
+export const isCaptchaActive = detectCaptcha;
+
 /**
  * Đợi người dùng giải captcha trên trình duyệt (tối đa 180s), có âm thanh cảnh báo
  */

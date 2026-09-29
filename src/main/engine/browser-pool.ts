@@ -142,6 +142,15 @@ export async function launchProfileContext(
     fs.mkdirSync(userDataDir, { recursive: true });
   }
 
+  // Nếu context đang tồn tại từ phiên trước, dọn dẹp trước khi mở mới
+  if (activeContexts.has(profile.id)) {
+    try {
+      const oldCtx = activeContexts.get(profile.id);
+      await oldCtx?.close().catch(() => {});
+    } catch (_) {}
+    activeContexts.delete(profile.id);
+  }
+
   // Dọn sạch hoàn toàn các tiến trình Chrome cũ và lock files trước khi mở
   await releaseProfileLocks(userDataDir, profile.name);
   cleanProfileGpuCache(userDataDir);
@@ -195,6 +204,19 @@ export async function launchProfileContext(
   const pages = context.pages();
   const page = pages.length > 0 ? pages[0] : await context.newPage();
 
+  // Tự động đóng context khi tất cả các tab bị đóng (khắc phục treo trên macOS)
+  const onPageClosed = () => {
+    setTimeout(async () => {
+      try {
+        if (context.pages().length === 0) {
+          await context.close().catch(() => {});
+        }
+      } catch (_) {}
+    }, 150);
+  };
+  page.on('close', onPageClosed);
+  context.on('page', (p) => p.on('close', onPageClosed));
+
   return { context, page };
 }
 
@@ -208,8 +230,12 @@ export async function openManualBrowser(profile: ProfileRecord, onClosed?: () =>
   await page.goto('https://www.tiktok.com/', { waitUntil: 'domcontentloaded' }).catch(() => {});
 
   const userDataDir = path.join(PROFILES_DIR, profile.name);
+  let isCleanedUp = false;
 
-  context.on('close', async () => {
+  const handleClose = async () => {
+    if (isCleanedUp) return;
+    isCleanedUp = true;
+
     try {
       const cookies = await context.cookies().catch(() => []);
       if (cookies.length > 0) {
@@ -224,13 +250,19 @@ export async function openManualBrowser(profile: ProfileRecord, onClosed?: () =>
     } catch (_) {
       profileRepo.updateStatus(profile.id, 'idle');
     }
-    activeContexts.delete(profile.id);
 
-    // Giải phóng triệt để process Chrome còn treo sau khi bấm đóng
+    activeContexts.delete(profile.id);
+    await context.close().catch(() => {});
+
+    // Giải phóng triệt để process Chrome còn treo sau khi bấm đóng X trên macOS
     await releaseProfileLocks(userDataDir, profile.name).catch(() => {});
 
     if (onClosed) onClosed();
-  });
+  };
+
+  // Lắng nghe cả event đóng của page và context
+  page.on('close', handleClose);
+  context.on('close', handleClose);
 }
 
 /**

@@ -17,22 +17,39 @@ export async function attachFavoriteMusic(
     log(`[Nhạc Favorites] Lần thử ${attempt}/${MAX_RETRY}...`);
 
     try {
+      await dismissPopups(page, log);
+
       // 1. Tìm nút mở Sounds / Web Video Editor
       const soundsBtn = page
-        .locator('.editor-entrance[data-button-name="sounds"], button[data-button-name="sounds"], button:has-text("Sounds"), button:has-text("Edit video")')
+        .locator(
+          'button[data-button-name="sounds"], .editor-entrance[data-button-name="sounds"], button:has-text("Sounds"), button:has-text("Edit video")'
+        )
         .first();
 
-      await soundsBtn.waitFor({ state: 'visible', timeout: 20000 });
+      await soundsBtn.waitFor({ state: 'visible', timeout: 25000 });
       await soundsBtn.scrollIntoViewIfNeeded().catch(() => {});
       await soundsBtn.click({ force: true });
-      await page.waitForTimeout(2500);
+      log('Đã nhấn nút mở Sounds Editor. Đang tải trình biên tập âm thanh...');
+      await page.waitForTimeout(3000);
 
-      await dismissPopups(page);
+      // Dismiss "Phone mode" tutorial popup nếu có trong editor
+      const phoneModeGotIt = page
+        .locator('div:has-text("Phone mode") button:has-text("Got it"), button:has-text("Got it")')
+        .first();
+      if (await phoneModeGotIt.isVisible({ timeout: 3500 }).catch(() => false)) {
+        await phoneModeGotIt.click({ force: true }).catch(() => {});
+        log('Đã tắt hướng dẫn Phone mode.');
+        await page.waitForTimeout(1000);
+      }
+
+      await dismissPopups(page, log);
 
       // 2. Chuyển sang Tab "Favorites" (Yêu thích)
       log('Đang mở tab "Favorites"...');
       const favTab = page
-        .locator('button:has-text("Favorites"), [role="tab"]:has-text("Favorites"), button:has-text("Yêu thích"), [role="tab"]:has-text("Yêu thích")')
+        .locator(
+          '[role="tab"]:has-text("Favorites"), button:has-text("Favorites"), [role="tab"]:has-text("Yêu thích"), button:has-text("Yêu thích")'
+        )
         .first();
 
       await favTab.waitFor({ state: 'visible', timeout: 10000 });
@@ -40,27 +57,27 @@ export async function attachFavoriteMusic(
       await page.waitForTimeout(2500);
 
       // 3. Quét danh sách các nút thêm nhạc "+" trong tab Favorites
-      // Nút "+" thường có icon cộng hoặc button shape rounded
+      // Nút "+" chính xác là button bên trong .MusicPanelMusicItem__operation chứa icon PlusBold
       const plusButtonSelectors = [
-        '.Button__root--shape-rounded',
-        'button[class*="Button__root--shape-rounded"]',
-        'button[aria-label*="Add"]',
-        'button:has(svg[data-icon="plus"])',
-        'div[role="listitem"] button'
+        '.MusicPanelMusicItem__operation button',
+        '[role="listitem"] button:has([data-icon="PlusBold"])',
+        'button:has([data-icon="plus-bold"])',
+        '.Button__root--shape-rounded[data-shape="rounded"]'
       ].join(', ');
 
       const plusButtons = page.locator(plusButtonSelectors);
       const totalFavs = await plusButtons.count();
 
-      log(`Tìm thấy ${totalFavs} bài hát trong mục Favorites.`);
+      log(`Tìm thấy ${totalFavs} bài hát trong mục Favorites của kênh.`);
 
+      // QUY TẮC QUAN TRỌNG: Nếu Favorites rỗng -> HỦY UPLOAD NGAY LẬP TỨC để tránh mất tiền view MMO
       if (totalFavs === 0) {
         throw new Error(
           'MỤC FAVORITES RỖNG: Kênh chưa lưu bài hát nào vào mục Yêu thích! Dừng upload ngay để tránh mất tiền view.'
         );
       }
 
-      // Xác định vị trí bài hát cần chọn
+      // Xác định bài hát cần chọn theo chế độ cấu hình
       let targetIndex = 0;
       if (profile.music_mode === 'favorite_rotate') {
         targetIndex = videoIndex % totalFavs;
@@ -74,16 +91,16 @@ export async function attachFavoriteMusic(
       const chosenButton = plusButtons.nth(targetIndex);
       await chosenButton.scrollIntoViewIfNeeded().catch(() => {});
       await chosenButton.click({ force: true });
-      log(`Đã thêm bài nhạc #${targetIndex + 1} vào Timeline. Đợi thanh thuộc tính âm thanh...`);
-      await page.waitForTimeout(2500);
+      log(`Đã thêm bài nhạc #${targetIndex + 1} vào Timeline. Đang chờ bảng thuộc tính âm thanh...`);
+      await page.waitForTimeout(3000);
 
-      // 4. Giảm âm lượng nhạc nền xuống -50 dB (giữ tiếng gốc video)
+      // 4. Giảm âm lượng nhạc nền xuống -50 dB (giữ trọn âm thanh gốc của video)
       const targetVolume = profile.music_volume ?? -50;
       log(`Đang cài đặt âm lượng nhạc nền về ${targetVolume} dB...`);
 
       try {
         const volumeInputs = page.locator(
-          'input.PropSettingInput__input, input[class*="PropSettingInput"], input[type="number"], .property-panel input'
+          'input.PropSettingInput__input, input[class*="PropSettingInput"], .property-panel input, input[type="text"][value="0"]'
         );
         const count = await volumeInputs.count();
         if (count > 0) {
@@ -93,22 +110,22 @@ export async function attachFavoriteMusic(
           await page.keyboard.press(selectAll);
           await volInput.fill(String(targetVolume));
           await page.keyboard.press('Enter');
-          await page.waitForTimeout(500);
+          await page.waitForTimeout(600);
           log(`Âm lượng đã được đặt thành công: ${targetVolume} dB.`);
         } else {
-          log(`Không tìm thấy ô nhập volume, giữ volume mặc định của editor.`);
+          log('Lưu ý: Không tìm thấy ô nhập volume cụ thể, giữ mức âm lượng của editor.');
         }
       } catch (volErr: any) {
-        log(`Bỏ qua chỉnh volume: ${volErr.message}`);
+        log(`Bỏ qua bước chỉnh volume: ${volErr.message}`);
       }
 
-      // 5. Bấm nút "Save" để lưu bản dựng và quay lại màn hình xuất bản
+      // 5. Bấm nút "Save" để lưu bản dựng và quay lại màn hình đăng video
       log('Đang bấm nút "Save" để lưu bản dựng trong Editor...');
       const saveBtn = page
-        .locator('button:has-text("Save"), button:has-text("Lưu"), button.editor-save-btn')
+        .locator('button:has-text("Save"), button.Button__root--type-primary:has-text("Save"), button:has-text("Lưu")')
         .first();
 
-      await saveBtn.waitFor({ state: 'visible', timeout: 8000 });
+      await saveBtn.waitFor({ state: 'visible', timeout: 10000 });
       await saveBtn.click({ force: true });
 
       // Đợi trở về màn hình Upload form
@@ -119,13 +136,13 @@ export async function attachFavoriteMusic(
       );
       await page.waitForTimeout(2000);
 
-      log('Đã lưu bản dựng thành công! Video đã được gắn nhạc Favorites.');
+      log('Đã lưu bản dựng thành công! Video đã được gắn nhạc Favorites chuẩn MMO.');
       success = true;
       break;
     } catch (err: any) {
       log(`Lỗi trong quá trình gắn nhạc: ${err.message}`);
 
-      // Nếu lỗi là do Favorites rỗng -> lập tức dừng, không retry vô ích
+      // Nếu lỗi là do Favorites rỗng -> lập tức dừng tiến trình, không retry vô ích
       if (err.message.includes('MỤC FAVORITES RỖNG')) {
         throw err;
       }
@@ -134,7 +151,7 @@ export async function attachFavoriteMusic(
       try {
         const cancelBtn = page.locator('button:has-text("Cancel"), button:has-text("Exit")').first();
         if (await cancelBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-          await cancelBtn.click().catch(() => {});
+          await cancelBtn.click({ force: true }).catch(() => {});
         }
       } catch (_) {}
 
