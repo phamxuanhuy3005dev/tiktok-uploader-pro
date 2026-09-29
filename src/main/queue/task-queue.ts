@@ -99,13 +99,20 @@ export class UploadQueueManager {
     });
   }
 
+  public getConcurrency(): number {
+    return (this.queue as any).concurrency || 2;
+  }
+
   public getStats() {
     return {
       size: this.queue.size,
       pending: this.queue.pending,
+      concurrency: this.getConcurrency(),
       runningProfiles: Array.from(this.runningProfiles)
     };
   }
 }
 
-export const uploadQueue = new UploadQueueManager(2);
+import { configRepo } from '../db/database';
+const initialConcurrency = Math.max(1, parseInt(configRepo.get('concurrency', '2'), 10) || 2);
+export const uploadQueue = new UploadQueueManager(initialConcurrency);

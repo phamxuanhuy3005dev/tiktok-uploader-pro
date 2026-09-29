@@ -9,19 +9,30 @@ export const api = {
   deleteAllProfiles: () => ipcRenderer.invoke('profiles:deleteAll'),
   openBrowser: (id: string) => ipcRenderer.invoke('profiles:openBrowser', id),
   closeBrowser: (id: string) => ipcRenderer.invoke('profiles:closeBrowser', id),
+  testProxy: (rawProxy: string) => ipcRenderer.invoke('proxy:test', rawProxy),
 
   // Import / Export
   importFromOldTool: () => ipcRenderer.invoke('profiles:importOld'),
   exportJson: () => ipcRenderer.invoke('profiles:exportJson'),
   importJson: () => ipcRenderer.invoke('profiles:importJson'),
 
-  // File / Folder Picker
+  // File / Folder Picker & Video Distribution
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
+  scanVideoFolder: (folderPath: string) => ipcRenderer.invoke('videos:scanFolder', folderPath),
+  distributeVideos: (params: {
+    sourceFolder: string;
+    targetProfileIds: string[];
+    mode?: 'move' | 'copy';
+  }) => ipcRenderer.invoke('videos:distribute', params),
 
   // Queue & Upload
   startQueue: (profileIds: string[]) => ipcRenderer.invoke('queue:start', profileIds),
   getQueueStats: () => ipcRenderer.invoke('queue:getStats'),
+  setConcurrency: (concurrency: number) => ipcRenderer.invoke('queue:setConcurrency', concurrency),
+  getConcurrency: () => ipcRenderer.invoke('queue:getConcurrency'),
   getLogs: (profileId: string) => ipcRenderer.invoke('logs:getByProfile', profileId),
+  getAllLogs: () => ipcRenderer.invoke('logs:getAll'),
+  clearLogs: () => ipcRenderer.invoke('logs:clear'),
 
   // Events from Main process
   onUploadProgress: (callback: (event: any) => void) => {

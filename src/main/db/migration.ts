@@ -38,7 +38,12 @@ export function importFromOldTool(oldToolPath = '/Users/fanboyrose/Desktop/tikto
     if (existing) {
       profileRepo.update({
         id: existing.id,
-        group_name: groupName
+        group_name: groupName,
+        account_id: oldP.account_id || existing.account_id,
+        pass: oldP.pass || existing.pass,
+        email: oldP.email || existing.email,
+        pass_email: oldP.pass_email || existing.pass_email,
+        mail_ao: oldP.mail_ao || existing.mail_ao
       });
       count++;
       continue;
@@ -72,6 +77,11 @@ export function importFromOldTool(oldToolPath = '/Users/fanboyrose/Desktop/tikto
       caption_mode: oldP.remove_title ? 'remove_title' : 'from_txt_file',
       proxy: null,
       cookies: oldP.cookies || null,
+      account_id: oldP.account_id || null,
+      pass: oldP.pass || null,
+      email: oldP.email || null,
+      pass_email: oldP.pass_email || null,
+      mail_ao: oldP.mail_ao || null,
       last_run: oldP.last_run || null
     });
     count++;
@@ -94,19 +104,49 @@ export function importProfilesFromJson(sourceFilePath: string): number {
     throw new Error('File không tồn tại.');
   }
   const content = fs.readFileSync(sourceFilePath, 'utf-8');
-  const list = JSON.parse(content);
+  let list: any;
+  try {
+    list = JSON.parse(content);
+  } catch (err: any) {
+    throw new Error(`Định dạng file JSON bị lỗi: ${err.message}`);
+  }
+
+  // Hỗ trợ cả định dạng mảng [...] hoặc bọc trong object { profiles: [...] }
   if (!Array.isArray(list)) {
-    throw new Error('Định dạng file JSON không hợp lệ (cần danh sách mảng).');
+    if (list && Array.isArray(list.profiles)) {
+      list = list.profiles;
+    } else {
+      throw new Error('Định dạng file JSON không hợp lệ (cần danh sách mảng profiles).');
+    }
   }
 
   let count = 0;
+  const currentProfiles = profileRepo.getAll();
+
   for (const item of list) {
-    if (!item.name) continue;
-    const existing = profileRepo.getAll().find((p) => p.name === item.name);
+    if (!item || !item.name) continue;
+    const name = String(item.name).trim();
+    if (!name) continue;
+
+    const existing = currentProfiles.find((p) => p.name.toLowerCase() === name.toLowerCase());
     if (!existing) {
-      profileRepo.create({
-        ...item,
-        id: item.id || `profile_${Date.now()}_${count}`
+      profileRepo.create(item);
+      count++;
+    } else {
+      // Cập nhật thông tin / cookie mới nếu có
+      let cookiesStr: string | null = null;
+      if (item.cookies) {
+        cookiesStr = typeof item.cookies === 'string' ? item.cookies : JSON.stringify(item.cookies);
+      }
+      profileRepo.update({
+        id: existing.id,
+        group_name: item.group_name || item.group || existing.group_name,
+        cookies: cookiesStr || existing.cookies,
+        account_id: item.account_id || existing.account_id,
+        pass: item.pass || existing.pass,
+        email: item.email || existing.email,
+        pass_email: item.pass_email || existing.pass_email,
+        mail_ao: item.mail_ao || existing.mail_ao
       });
       count++;
     }

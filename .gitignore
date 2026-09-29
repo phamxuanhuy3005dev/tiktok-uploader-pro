@@ -8,3 +8,5 @@ profiles/*
 !profiles/.gitkeep
 .DS_Store
 *.log
+*.tsbuildinfo
+data/.runner-cache.json

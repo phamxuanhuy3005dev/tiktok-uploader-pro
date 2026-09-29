@@ -130,6 +130,174 @@ export function cleanProfileGpuCache(userDataDir: string): void {
   }
 }
 
+export interface ParsedProxy {
+  server: string;
+  username?: string;
+  password?: string;
+}
+
+export interface ProxyTestResult {
+  success: boolean;
+  ip?: string;
+  latencyMs?: number;
+  error?: string;
+}
+
+/**
+ * Chuẩn hóa và parse mọi định dạng Proxy:
+ * - host:port:user:pass
+ * - host:port
+ * - http://user:pass@host:port
+ * - socks5://user:pass@host:port
+ * - user:pass@host:port
+ */
+export function parseProxy(rawProxy?: string | null): ParsedProxy | undefined {
+  if (!rawProxy || !rawProxy.trim()) return undefined;
+  let str = rawProxy.trim();
+
+  // 1. Format: host:port:username:password
+  const colonParts = str.split(':');
+  if (!str.includes('://') && !str.includes('@') && colonParts.length === 4) {
+    return {
+      server: `http://${colonParts[0]}:${colonParts[1]}`,
+      username: colonParts[2],
+      password: colonParts[3]
+    };
+  }
+
+  // 2. Format: host:port
+  if (!str.includes('://') && !str.includes('@') && colonParts.length === 2) {
+    return {
+      server: `http://${colonParts[0]}:${colonParts[1]}`
+    };
+  }
+
+  // 3. Nếu thiếu protocol (ví dụ user:pass@host:port), thêm http://
+  if (!str.includes('://')) {
+    str = `http://${str}`;
+  }
+
+  try {
+    const parsed = new URL(str);
+    const protocol = parsed.protocol || 'http:';
+    const server = `${protocol}//${parsed.hostname}${parsed.port ? `:${parsed.port}` : ''}`;
+    const result: ParsedProxy = { server };
+
+    if (parsed.username) {
+      result.username = decodeURIComponent(parsed.username);
+    }
+    if (parsed.password) {
+      result.password = decodeURIComponent(parsed.password);
+    }
+
+    return result;
+  } catch {
+    return { server: str };
+  }
+}
+
+/**
+ * Tự động chọn engine trình duyệt:
+ * Ưu tiên Chromium Playwright nội bộ -> Fallback sang Google Chrome / Edge có sẵn trên máy người dùng
+ */
+export function resolveBrowserLaunchOptions(): { channel?: string; executablePath?: string } {
+  try {
+    const pwPath = chromium.executablePath();
+    if (pwPath && fs.existsSync(pwPath)) {
+      return {};
+    }
+  } catch (_) {}
+
+  if (process.platform === 'darwin') {
+    if (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')) {
+      return { channel: 'chrome' };
+    }
+  } else if (process.platform === 'win32') {
+    const winPaths = [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      path.join(process.env.LOCALAPPDATA || '', 'Google\\Chrome\\Application\\chrome.exe')
+    ];
+    if (winPaths.some((p) => fs.existsSync(p))) {
+      return { channel: 'chrome' };
+    }
+    const edgePaths = [
+      'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+      'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+    ];
+    if (edgePaths.some((p) => fs.existsSync(p))) {
+      return { channel: 'msedge' };
+    }
+  }
+
+  return { channel: 'chrome' };
+}
+
+/**
+ * Kiểm tra kết nối thực tế qua Proxy bằng Playwright Chromium
+ */
+export async function testProxyConnection(rawProxy?: string | null): Promise<ProxyTestResult> {
+  const proxyConfig = parseProxy(rawProxy);
+  if (!proxyConfig) {
+    return { success: false, error: 'Chưa nhập địa chỉ proxy hoặc định dạng không hợp lệ.' };
+  }
+
+  const startTime = Date.now();
+  let testBrowser;
+  try {
+    const browserOpts: any = {
+      headless: true,
+      proxy: proxyConfig,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      ...resolveBrowserLaunchOptions()
+    };
+    testBrowser = await chromium.launch(browserOpts);
+
+    const context = await testBrowser.newContext({
+      locale: 'en-US'
+    });
+    const page = await context.newPage();
+
+    const response = await page.goto('https://api.ipify.org?format=json', {
+      timeout: 15000,
+      waitUntil: 'commit'
+    });
+
+    if (!response || !response.ok()) {
+      throw new Error(`HTTP ${response?.status() || 'Unknown'}`);
+    }
+
+    const bodyText = await page.textContent('body');
+    const elapsed = Date.now() - startTime;
+    const json = JSON.parse(bodyText || '{}');
+
+    return {
+      success: true,
+      ip: json.ip || 'Unknown IP',
+      latencyMs: elapsed
+    };
+  } catch (err: any) {
+    const elapsed = Date.now() - startTime;
+    let errMsg = err.message || 'Lỗi không xác định';
+    if (errMsg.includes('ERR_TIMED_OUT') || errMsg.includes('Timeout') || errMsg.includes('timeout')) {
+      errMsg = 'Quá thời gian chờ (Proxy Timeout - Kiểm tra lại server proxy hoặc whitelist IP mạng nhà).';
+    } else if (errMsg.includes('ERR_PROXY_CONNECTION_FAILED')) {
+      errMsg = 'Không kết nối được tới Proxy (Sai IP/Port hoặc máy chủ proxy offline).';
+    } else if (errMsg.includes('ERR_PROXY_AUTH_REQUESTED') || errMsg.includes('407')) {
+      errMsg = 'Proxy yêu cầu tài khoản/mật khẩu xác thực (407 Proxy Authentication Required).';
+    }
+    return {
+      success: false,
+      latencyMs: elapsed,
+      error: errMsg
+    };
+  } finally {
+    if (testBrowser) {
+      await testBrowser.close().catch(() => {});
+    }
+  }
+}
+
 /**
  * Khởi chạy Browser Context cho một profile
  */
@@ -163,28 +331,19 @@ export async function launchProfileContext(
     locale: 'en-US',
     extraHTTPHeaders: {
       'Accept-Language': 'en-US,en;q=0.9'
-    }
+    },
+    ...resolveBrowserLaunchOptions()
   };
 
   // Cấu hình Proxy nếu có
-  if (profile.proxy && profile.proxy.trim()) {
-    const rawProxy = profile.proxy.trim();
-    if (rawProxy.includes('://')) {
-      launchOptions.proxy = { server: rawProxy };
-    } else {
-      const parts = rawProxy.split(':');
-      if (parts.length === 4) {
-        launchOptions.proxy = {
-          server: `http://${parts[0]}:${parts[1]}`,
-          username: parts[2],
-          password: parts[3]
-        };
-      } else if (parts.length === 2) {
-        launchOptions.proxy = {
-          server: `http://${parts[0]}:${parts[1]}`
-        };
-      }
-    }
+  const proxyConfig = parseProxy(profile.proxy);
+  if (proxyConfig) {
+    launchOptions.proxy = proxyConfig;
+    console.log(
+      `[${profile.name}] 🌐 Kích hoạt Proxy: ${proxyConfig.server} ${
+        proxyConfig.username ? `(User: ${proxyConfig.username})` : '(Direct Auth)'
+      }`
+    );
   }
 
   const context = await chromium.launchPersistentContext(userDataDir, launchOptions);

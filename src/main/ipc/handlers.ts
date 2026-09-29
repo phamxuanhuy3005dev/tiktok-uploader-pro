@@ -1,14 +1,40 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron';
-import { profileRepo, logRepo, ProfileRecord } from '../db/database';
-import { openManualBrowser, closeProfileContext } from '../engine/browser-pool';
+import fs from 'fs';
+import path from 'path';
+import { profileRepo, logRepo, configRepo, ProfileRecord } from '../db/database';
+import { openManualBrowser, closeProfileContext, testProxyConnection } from '../engine/browser-pool';
 import { uploadQueue } from '../queue/task-queue';
 import { importFromOldTool, exportProfilesToJson, importProfilesFromJson } from '../db/migration';
 
+let currentMainWindow: BrowserWindow | null = null;
+let isIpcRegistered = false;
+
+export function setMainWindow(win: BrowserWindow | null): void {
+  currentMainWindow = win;
+}
+
+function getValidWindow(): BrowserWindow | undefined {
+  if (currentMainWindow && !currentMainWindow.isDestroyed()) {
+    return currentMainWindow;
+  }
+  const allWindows = BrowserWindow.getAllWindows();
+  return allWindows.length > 0 ? allWindows[0] : undefined;
+}
+
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
+  currentMainWindow = mainWindow;
+
+  // Tránh đăng ký IPC lần 2 gây crash khi cửa sổ được mở lại trên macOS (app.on('activate'))
+  if (isIpcRegistered) {
+    return;
+  }
+  isIpcRegistered = true;
+
   // Đăng ký listener cập nhật tiến độ upload gửi về UI
   uploadQueue.onProgress((event) => {
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('upload:progress', event);
+    const activeWin = getValidWindow();
+    if (activeWin && !activeWin.isDestroyed()) {
+      activeWin.webContents.send('upload:progress', event);
     }
   });
 
@@ -42,6 +68,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return profileRepo.getAll();
   });
 
+  // Kiểm tra kết nối Proxy thực tế
+  ipcMain.handle('proxy:test', async (_, rawProxy: string) => {
+    return testProxyConnection(rawProxy);
+  });
+
   // Import từ tool cũ tiktok-at
   ipcMain.handle('profiles:importOld', async () => {
     const res = importFromOldTool();
@@ -52,26 +83,37 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Export profiles ra file JSON
-  ipcMain.handle('profiles:exportJson', async () => {
-    const res = await dialog.showSaveDialog(mainWindow, {
+  const handleExport = async () => {
+    const activeWin = getValidWindow();
+    const options = {
       title: 'Xuất danh sách Profiles',
       defaultPath: 'tiktok_profiles_backup.json',
       filters: [{ name: 'JSON Files', extensions: ['json'] }]
-    });
+    };
+    const res = activeWin 
+      ? await dialog.showSaveDialog(activeWin, options)
+      : await dialog.showSaveDialog(options);
+
     if (!res.canceled && res.filePath) {
       exportProfilesToJson(res.filePath);
       return { success: true, filePath: res.filePath };
     }
     return { success: false };
-  });
+  };
+  ipcMain.handle('profiles:exportJson', handleExport);
 
   // Import profiles từ file JSON
-  ipcMain.handle('profiles:importJson', async () => {
-    const res = await dialog.showOpenDialog(mainWindow, {
+  const handleImport = async () => {
+    const activeWin = getValidWindow();
+    const options = {
       title: 'Nhập danh sách Profiles từ JSON',
       filters: [{ name: 'JSON Files', extensions: ['json'] }],
-      properties: ['openFile']
-    });
+      properties: ['openFile'] as ('openFile')[]
+    };
+    const res = activeWin
+      ? await dialog.showOpenDialog(activeWin, options)
+      : await dialog.showOpenDialog(options);
+
     if (!res.canceled && res.filePaths.length > 0) {
       const count = importProfilesFromJson(res.filePaths[0]);
       return {
@@ -81,7 +123,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       };
     }
     return { success: false };
-  });
+  };
+  ipcMain.handle('profiles:importJson', handleImport);
 
   // Mở trình duyệt đăng nhập thủ công
   ipcMain.handle('profiles:openBrowser', async (_, id: string) => {
@@ -89,8 +132,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (!profile) throw new Error('Không tìm thấy profile');
 
     await openManualBrowser(profile, () => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('profiles:updated', profileRepo.getAll());
+      const activeWin = getValidWindow();
+      if (activeWin && !activeWin.isDestroyed()) {
+        activeWin.webContents.send('profiles:updated', profileRepo.getAll());
       }
     });
     return true;
@@ -104,14 +148,135 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Native folder selector
   ipcMain.handle('dialog:selectFolder', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory', 'createDirectory']
-    });
+    const activeWin = getValidWindow();
+    const options = {
+      properties: ['openDirectory', 'createDirectory'] as ('openDirectory' | 'createDirectory')[]
+    };
+    const result = activeWin
+      ? await dialog.showOpenDialog(activeWin, options)
+      : await dialog.showOpenDialog(options);
+
     if (result.canceled || result.filePaths.length === 0) {
       return null;
     }
     return result.filePaths[0];
   });
+
+  // Quét thư mục video
+  ipcMain.handle('videos:scanFolder', async (_, folderPath: string) => {
+    if (!folderPath || !fs.existsSync(folderPath)) {
+      return { exists: false, count: 0, files: [] };
+    }
+    const validExts = ['.mp4', '.mov', '.webm', '.mkv'];
+    const files = fs
+      .readdirSync(folderPath)
+      .filter((f) => {
+        if (f.startsWith('.')) return false;
+        const ext = path.extname(f).toLowerCase();
+        return validExts.includes(ext);
+      });
+    return {
+      exists: true,
+      count: files.length,
+      files
+    };
+  });
+
+  // Chia đều video từ 1 folder cho các kênh (hoặc theo nhóm)
+  ipcMain.handle(
+    'videos:distribute',
+    async (
+      _,
+      {
+        sourceFolder,
+        targetProfileIds,
+        mode = 'move'
+      }: {
+        sourceFolder: string;
+        targetProfileIds: string[];
+        mode?: 'move' | 'copy';
+      }
+    ) => {
+      if (!sourceFolder || !fs.existsSync(sourceFolder)) {
+        throw new Error('Thư mục nguồn không tồn tại!');
+      }
+
+      if (!targetProfileIds || targetProfileIds.length === 0) {
+        throw new Error('Vui lòng chọn ít nhất 1 profile để chia đều video!');
+      }
+
+      const validExts = ['.mp4', '.mov', '.webm', '.mkv'];
+      const allFiles = fs
+        .readdirSync(sourceFolder)
+        .filter((f) => {
+          if (f.startsWith('.')) return false;
+          const ext = path.extname(f).toLowerCase();
+          return validExts.includes(ext);
+        })
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+      if (allFiles.length === 0) {
+        throw new Error('Không tìm thấy video hợp lệ nào (.mp4, .mov, .webm, .mkv) trong thư mục nguồn!');
+      }
+
+      const profiles = targetProfileIds
+        .map((id) => profileRepo.getById(id))
+        .filter(Boolean) as ProfileRecord[];
+
+      if (profiles.length === 0) {
+        throw new Error('Không tìm thấy thông tin các kênh hợp lệ.');
+      }
+
+      const results: Array<{
+        profileId: string;
+        profileName: string;
+        folder: string;
+        assignedVideos: string[];
+      }> = [];
+
+      for (let i = 0; i < profiles.length; i++) {
+        const p = profiles[i];
+        // Phân bổ xoay vòng đều (Round-Robin)
+        const assigned = allFiles.filter((_, idx) => idx % profiles.length === i);
+        
+        // Tạo thư mục riêng cho kênh ngay bên trong thư mục nguồn
+        const pFolder = path.join(sourceFolder, p.name);
+        if (!fs.existsSync(pFolder)) {
+          fs.mkdirSync(pFolder, { recursive: true });
+        }
+
+        for (const file of assigned) {
+          const srcPath = path.join(sourceFolder, file);
+          const dstPath = path.join(pFolder, file);
+          if (mode === 'move') {
+            fs.renameSync(srcPath, dstPath);
+          } else {
+            fs.copyFileSync(srcPath, dstPath);
+          }
+        }
+
+        // Cập nhật video_folder cho profile trong database
+        profileRepo.update({
+          id: p.id,
+          video_folder: pFolder
+        });
+
+        results.push({
+          profileId: p.id,
+          profileName: p.name,
+          folder: pFolder,
+          assignedVideos: assigned
+        });
+      }
+
+      return {
+        totalVideos: allFiles.length,
+        profilesCount: profiles.length,
+        results,
+        updatedProfiles: profileRepo.getAll()
+      };
+    }
+  );
 
   // Bắt đầu upload cho danh sách profile
   ipcMain.handle('queue:start', async (_, profileIds: string[]) => {
@@ -128,7 +293,27 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return uploadQueue.getStats();
   });
 
+  ipcMain.handle('queue:setConcurrency', async (_, concurrency: number) => {
+    const limit = Math.max(1, Math.min(10, Number(concurrency) || 2));
+    uploadQueue.setConcurrency(limit);
+    configRepo.set('concurrency', String(limit));
+    return uploadQueue.getStats();
+  });
+
+  ipcMain.handle('queue:getConcurrency', async () => {
+    return uploadQueue.getConcurrency();
+  });
+
   ipcMain.handle('logs:getByProfile', async (_, profileId: string) => {
     return logRepo.getByProfile(profileId);
+  });
+
+  ipcMain.handle('logs:getAll', async () => {
+    return logRepo.getAll(500);
+  });
+
+  ipcMain.handle('logs:clear', async () => {
+    logRepo.clear();
+    return true;
   });
 }

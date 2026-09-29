@@ -9,15 +9,15 @@ export interface ContentStatusSummary {
 
 /**
  * Kiểm tra danh sách bài đăng hiện tại trên https://www.tiktok.com/tiktokstudio/content
- * Phát hiện các bài đã lên lịch (Scheduled) để nối tiếp thời gian lên lịch chính xác,
- * tránh bị trùng lịch hoặc đè giờ với các video trước.
+ * Phát hiện chính xác các bài đã lên lịch (Scheduled) trong danh sách Posts,
+ * để nối tiếp thời gian lên lịch chính xác, tránh bị trùng lịch hoặc đè giờ với các video trước.
  */
 export async function checkExistingScheduledTime(
   page: Page,
   log: (msg: string) => void
 ): Promise<ContentStatusSummary> {
   const manageUrl = 'https://www.tiktok.com/tiktokstudio/content';
-  log(`Đang kiểm tra danh sách bài đăng & lịch đã lên tại: ${manageUrl}...`);
+  log(`Đang kiểm tra danh sách bài đăng & lịch hẹn giờ tại: ${manageUrl}...`);
 
   const summary: ContentStatusSummary = {
     hasScheduledPosts: false,
@@ -35,13 +35,14 @@ export async function checkExistingScheduledTime(
     await page
       .waitForSelector(
         'button:has-text("Posts"), [role="tab"]:has-text("Posts"), [role="tablist"], table, [data-tt*="PostTable"], .post-table',
-        { timeout: 7000 }
+        { timeout: 8000 }
       )
       .catch(() => null);
 
     await dismissPopups(page);
+    await page.waitForTimeout(1500);
 
-    // 1. Quét số lượng bài đăng đã publish (ví dụ: Posts 1116)
+    // 1. Quét số lượng bài đăng đã publish (ví dụ: Posts 636)
     const postCountText = await page
       .evaluate(() => {
         const tabs = Array.from(document.querySelectorAll('[role="tab"], button'));
@@ -56,62 +57,62 @@ export async function checkExistingScheduledTime(
 
     summary.totalPublished = postCountText;
     if (postCountText > 0) {
-      log(`Kênh hiện có ${postCountText} video đã phát hành.`);
+      log(`Kênh hiện có ${postCountText} video trong hệ thống.`);
     }
 
-    // 2. Tìm tab "Scheduled" (Đã lên lịch) nếu có
-    const scheduledTab = page
-      .locator(
-        'button:has-text("Scheduled"), [role="tab"]:has-text("Scheduled"), [data-e2e="scheduled-tab"], button:has-text("Đã lên lịch"), [role="tab"]:has-text("Đã lên lịch")'
-      )
-      .first();
-
-    const hasScheduledTab = await scheduledTab.isVisible({ timeout: 2000 }).catch(() => false);
-
-    if (!hasScheduledTab) {
-      log('[Lịch hẹn cũ trên kênh] Kênh hiện không có video nào đang hẹn giờ trên TikTok Studio. Sẽ lên lịch đăng mới bắt đầu từ thời điểm hiện tại.');
-      return summary;
-    }
-
-    await scheduledTab.click();
-    log('Đã bấm tab "Scheduled". Đang đọc thời gian bài đăng cuối cùng...');
-    await page.waitForTimeout(2500);
-
-    const latestTimeStr = await page
+    // 2. Quét toàn bộ bảng Posts để phát hiện các bài đã lên lịch (Scheduled) trong tương lai
+    const scheduledTimestamps = await page
       .evaluate(() => {
-        const bodyText = document.body.innerText;
-        // Bắt chuỗi ngày giờ tiếng Anh / số: "Sep 30, 2026, 12:30 PM" hoặc "2026-09-30 14:00"
-        const matches = bodyText.match(
-          /(?:Scheduled for|Scheduled:?)\s*([A-Za-z]+ \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M|\d{4}-\d{2}-\d{2} \d{2}:\d{2})/g
+        const nowMs = Date.now();
+        const currentYear = new Date().getFullYear();
+        const detected: number[] = [];
+
+        // Bắt chuỗi ngày giờ tiếng Anh dạng: "Sep 30, 3:25 AM" hoặc "Sep 30, 2026, 3:25 AM"
+        const regex = /([A-Za-z]{3}\s+\d{1,2}(?:,\s+\d{4})?,\s+\d{1,2}:\d{2}\s+[AP]M)/gi;
+
+        // Quét các dòng hoặc thẻ chứa bài đăng
+        const rows = Array.from(
+          document.querySelectorAll(
+            'table tr, [data-tt*="PostTable"] tr, div[class*="post-item"], div[class*="table-row"], div[class*="PostCard"], div[class*="content-item"]'
+          )
         );
-        if (matches && matches.length > 0) {
-          return matches[matches.length - 1];
+
+        const targets = rows.length > 0 ? rows : [document.body];
+
+        for (const target of targets) {
+          const text = (target as HTMLElement).innerText || '';
+          const matches = text.match(regex);
+          if (matches) {
+            for (const m of matches) {
+              let clean = m.trim();
+              if (!clean.includes(String(currentYear))) {
+                clean = `${clean}, ${currentYear}`;
+              }
+              const d = new Date(clean);
+              // Nếu thời gian này lớn hơn hiện tại + 2 phút -> Đích thị là video đang hẹn giờ!
+              if (!isNaN(d.getTime()) && d.getTime() > nowMs + 2 * 60 * 1000) {
+                detected.push(d.getTime());
+              }
+            }
+          }
         }
 
-        // Bắt từ bảng PostTable
-        const postTable = document.querySelector('table, [data-tt*="PostTable"], [class*="PostTable"]');
-        if (postTable) {
-          const text = (postTable as HTMLElement).innerText;
-          const dateMatch = text.match(/(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\s+\d{1,2}:\d{2})/);
-          if (dateMatch) return dateMatch[1];
-        }
-        return null;
+        return detected;
       })
-      .catch(() => null);
+      .catch(() => [] as number[]);
 
-    if (latestTimeStr) {
-      const cleanStr = latestTimeStr.replace(/(?:Scheduled for|Scheduled:?)\s*/i, '');
-      const parsedDate = new Date(cleanStr);
-      if (!isNaN(parsedDate.getTime())) {
-        summary.hasScheduledPosts = true;
-        summary.latestScheduledDate = parsedDate;
-        log(`Tìm thấy mốc thời gian video đã lên lịch gần nhất: ${parsedDate.toLocaleString('vi-VN')}`);
-      }
+    if (scheduledTimestamps.length > 0) {
+      const maxMs = Math.max(...scheduledTimestamps);
+      summary.hasScheduledPosts = true;
+      summary.latestScheduledDate = new Date(maxMs);
+      log(
+        `Đã phát hiện ${scheduledTimestamps.length} bài đăng đang hẹn giờ. Mốc hẹn giờ muộn nhất hiện tại: ${summary.latestScheduledDate.toLocaleString('vi-VN')}`
+      );
     } else {
-      log('Tab Scheduled không có bài nào đang chờ.');
+      log('Kênh hiện chưa có video nào đang hẹn giờ. Video đầu tiên sẽ được đặt lịch cách thời điểm hiện tại tối thiểu 15-20 phút.');
     }
   } catch (e: any) {
-    log(`Lưu ý: Không thể quét tab quản lý content: ${e.message}. Tiếp tục sang bước upload.`);
+    log(`Lưu ý: Không thể quét bảng quản lý nội dung: ${e.message}. Tiếp tục sang bước upload.`);
   }
 
   return summary;

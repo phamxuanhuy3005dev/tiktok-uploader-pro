@@ -19,6 +19,11 @@ export interface ProfileRecord {
   caption_mode: 'remove_title' | 'from_txt_file';
   proxy: string | null;
   cookies: string | null;
+  account_id?: string | null;
+  pass?: string | null;
+  email?: string | null;
+  pass_email?: string | null;
+  mail_ao?: string | null;
   last_run: string | null;
   created_at?: string;
 }
@@ -52,7 +57,7 @@ db.pragma('busy_timeout = 10000');
 db.pragma('cache_size = -8000'); // 8MB cache
 db.pragma('temp_store = MEMORY');
 
-// 1. Tạo bảng profiles & upload_logs nếu chưa có
+// 1. Tạo bảng profiles, upload_logs & config nếu chưa có
 db.exec(`
   CREATE TABLE IF NOT EXISTS profiles (
     id TEXT PRIMARY KEY NOT NULL,
@@ -70,6 +75,11 @@ db.exec(`
     caption_mode TEXT DEFAULT 'remove_title',
     proxy TEXT DEFAULT NULL,
     cookies TEXT DEFAULT NULL,
+    account_id TEXT DEFAULT NULL,
+    pass TEXT DEFAULT NULL,
+    email TEXT DEFAULT NULL,
+    pass_email TEXT DEFAULT NULL,
+    mail_ao TEXT DEFAULT NULL,
     last_run TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -84,9 +94,14 @@ db.exec(`
     error_message TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS config (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT
+  );
 `);
 
-// 2. Safe migration: Đảm bảo các cột mới tồn tại TRƯỚC KHI tạo Index
+// 2. Safe migration: Đảm bảo các cột mới tồn tại
 try {
   const tableInfo = db.prepare('PRAGMA table_info(profiles)').all() as any[];
   const cols = new Set(tableInfo.map((c) => c.name));
@@ -96,16 +111,63 @@ try {
   if (!cols.has('group_name')) {
     db.exec("ALTER TABLE profiles ADD COLUMN group_name TEXT DEFAULT 'Mặc định';");
   }
+  const credCols = ['account_id', 'pass', 'email', 'pass_email', 'mail_ao'];
+  for (const c of credCols) {
+    if (!cols.has(c)) {
+      db.exec(`ALTER TABLE profiles ADD COLUMN ${c} TEXT DEFAULT NULL;`);
+    }
+  }
 } catch (_) {}
 
-// 3. Tạo Index sau khi các cột đã chắc chắn tồn tại
+// 3. Tự động sync tài khoản, pass, email từ DB tiktok-at cũ nếu có
+try {
+  const oldDbPath = '/Users/fanboyrose/Desktop/tiktok-at/data/tiktok.db';
+  if (fs.existsSync(oldDbPath)) {
+    const oldDb = new Database(oldDbPath, { readonly: true });
+    const oldProfiles = oldDb.prepare('SELECT name, account_id, pass, email, pass_email, mail_ao FROM profiles').all() as any[];
+    const updateStmt = db.prepare(`
+      UPDATE profiles 
+      SET account_id = coalesce(account_id, ?),
+          pass = coalesce(pass, ?),
+          email = coalesce(email, ?),
+          pass_email = coalesce(pass_email, ?),
+          mail_ao = coalesce(mail_ao, ?)
+      WHERE name = ?
+    `);
+    for (const op of oldProfiles) {
+      if (op.name) {
+        updateStmt.run(op.account_id || null, op.pass || null, op.email || null, op.pass_email || null, op.mail_ao || null, op.name);
+      }
+    }
+    oldDb.close();
+  }
+} catch (_) {}
+
+// 4. Tạo Index
 try {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_profiles_status ON profiles(status);
     CREATE INDEX IF NOT EXISTS idx_profiles_group ON profiles(group_name);
     CREATE INDEX IF NOT EXISTS idx_logs_profile_id ON upload_logs(profile_id);
+    CREATE INDEX IF NOT EXISTS idx_logs_created_at ON upload_logs(created_at DESC);
   `);
 } catch (_) {}
+
+export const configRepo = {
+  get: (key: string, defaultValue = ''): string => {
+    try {
+      const row = db.prepare('SELECT value FROM config WHERE key = ?').get(key) as any;
+      return row ? row.value : defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  },
+  set: (key: string, value: string): void => {
+    try {
+      db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)').run(key, value);
+    } catch (_) {}
+  }
+};
 
 export const profileRepo = {
   getAll: (): ProfileRecord[] => {
@@ -116,22 +178,59 @@ export const profileRepo = {
     return db.prepare('SELECT * FROM profiles WHERE id = ?').get(id) as ProfileRecord | undefined;
   },
 
-  create: (profile: Omit<ProfileRecord, 'created_at'>): void => {
+  create: (profile: any): void => {
+    if (!profile.name || typeof profile.name !== 'string' || !profile.name.trim()) {
+      throw new Error('Tên profile (name) là bắt buộc!');
+    }
+
+    let serializedCookies: string | null = null;
+    if (profile.cookies) {
+      if (typeof profile.cookies === 'string') {
+        serializedCookies = profile.cookies;
+      } else {
+        try {
+          serializedCookies = JSON.stringify(profile.cookies);
+        } catch {
+          serializedCookies = String(profile.cookies);
+        }
+      }
+    }
+
+    const normalized = {
+      id: profile.id || `profile_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: profile.name.trim(),
+      group_name: profile.group_name || profile.group || 'Mặc định',
+      status: profile.status || 'idle',
+      video_folder: profile.video_folder || '',
+      enable_music: profile.enable_music !== undefined ? Number(profile.enable_music) : 1,
+      music_mode: profile.music_mode || 'favorite_rotate',
+      favorite_index: profile.favorite_index !== undefined ? Number(profile.favorite_index) : 0,
+      music_volume: profile.music_volume !== undefined ? Number(profile.music_volume) : -50,
+      schedule_mode: profile.schedule_mode || 'auto_increment',
+      schedule_interval: profile.schedule_interval !== undefined ? Number(profile.schedule_interval) : 10,
+      golden_hours: profile.golden_hours || '11:30,17:30,20:00',
+      caption_mode: profile.caption_mode || 'remove_title',
+      proxy: profile.proxy || null,
+      cookies: serializedCookies,
+      account_id: profile.account_id || null,
+      pass: profile.pass || null,
+      email: profile.email || null,
+      pass_email: profile.pass_email || null,
+      mail_ao: profile.mail_ao || null,
+      last_run: profile.last_run || null
+    };
+
     db.prepare(`
       INSERT INTO profiles (
         id, name, group_name, status, video_folder, enable_music, music_mode, favorite_index,
         music_volume, schedule_mode, schedule_interval, golden_hours,
-        caption_mode, proxy, cookies, last_run
+        caption_mode, proxy, cookies, account_id, pass, email, pass_email, mail_ao, last_run
       ) VALUES (
         @id, @name, @group_name, @status, @video_folder, @enable_music, @music_mode, @favorite_index,
         @music_volume, @schedule_mode, @schedule_interval, @golden_hours,
-        @caption_mode, @proxy, @cookies, @last_run
+        @caption_mode, @proxy, @cookies, @account_id, @pass, @email, @pass_email, @mail_ao, @last_run
       )
-    `).run({
-      ...profile,
-      group_name: profile.group_name || 'Mặc định',
-      enable_music: profile.enable_music ?? 1
-    });
+    `).run(normalized);
   },
 
   update: (profile: Partial<ProfileRecord> & { id: string }): void => {
@@ -166,5 +265,18 @@ export const logRepo = {
     return db.prepare(`
       SELECT * FROM upload_logs WHERE profile_id = ? ORDER BY created_at DESC LIMIT ?
     `).all(profileId, limit) as UploadLogRecord[];
+  },
+
+  getAll: (limit = 200): (UploadLogRecord & { profile_name?: string; group_name?: string })[] => {
+    return db.prepare(`
+      SELECT l.*, p.name as profile_name, p.group_name 
+      FROM upload_logs l 
+      LEFT JOIN profiles p ON l.profile_id = p.id 
+      ORDER BY l.created_at DESC LIMIT ?
+    `).all(limit) as any[];
+  },
+
+  clear: (): void => {
+    db.prepare('DELETE FROM upload_logs').run();
   }
 };

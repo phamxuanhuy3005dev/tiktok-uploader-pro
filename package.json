@@ -1,5 +1,6 @@
 {
   "name": "tiktok-uploader-pro",
+  "productName": "TikTok Uploader Pro",
   "version": "1.0.0",
   "description": "TikTok Multi-Channel Automation & Favorite Music Insertion Engine",
   "main": "./out/main/index.js",
@@ -17,6 +18,29 @@
     "build:unpack": "npm run build && electron-builder --dir",
     "build:mac": "npm run build && electron-builder --mac",
     "build:win": "npm run build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.tiktok.uploaderpro",
+    "productName": "TikTok Uploader Pro",
+    "directories": {
+      "buildResources": "resources"
+    },
+    "mac": {
+      "icon": "resources/icon.icns",
+      "category": "public.app-category.utilities",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "icon": "resources/icon.png",
+      "target": ["nsis", "portable"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TikTok Uploader Pro"
+    }
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.1",
