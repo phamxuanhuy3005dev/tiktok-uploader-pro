@@ -147,8 +147,11 @@ export async function applySchedule(
       await page.keyboard.press('Enter');
       await page.waitForTimeout(500);
 
-      // Bấm ra ngoài vùng form để đóng popover ngày giờ mà không kích hoạt phím Escape
-      await page.locator('body').click({ position: { x: 10, y: 10 } }).catch(() => {});
+      // Đóng focus trên input mà không click vào header hay phím Escape
+      await page.evaluate(() => {
+        (document.activeElement as HTMLElement)?.blur();
+      }).catch(() => {});
+      await dismissPopups(page, log);
 
       log(`Đã điền lịch thành công: ${dateStr} ${timeStr}`);
     } else {

@@ -80,19 +80,40 @@ export async function submitAndConfirmPost(
 
   for (let attempt = 1; attempt <= 10; attempt++) {
     await handleCaptchaWait(page, profile.name, log);
-    await dismissPopups(page);
+    await dismissPopups(page, log);
 
-    const postBtn = page
-      .locator(
-        'button[data-e2e="post_video_button"]:not([disabled]), button:has-text("Schedule"):not([disabled]), button:has-text("Lên lịch"):not([disabled]), button:has-text("Post"):not([disabled])'
-      )
-      .first();
+    const postSelectors = [
+      'button[data-e2e="post_video_button"]',
+      'button.common-button-post-video',
+      'button:has-text("Schedule")',
+      'button:has-text("Lên lịch")',
+      'button:has-text("Post"):not(:has-text("draft"))'
+    ];
 
-    if (await postBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      log(`Nhấn nút đăng (Lần ${attempt}/10)...`);
-      await postBtn.scrollIntoViewIfNeeded().catch(() => {});
-      await postBtn.click({ force: true }).catch(() => {});
+    let targetBtn: any = null;
+    for (const sel of postSelectors) {
+      const btn = page.locator(sel).first();
+      if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
+        const disabled = await btn.getAttribute('disabled');
+        const ariaDisabled = await btn.getAttribute('aria-disabled');
+        if (disabled === null && ariaDisabled !== 'true') {
+          targetBtn = btn;
+          break;
+        }
+      }
+    }
+
+    if (targetBtn) {
+      const btnLabel = ((await targetBtn.innerText().catch(() => '')) || 'Post').trim();
+      log(`Nhấn nút ${btnLabel} (Lần ${attempt}/10)...`);
+      await targetBtn.scrollIntoViewIfNeeded().catch(() => {});
+      try {
+        await targetBtn.click({ timeout: 5000 });
+      } catch (_) {
+        await targetBtn.click({ force: true }).catch(() => {});
+      }
       await page.waitForTimeout(2000);
+      await dismissPopups(page, log);
     }
 
     // Kiểm tra đã xuất bản thành công chưa
