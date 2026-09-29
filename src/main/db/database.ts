@@ -52,7 +52,7 @@ db.pragma('busy_timeout = 10000');
 db.pragma('cache_size = -8000'); // 8MB cache
 db.pragma('temp_store = MEMORY');
 
-// Khởi tạo bảng dữ liệu chuẩn
+// 1. Tạo bảng profiles & upload_logs nếu chưa có
 db.exec(`
   CREATE TABLE IF NOT EXISTS profiles (
     id TEXT PRIMARY KEY NOT NULL,
@@ -84,13 +84,9 @@ db.exec(`
     error_message TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
-
-  CREATE INDEX IF NOT EXISTS idx_profiles_status ON profiles(status);
-  CREATE INDEX IF NOT EXISTS idx_profiles_group ON profiles(group_name);
-  CREATE INDEX IF NOT EXISTS idx_logs_profile_id ON upload_logs(profile_id);
 `);
 
-// Safe migration: thêm cột enable_music và group_name nếu DB cũ chưa có
+// 2. Safe migration: Đảm bảo các cột mới tồn tại TRƯỚC KHI tạo Index
 try {
   const tableInfo = db.prepare('PRAGMA table_info(profiles)').all() as any[];
   const cols = new Set(tableInfo.map((c) => c.name));
@@ -100,6 +96,15 @@ try {
   if (!cols.has('group_name')) {
     db.exec("ALTER TABLE profiles ADD COLUMN group_name TEXT DEFAULT 'Mặc định';");
   }
+} catch (_) {}
+
+// 3. Tạo Index sau khi các cột đã chắc chắn tồn tại
+try {
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_profiles_status ON profiles(status);
+    CREATE INDEX IF NOT EXISTS idx_profiles_group ON profiles(group_name);
+    CREATE INDEX IF NOT EXISTS idx_logs_profile_id ON upload_logs(profile_id);
+  `);
 } catch (_) {}
 
 export const profileRepo = {
