@@ -2,6 +2,7 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { profileRepo, logRepo, ProfileRecord } from '../db/database';
 import { openManualBrowser, closeProfileContext } from '../engine/browser-pool';
 import { uploadQueue } from '../queue/task-queue';
+import { importFromOldTool, exportProfilesToJson, importProfilesFromJson } from '../db/migration';
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Đăng ký listener cập nhật tiến độ upload gửi về UI
@@ -30,6 +31,47 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     await closeProfileContext(id);
     profileRepo.delete(id);
     return profileRepo.getAll();
+  });
+
+  // Import từ tool cũ tiktok-at
+  ipcMain.handle('profiles:importOld', async () => {
+    const res = importFromOldTool();
+    return {
+      profiles: profileRepo.getAll(),
+      ...res
+    };
+  });
+
+  // Export profiles ra file JSON
+  ipcMain.handle('profiles:exportJson', async () => {
+    const res = await dialog.showSaveDialog(mainWindow, {
+      title: 'Xuất danh sách Profiles',
+      defaultPath: 'tiktok_profiles_backup.json',
+      filters: [{ name: 'JSON Files', extensions: ['json'] }]
+    });
+    if (!res.canceled && res.filePath) {
+      exportProfilesToJson(res.filePath);
+      return { success: true, filePath: res.filePath };
+    }
+    return { success: false };
+  });
+
+  // Import profiles từ file JSON
+  ipcMain.handle('profiles:importJson', async () => {
+    const res = await dialog.showOpenDialog(mainWindow, {
+      title: 'Nhập danh sách Profiles từ JSON',
+      filters: [{ name: 'JSON Files', extensions: ['json'] }],
+      properties: ['openFile']
+    });
+    if (!res.canceled && res.filePaths.length > 0) {
+      const count = importProfilesFromJson(res.filePaths[0]);
+      return {
+        success: true,
+        count,
+        profiles: profileRepo.getAll()
+      };
+    }
+    return { success: false };
   });
 
   // Mở trình duyệt đăng nhập thủ công

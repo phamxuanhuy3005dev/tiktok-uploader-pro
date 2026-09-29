@@ -9,6 +9,11 @@ export const api = {
   openBrowser: (id: string) => ipcRenderer.invoke('profiles:openBrowser', id),
   closeBrowser: (id: string) => ipcRenderer.invoke('profiles:closeBrowser', id),
 
+  // Import / Export
+  importFromOldTool: () => ipcRenderer.invoke('profiles:importOld'),
+  exportJson: () => ipcRenderer.invoke('profiles:exportJson'),
+  importJson: () => ipcRenderer.invoke('profiles:importJson'),
+
   // File / Folder Picker
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
 

@@ -5,6 +5,9 @@ export interface IElectronAPI {
   deleteProfile: (id: string) => Promise<any[]>;
   openBrowser: (id: string) => Promise<boolean>;
   closeBrowser: (id: string) => Promise<boolean>;
+  importFromOldTool: () => Promise<{ profiles: any[]; importedCount: number; message: string }>;
+  exportJson: () => Promise<{ success: boolean; filePath?: string }>;
+  importJson: () => Promise<{ success: boolean; count?: number; profiles?: any[] }>;
   selectFolder: () => Promise<string | null>;
   startQueue: (profileIds: string[]) => Promise<any>;
   getQueueStats: () => Promise<any>;

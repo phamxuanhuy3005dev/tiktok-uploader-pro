@@ -87,7 +87,7 @@ export const App: React.FC = () => {
   };
 
   const handleOpenBrowser = async (profile: any) => {
-    toast.info(`Đang mở trình duyệt cho profile [${profile.name}]...`);
+    toast.info(`Đang mở Google Chrome (en-US) cho profile [${profile.name}]...`);
     try {
       await window.api.openBrowser(profile.id);
     } catch (err: any) {
@@ -124,6 +124,46 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleImportOldTool = async () => {
+    toast.loading('Đang quét và nhập dữ liệu từ thư mục tiktok-at cũ...');
+    try {
+      const res = await window.api.importFromOldTool();
+      toast.dismiss();
+      if (res.importedCount > 0) {
+        toast.success(res.message);
+        setProfiles(res.profiles);
+      } else {
+        toast.info('Không có profile mới nào cần nhập (tất cả đã tồn tại).');
+      }
+    } catch (err: any) {
+      toast.dismiss();
+      toast.error(`Lỗi nhập từ tool cũ: ${err.message}`);
+    }
+  };
+
+  const handleExportJson = async () => {
+    try {
+      const res = await window.api.exportJson();
+      if (res.success) {
+        toast.success(`Đã xuất danh sách profiles ra file JSON thành công!`);
+      }
+    } catch (err: any) {
+      toast.error(`Lỗi xuất JSON: ${err.message}`);
+    }
+  };
+
+  const handleImportJson = async () => {
+    try {
+      const res = await window.api.importJson();
+      if (res.success) {
+        toast.success(`Đã nhập thành công ${res.count} profile từ file JSON!`);
+        if (res.profiles) setProfiles(res.profiles);
+      }
+    } catch (err: any) {
+      toast.error(`Lỗi nhập JSON: ${err.message}`);
+    }
+  };
+
   const runningCount = queueStats.runningProfiles?.length || 0;
 
   return (
@@ -139,6 +179,9 @@ export const App: React.FC = () => {
             setIsModalOpen(true);
           }}
           onRunBatch={handleRunBatch}
+          onImportOldTool={handleImportOldTool}
+          onExportJson={handleExportJson}
+          onImportJson={handleImportJson}
           totalProfiles={profiles.length}
           runningCount={runningCount}
         />
@@ -153,7 +196,7 @@ export const App: React.FC = () => {
                   Hàng đợi đang xử lý: {runningCount} profile đồng thời (Worker Pool Concurrency: 2)
                 </p>
                 <p className="text-xs text-rose-400/80">
-                  Tự động kiểm soát tài nguyên RAM/CPU, gắn nhạc Favorites -50dB và chuyển video sang folder done/.
+                  Chuẩn hóa giao diện en-US cho kênh US, gắn nhạc Favorites -50dB và chuyển video sang folder done/.
                 </p>
               </div>
             </div>
@@ -172,17 +215,25 @@ export const App: React.FC = () => {
             </div>
             <h3 className="text-base font-bold text-zinc-100">Chưa có Profile TikTok nào</h3>
             <p className="text-xs text-zinc-400 max-w-md mt-1 mb-5">
-              Bấm nút &quot;Thêm Profile&quot; để tạo hồ sơ kênh, chọn thư mục video nguồn và cấu hình nhạc Favorites kiếm tiền.
+              Bạn có thể bấm nút <strong className="text-amber-400">&quot;Nhập từ Tool Cũ&quot;</strong> để kéo toàn bộ kênh & cookie có sẵn từ tiktok-at, hoặc bấm &quot;Thêm Profile&quot; để tạo mới.
             </p>
-            <button
-              onClick={() => {
-                setEditingProfile(null);
-                setIsModalOpen(true);
-              }}
-              className="px-4 py-2 rounded-lg bg-zinc-100 text-zinc-900 text-xs font-semibold hover:bg-white shadow transition-all"
-            >
-              + Tạo Profile Đầu Tiên
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={handleImportOldTool}
+                className="px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition-all"
+              >
+                Nhập từ Tool Cũ (tiktok-at)
+              </button>
+              <button
+                onClick={() => {
+                  setEditingProfile(null);
+                  setIsModalOpen(true);
+                }}
+                className="px-4 py-2 rounded-lg bg-zinc-100 text-zinc-900 text-xs font-semibold hover:bg-white shadow transition-all"
+              >
+                + Tạo Profile Mới
+              </button>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

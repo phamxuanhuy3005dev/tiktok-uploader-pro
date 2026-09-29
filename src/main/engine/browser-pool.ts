@@ -5,19 +5,20 @@ import { ProfileRecord, PROFILES_DIR, profileRepo } from '../db/database';
 
 const activeContexts = new Map<string, BrowserContext>();
 
-const STEALTH_CHROME_ARGS = [
+const CLEAN_CHROME_ARGS = [
   '--disable-blink-features=AutomationControlled',
   '--no-first-run',
   '--no-default-browser-check',
   '--password-store=basic',
-  '--disable-features=UseMultiplaneOverlayForHardwareVideo,IsolateOrigins,site-per-process',
+  '--disable-features=UseMultiplaneOverlayForHardwareVideo',
   '--enable-features=PaintHolding',
   '--metrics-recording-only',
   '--disable-breakpad',
   '--disable-sync',
   '--disable-default-apps',
   '--disable-component-update',
-  '--start-maximized'
+  '--start-maximized',
+  '--lang=en-US'
 ];
 
 /**
@@ -37,38 +38,39 @@ export function cleanBrowserLocks(userDataDir: string): void {
 }
 
 /**
- * Tiêm các script Stealth qua evaluateOnNewDocument để TikTok không phát hiện bot
+ * Xóa cache shader GPU tránh lỗi treo WebGL / Captcha
  */
-export async function applyStealthScripts(context: BrowserContext): Promise<void> {
-  await context.addInitScript(() => {
-    // 1. Ghi đè navigator.webdriver
-    Object.defineProperty(navigator, 'webdriver', {
-      get: () => undefined
-    });
+export function cleanProfileGpuCache(userDataDir: string): void {
+  if (!fs.existsSync(userDataDir)) return;
+  const staleDirs = [
+    path.join(userDataDir, 'Default', 'GPUCache'),
+    path.join(userDataDir, 'Default', 'DawnGraphiteCache'),
+    path.join(userDataDir, 'Default', 'DawnWebGPUCache'),
+    path.join(userDataDir, 'GrShaderCache'),
+    path.join(userDataDir, 'ShaderCache')
+  ];
+  for (const dir of staleDirs) {
+    try {
+      if (fs.existsSync(dir)) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    } catch (_) {}
+  }
+}
 
-    // 2. Fake chrome.runtime
-    // @ts-ignore
-    window.chrome = {
-      runtime: {
-        id: undefined,
-        connect: () => {},
-        sendMessage: () => {}
-      },
-      loadTimes: () => {},
-      csi: () => {},
-      app: {}
-    };
-
-    // 3. Fake navigator.languages
-    Object.defineProperty(navigator, 'languages', {
-      get: () => ['vi-VN', 'vi', 'en-US', 'en']
-    });
-
-    // 4. Fake navigator.plugins
-    Object.defineProperty(navigator, 'plugins', {
-      get: () => [1, 2, 3, 4, 5]
-    });
-  });
+/**
+ * Kiểm tra xem máy có cài Google Chrome chính chủ không
+ */
+function hasSystemChrome(): boolean {
+  if (process.platform === 'darwin') {
+    return fs.existsSync('/Applications/Google Chrome.app');
+  } else if (process.platform === 'win32') {
+    const p1 = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+    const p2 = 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe';
+    const p3 = `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`;
+    return fs.existsSync(p1) || fs.existsSync(p2) || fs.existsSync(p3);
+  }
+  return false;
 }
 
 /**
@@ -79,22 +81,31 @@ export async function launchProfileContext(
   headless = false
 ): Promise<{ context: BrowserContext; page: Page }> {
   const userDataDir = path.join(PROFILES_DIR, profile.name);
+  if (!fs.existsSync(userDataDir)) {
+    fs.mkdirSync(userDataDir, { recursive: true });
+  }
+
   cleanBrowserLocks(userDataDir);
+  cleanProfileGpuCache(userDataDir);
 
   const launchOptions: any = {
     headless,
-    viewport: null, // Dùng toàn màn hình
-    args: [...STEALTH_CHROME_ARGS],
-    userAgent:
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-    locale: 'vi-VN',
-    timezoneId: 'Asia/Ho_Chi_Minh'
+    viewport: null, // Full màn hình
+    args: [...CLEAN_CHROME_ARGS],
+    locale: 'en-US',
+    extraHTTPHeaders: {
+      'Accept-Language': 'en-US,en;q=0.9'
+    }
   };
+
+  // Ưu tiên dùng Google Chrome thật nếu có trên máy (tránh hoàn toàn lỗi "max attempts" của TikTok)
+  if (hasSystemChrome()) {
+    launchOptions.channel = 'chrome';
+  }
 
   // Cấu hình Proxy nếu có
   if (profile.proxy && profile.proxy.trim()) {
     const rawProxy = profile.proxy.trim();
-    // Parse proxy dạng http://user:pass@ip:port hoặc ip:port:user:pass
     if (rawProxy.includes('://')) {
       launchOptions.proxy = { server: rawProxy };
     } else {
@@ -113,8 +124,25 @@ export async function launchProfileContext(
     }
   }
 
-  const context = await chromium.launchPersistentContext(userDataDir, launchOptions);
-  await applyStealthScripts(context);
+  let context: BrowserContext;
+  try {
+    context = await chromium.launchPersistentContext(userDataDir, launchOptions);
+  } catch (err: any) {
+    // Nếu channel 'chrome' bị lỗi, fallback về chromium mặc định
+    if (launchOptions.channel) {
+      delete launchOptions.channel;
+      context = await chromium.launchPersistentContext(userDataDir, launchOptions);
+    } else {
+      throw err;
+    }
+  }
+
+  // Chỉ xóa navigator.webdriver một cách tinh gọn, TUYỆT ĐỐI không mock plugins/runtime gây nghi ngờ bot
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', {
+      get: () => undefined
+    });
+  });
 
   // Nạp cookies nếu có
   if (profile.cookies) {
@@ -141,7 +169,8 @@ export async function openManualBrowser(profile: ProfileRecord, onClosed?: () =>
   const { context, page } = await launchProfileContext(profile, false);
   profileRepo.updateStatus(profile.id, 'manual_session');
 
-  await page.goto('https://www.tiktok.com/', { waitUntil: 'domcontentloaded' }).catch(() => {});
+  // Điều hướng vào trang login hoặc trang chủ với ngôn ngữ tiếng Anh
+  await page.goto('https://www.tiktok.com/login', { waitUntil: 'domcontentloaded' }).catch(() => {});
 
   context.on('close', async () => {
     try {
