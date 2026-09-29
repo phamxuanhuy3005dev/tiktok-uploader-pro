@@ -28,30 +28,36 @@
 
 ---
 
-## 🚀 Hướng Dẫn Sử Dụng Nhanh (1-Click Run)
+## 👥 Hướng Dẫn Cài Đặt Cho Thành Viên Khác (Phân Phối Nhanh)
 
-### Trên macOS:
-- Nhấp đúp chuột vào file: **`Chay-App-Mac.command`**
+Tool hoạt động theo mô hình **Smart Portable Runner** (giống tool cũ): Cực kỳ mượt, không cần cài đặt phức tạp, tự động cập nhật code mới mỗi khi mở app!
 
-### Trên Windows:
-- Nhấp đúp chuột vào file: **`Chay-App-Windows.bat`**
-
-### Hoặc chạy qua Terminal:
+### 📥 1. Tải về lần đầu:
+Mở Terminal (Mac) hoặc Git Bash / CMD (Windows) và chạy:
 ```bash
-cd /Users/fanboyrose/Desktop/tiktok-uploader-pro
-npm run dev
+git clone https://github.com/phamxuanhuy3005dev/tiktok-uploader-pro.git
 ```
+
+### ⚡ 2. Khởi chạy 1 chạm:
+- **Trên macOS**: Nhấp đúp chuột vào file **`Chay-App-Mac.command`**
+- **Trên Windows**: Nhấp đúp chuột vào file **`Chay-App-Windows.bat`**
+
+> **Cơ chế tự động của Smart Runner**:
+> - Tự động chạy `git pull` để nhận code mới nhất từ GitHub.
+> - Tự động cài thư viện (`npm install` & `playwright`) nếu máy mới chưa có.
+> - Tự động kiểm tra file thay đổi và compile siêu tốc (< 0.6s).
+> - Mở ứng dụng trực tiếp ở chế độ Production tối ưu RAM và mượt mà nhất.
 
 ---
 
 ## 📖 Quy Trình Làm Việc Chuẩn (Workflow MMO)
 
-1. **Bước 1: Thêm Profile**:
+1. **Bước 1: Thêm Profile & Gán Thư Mục**:
    - Bấm nút **"Thêm Profile"** trên giao diện.
-   - Điền tên kênh (ví dụ: `review_phim_01`).
-   - Bấm **"Chọn Folder"** để chỉ định thư mục chứa các video cần đăng.
-   - Thiết lập chế độ nhạc: *Cố định 1 bài* hoặc *Xoay vòng các bài trong Favorites*.
-   - Thiết lập lịch đăng: *Nối tiếp (+10 phút)* hoặc *Khung giờ vàng (11:30, 17:30, 20:00)*.
+   - Điền tên kênh (ví dụ: `review_phim_01`), chọn Nhóm kênh.
+   - Chọn Folder video riêng hoặc dùng tính năng **"Chia Đều Video"** để tự động phân phối 1 thư mục mẹ cho nhiều profile theo nhóm.
+   - Thiết lập cấu hình nhạc: *Tắt nhạc* hoặc *Bật nhạc yêu thích (Xoay vòng hoặc Cố định bài)*.
+   - Thiết lập proxy (nếu nuôi nick ngoại: hỗ trợ `http://`, `socks5://`, có nút kiểm tra IP/Quốc gia trực tiếp).
 
 2. **Bước 2: Đăng Nhập Tài Khoản Lần Đầu**:
    - Bấm nút **"Mở Trình Duyệt"** tại card profile tương ứng.
@@ -60,4 +66,5 @@ npm run dev
    - Tắt cửa sổ trình duyệt: Ứng dụng sẽ tự động lưu Cookies và phiên đăng nhập vào database SQLite vĩnh viễn.
 
 3. **Bước 3: Bắt Đầu Upload**:
-   - Bấm nút **"Bắt Đầu Upload"** trên từng profile hoặc nút **"Chạy Hàng Loạt"** ở góc trên để hệ thống tự động xử lý toàn bộ dàn kênh!
+   - Chọn các profile cần chạy rồi bấm **"Bắt đầu đăng"**.
+   - Hệ thống tự động kiểm tra cảnh báo thư mục trống, lên lịch chuẩn xác và di chuyển video sang `done/` sau khi hoàn tất.
