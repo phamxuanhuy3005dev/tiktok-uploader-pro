@@ -19,15 +19,33 @@ export async function attachFavoriteMusic(
     try {
       await dismissPopups(page, log);
 
-      // 1. Tìm nút mở Sounds / Web Video Editor
-      const soundsBtn = page
-        .locator(
-          'button[data-button-name="sounds"], .editor-entrance[data-button-name="sounds"], button:has-text("Sounds"), button:has-text("Edit video")'
-        )
-        .first();
+      // 1. Tìm nút mở Sounds Editor chính xác trên video card (chuẩn theo tiktok-at)
+      const soundsSelector = '.editor-entrance[data-button-name="sounds"], button[data-button-name="sounds"]';
+      const soundsBtn = page.locator(soundsSelector).first();
 
-      await soundsBtn.waitFor({ state: 'visible', timeout: 25000 });
-      await soundsBtn.scrollIntoViewIfNeeded().catch(() => {});
+      let soundsVisible = false;
+      for (let waitSec = 0; waitSec < 25; waitSec++) {
+        await page
+          .evaluate(() => {
+            const btn = document.querySelector(
+              '.editor-entrance[data-button-name="sounds"], [data-button-name="sounds"]'
+            );
+            if (btn) btn.scrollIntoView({ block: 'center' });
+          })
+          .catch(() => null);
+
+        if (await soundsBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+          soundsVisible = true;
+          break;
+        }
+        await page.waitForTimeout(1000);
+        await dismissPopups(page, log);
+      }
+
+      if (!soundsVisible) {
+        throw new Error('Không tìm thấy nút Sounds Editor sau khi nạp video.');
+      }
+
       await soundsBtn.click({ force: true });
       log('Đã nhấn nút mở Sounds Editor. Đang tải trình biên tập âm thanh...');
       await page.waitForTimeout(3000);

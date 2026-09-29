@@ -78,13 +78,14 @@ export async function dismissPopups(page: Page, log?: (msg: string) => void): Pr
       dismissedAny = true;
     }
 
-    // 4. Popup xác nhận Discard / Exit khác -> Luôn chọn Stay/Cancel/Not now, KHÔNG chọn Discard
+    // 4. Popup xác nhận Exit ("Are you sure you want to exit?") -> Luôn chọn Cancel để tiếp tục ở lại trang
     const exitCancelBtn = page
       .locator(
-        'div[role="dialog"]:has-text("Discard") button:has-text("Not now"), div[role="dialog"]:has-text("Discard") button:has-text("Cancel"), div[role="dialog"]:has-text("exit") button:has-text("Cancel")'
+        'div:has-text("Are you sure you want to exit") button:has-text("Cancel"), [class*="Modal"]:has-text("exit") button:has-text("Cancel"), div[role="dialog"]:has-text("exit") button:has-text("Cancel"), div[role="dialog"]:has-text("Discard") button:has-text("Cancel"), div[role="dialog"]:has-text("Discard") button:has-text("Not now")'
       )
       .first();
-    if (await exitCancelBtn.isVisible({ timeout: 200 }).catch(() => false)) {
+    if (await exitCancelBtn.isVisible({ timeout: 250 }).catch(() => false)) {
+      if (log) log('Đã tự động bấm "Cancel" trên popup "Are you sure you want to exit?" để ở lại trang đăng.');
       await exitCancelBtn.click({ force: true }).catch(() => {});
       dismissedAny = true;
       await page.waitForTimeout(300);
