@@ -1,18 +1,61 @@
-import PQueue from 'p-queue';
 import { ProfileRecord, profileRepo } from '../db/database';
 import { runUploadPipeline, PipelineProgressEvent } from '../engine/upload-pipeline';
 
+/**
+ * Hàng đợi bất đồng bộ thuần (Zero-dependency async concurrency queue)
+ * Tương thích 100% với Electron Main process mà không gặp lỗi ESM/CJS interop của p-queue.
+ */
+class SimpleAsyncQueue {
+  private concurrency: number;
+  private running = 0;
+  private queue: (() => Promise<void>)[] = [];
+
+  constructor(concurrency = 2) {
+    this.concurrency = concurrency;
+  }
+
+  public setConcurrency(limit: number): void {
+    this.concurrency = Math.max(1, limit);
+    this.next();
+  }
+
+  public add(task: () => Promise<void>): void {
+    this.queue.push(task);
+    this.next();
+  }
+
+  private next(): void {
+    while (this.running < this.concurrency && this.queue.length > 0) {
+      const task = this.queue.shift();
+      if (!task) break;
+      this.running++;
+      task().finally(() => {
+        this.running--;
+        this.next();
+      });
+    }
+  }
+
+  public get size(): number {
+    return this.queue.length;
+  }
+
+  public get pending(): number {
+    return this.running;
+  }
+}
+
 export class UploadQueueManager {
-  private queue: PQueue;
+  private queue: SimpleAsyncQueue;
   private runningProfiles: Set<string> = new Set();
   private progressListeners: ((event: PipelineProgressEvent) => void)[] = [];
 
   constructor(concurrency = 2) {
-    this.queue = new PQueue({ concurrency });
+    this.queue = new SimpleAsyncQueue(concurrency);
   }
 
   public setConcurrency(limit: number): void {
-    this.queue.concurrency = Math.max(1, limit);
+    this.queue.setConcurrency(limit);
   }
 
   public onProgress(listener: (event: PipelineProgressEvent) => void): void {
