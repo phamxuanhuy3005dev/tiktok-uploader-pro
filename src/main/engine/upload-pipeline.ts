@@ -87,9 +87,13 @@ export async function runUploadPipeline(
         currentStep = 'ATTACHING_FILE';
         await attachVideoFile(page, videoPath, (m) => log(m));
 
-        // BƯỚC 3: BẮT BUỘC GẮN NHẠC FAVORITES (Nguồn kiếm tiền)
-        currentStep = 'ATTACHING_MUSIC';
-        await attachFavoriteMusic(page, profile, uploadedCount, (m) => log(m));
+        // BƯỚC 3: GẮN NHẠC FAVORITES (Nếu profile bật tính năng này)
+        if (profile.enable_music !== 0) {
+          currentStep = 'ATTACHING_MUSIC';
+          await attachFavoriteMusic(page, profile, uploadedCount, (m) => log(m));
+        } else {
+          log('Profile cấu hình TẮT chèn nhạc: Bỏ qua editor, giữ nguyên âm thanh gốc của video.');
+        }
 
         // BƯỚC 4: Xử lý Caption / Hashtag
         currentStep = 'PROCESSING_CAPTION';

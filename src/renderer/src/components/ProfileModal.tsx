@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, Music, Calendar, FileText, Globe, AlertTriangle } from 'lucide-react';
+import { Folder, Music, Calendar, FileText, Globe, AlertTriangle, Users } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -18,8 +18,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   initialData
 }) => {
   const [name, setName] = useState('');
+  const [groupName, setGroupName] = useState('Mặc định');
   const [videoFolder, setVideoFolder] = useState('');
-  const [musicMode, setMusicMode] = useState<'favorite_single' | 'favorite_rotate'>('favorite_single');
+  const [enableMusic, setEnableMusic] = useState(true);
+  const [musicMode, setMusicMode] = useState<'favorite_single' | 'favorite_rotate'>('favorite_rotate');
   const [favoriteIndex, setFavoriteIndex] = useState(0);
   const [musicVolume, setMusicVolume] = useState(-50);
   const [scheduleMode, setScheduleMode] = useState<'immediate' | 'auto_increment' | 'golden_hours'>('auto_increment');
@@ -32,8 +34,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   useEffect(() => {
     if (initialData) {
       setName(initialData.name || '');
+      setGroupName(initialData.group_name || 'Mặc định');
       setVideoFolder(initialData.video_folder || '');
-      setMusicMode(initialData.music_mode || 'favorite_single');
+      setEnableMusic(initialData.enable_music !== 0);
+      setMusicMode(initialData.music_mode || 'favorite_rotate');
       setFavoriteIndex(initialData.favorite_index ?? 0);
       setMusicVolume(initialData.music_volume ?? -50);
       setScheduleMode(initialData.schedule_mode || 'auto_increment');
@@ -43,8 +47,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setProxy(initialData.proxy || '');
     } else {
       setName('');
+      setGroupName('Mặc định');
       setVideoFolder('');
-      setMusicMode('favorite_single');
+      setEnableMusic(true);
+      setMusicMode('favorite_rotate'); // Mặc định xoay vòng theo yêu cầu
       setFavoriteIndex(0);
       setMusicVolume(-50);
       setScheduleMode('auto_increment');
@@ -71,7 +77,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       await onSave({
         id: initialData?.id || `profile_${Date.now()}`,
         name: name.trim(),
+        group_name: groupName.trim() || 'Mặc định',
         video_folder: videoFolder.trim(),
+        enable_music: enableMusic ? 1 : 0,
         music_mode: musicMode,
         favorite_index: Number(favoriteIndex) || 0,
         music_volume: Number(musicVolume) || -50,
@@ -95,12 +103,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={initialData ? `Chỉnh Sửa Profile: ${initialData.name}` : 'Thêm Profile Mới'}
-      description="Cấu hình tài khoản, thư mục video, quy tắc gắn nhạc kiếm tiền và lên lịch."
+      description="Cấu hình tài khoản, nhóm kênh, thư mục video, quy tắc chèn nhạc và lên lịch."
       className="max-w-2xl max-h-[90vh] overflow-y-auto"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Tên & Thư mục */}
-        <div className="space-y-3">
+        {/* Tên & Nhóm */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
               Tên Profile (Định danh kênh)
@@ -108,81 +116,127 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="ví dụ: review_phim_01, channel_us_trending"
+              placeholder="ví dụ: juliapiper_paz, review_01"
               required
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
-              Thư mục Video nguồn
+            <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5 text-zinc-400" /> Nhóm Kênh (Group)
             </label>
-            <div className="flex gap-2">
-              <Input
-                value={videoFolder}
-                onChange={(e) => setVideoFolder(e.target.value)}
-                placeholder="/Users/username/Videos/Channel1"
-                className="flex-1 font-mono text-xs"
-              />
-              <Button type="button" variant="secondary" onClick={handleSelectFolder}>
-                <Folder className="h-4 w-4 mr-1 text-zinc-400" /> Chọn Folder
-              </Button>
-            </div>
-            <p className="text-[11px] text-zinc-500 mt-1">
-              * Video sau khi đăng thành công sẽ tự động được chuyển sang thư mục con <code className="text-zinc-400">done/</code>.
-            </p>
+            <Input
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              placeholder="ví dụ: Huy nuoi 1, US Clone, Affiliate..."
+            />
           </div>
         </div>
 
-        {/* Khối Gắn Nhạc Favorites (Quan Trọng Nhất) */}
+        {/* Thư mục Video nguồn */}
+        <div>
+          <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
+            Thư mục Video nguồn
+          </label>
+          <div className="flex gap-2">
+            <Input
+              value={videoFolder}
+              onChange={(e) => setVideoFolder(e.target.value)}
+              placeholder="/Users/username/Videos/Channel1"
+              className="flex-1 font-mono text-xs"
+            />
+            <Button type="button" variant="secondary" onClick={handleSelectFolder}>
+              <Folder className="h-4 w-4 mr-1 text-zinc-400" /> Chọn Folder
+            </Button>
+          </div>
+          <p className="text-[11px] text-zinc-500 mt-1">
+            * Video sau khi đăng thành công sẽ tự động được chuyển sang thư mục con <code className="text-zinc-400">done/</code>.
+          </p>
+        </div>
+
+        {/* Khối Gắn Nhạc Favorites (Tùy chọn Bật/Tắt) */}
         <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4 space-y-3">
-          <div className="flex items-center gap-2 text-rose-400 font-semibold text-sm">
-            <Music className="h-4 w-4" /> Cấu Hình Gắn Nhạc Yêu Thích (Favorites Sound)
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Chế độ chọn bài</label>
-              <select
-                value={musicMode}
-                onChange={(e: any) => setMusicMode(e.target.value)}
-                className="w-full h-9 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-rose-500"
-              >
-                <option value="favorite_single">Cố định 1 bài hát chỉ định</option>
-                <option value="favorite_rotate">Xoay vòng các bài trong Favorites</option>
-              </select>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-rose-400 font-semibold text-sm">
+              <Music className="h-4 w-4" /> Tự Động Chèn Nhạc Favorites
             </div>
-
-            {musicMode === 'favorite_single' && (
-              <div>
-                <label className="block text-xs text-zinc-400 mb-1">Vị trí bài trong Favorites (0 là đầu tiên)</label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={favoriteIndex}
-                  onChange={(e) => setFavoriteIndex(Number(e.target.value))}
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Âm lượng nhạc nền (dB)</label>
-              <Input
-                type="number"
-                value={musicVolume}
-                onChange={(e) => setMusicVolume(Number(e.target.value))}
-                placeholder="-50"
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={enableMusic}
+                onChange={(e) => setEnableMusic(e.target.checked)}
+                className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 bg-zinc-900 border-zinc-700"
               />
-              <span className="text-[10px] text-zinc-500">-50 dB giúp giữ tiếng gốc nhưng vẫn ăn view nhạc.</span>
-            </div>
+              <span className="text-xs font-medium text-zinc-200">
+                {enableMusic ? 'Đang Bật' : 'Tắt (Giữ tiếng gốc)'}
+              </span>
+            </label>
           </div>
 
-          <div className="flex items-start gap-2 bg-rose-500/10 rounded-lg p-2.5 text-xs text-rose-300">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
-            <span>
-              <strong>Bảo vệ doanh thu:</strong> Nếu tài khoản chưa lưu bài nhạc nào trong mục Favorites hoặc lỗi không bấm được Save, hệ thống sẽ <strong>HỦY ĐĂNG</strong> video đó để bảo toàn file, không làm mất view nhạc!
-            </span>
-          </div>
+          {enableMusic ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Chế độ chọn bài</label>
+                  <select
+                    value={musicMode}
+                    onChange={(e: any) => setMusicMode(e.target.value)}
+                    className="w-full h-9 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-rose-500"
+                  >
+                    <option value="favorite_rotate">Xoay vòng các bài trong Favorites (Mặc định)</option>
+                    <option value="favorite_single">Cố định 1 bài hát chỉ định</option>
+                  </select>
+                </div>
+
+                {musicMode === 'favorite_single' ? (
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">Vị trí bài trong Favorites (0 là đầu tiên)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={favoriteIndex}
+                      onChange={(e) => setFavoriteIndex(Number(e.target.value))}
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">Âm lượng nhạc nền (dB)</label>
+                    <Input
+                      type="number"
+                      value={musicVolume}
+                      onChange={(e) => setMusicVolume(Number(e.target.value))}
+                      placeholder="-50"
+                    />
+                    <span className="text-[10px] text-zinc-500">-50 dB giúp giữ tiếng gốc nhưng vẫn ăn view nhạc.</span>
+                  </div>
+                )}
+              </div>
+
+              {musicMode === 'favorite_single' && (
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Âm lượng nhạc nền (dB)</label>
+                  <Input
+                    type="number"
+                    value={musicVolume}
+                    onChange={(e) => setMusicVolume(Number(e.target.value))}
+                    placeholder="-50"
+                  />
+                  <span className="text-[10px] text-zinc-500">-50 dB giúp giữ tiếng gốc nhưng vẫn ăn view nhạc.</span>
+                </div>
+              )}
+
+              <div className="flex items-start gap-2 bg-rose-500/10 rounded-lg p-2.5 text-xs text-rose-300">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+                <span>
+                  <strong>Bảo vệ doanh thu:</strong> Nếu tài khoản chưa lưu bài nhạc nào trong mục Favorites hoặc kẹt nút Save, hệ thống sẽ <strong>HỦY ĐĂNG</strong> video đó để bảo toàn file, không làm mất view nhạc!
+                </span>
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-zinc-400 py-1">
+              Profile này được cấu hình <strong>TẮT chèn nhạc</strong>. Video sẽ được tải lên với âm thanh gốc, bỏ qua hoàn toàn trình biên tập âm thanh.
+            </p>
+          )}
         </div>
 
         {/* Khối Lên Lịch (Scheduling) */}

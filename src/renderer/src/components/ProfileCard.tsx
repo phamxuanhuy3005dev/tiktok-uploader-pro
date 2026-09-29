@@ -10,7 +10,8 @@ import {
   Trash2,
   ListOrdered,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Users
 } from 'lucide-react';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
@@ -58,8 +59,13 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       {/* Header card */}
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-bold text-base text-zinc-100 group-hover:text-white">{profile.name}</h3>
+            {profile.group_name && profile.group_name !== 'Mặc định' && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-zinc-800/80 px-2 py-0.5 text-[11px] font-medium text-zinc-300 border border-zinc-700/50">
+                <Users className="h-3 w-3 text-zinc-400" /> {profile.group_name}
+              </span>
+            )}
             {getStatusBadge()}
           </div>
           <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-1">
@@ -113,8 +119,11 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         <div className="flex items-center gap-2">
           <Music className="h-3.5 w-3.5 text-rose-400 shrink-0" />
           <span className="truncate text-zinc-300">
-            {profile.music_mode === 'favorite_rotate' ? 'Xoay vòng Favorites' : `Favorites #${profile.favorite_index + 1}`}{' '}
-            ({profile.music_volume} dB)
+            {profile.enable_music === 0
+              ? 'Tắt chèn nhạc (Tiếng gốc)'
+              : profile.music_mode === 'favorite_rotate'
+                ? `Xoay vòng Favorites (${profile.music_volume} dB)`
+                : `Favorites #${profile.favorite_index + 1} (${profile.music_volume} dB)`}
           </span>
         </div>
 
@@ -132,7 +141,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         <div className="flex items-center gap-2 overflow-hidden">
           <Globe className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
           <span className="truncate font-mono text-[11px]">
-            {profile.proxy ? profile.proxy.replace(/:[^:]*@/, ':***@') : 'IP Mạng Trực Tiếp (No Proxy)'}
+            {profile.proxy ? profile.proxy.replace(/:[^:]*@/, ':***@') : 'IP Trực Tiếp (No Proxy)'}
           </span>
         </div>
       </div>

@@ -10,14 +10,15 @@ const CLEAN_CHROME_ARGS = [
   '--no-first-run',
   '--no-default-browser-check',
   '--password-store=basic',
+  '--disable-direct-composition-video-overlays',
   '--disable-features=UseMultiplaneOverlayForHardwareVideo',
   '--enable-features=PaintHolding',
   '--metrics-recording-only',
   '--disable-breakpad',
+  '--disable-prompt-on-repost',
   '--disable-sync',
   '--disable-default-apps',
   '--disable-component-update',
-  '--start-maximized',
   '--lang=en-US'
 ];
 
@@ -59,21 +60,6 @@ export function cleanProfileGpuCache(userDataDir: string): void {
 }
 
 /**
- * Kiểm tra xem máy có cài Google Chrome chính chủ không
- */
-function hasSystemChrome(): boolean {
-  if (process.platform === 'darwin') {
-    return fs.existsSync('/Applications/Google Chrome.app');
-  } else if (process.platform === 'win32') {
-    const p1 = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-    const p2 = 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe';
-    const p3 = `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`;
-    return fs.existsSync(p1) || fs.existsSync(p2) || fs.existsSync(p3);
-  }
-  return false;
-}
-
-/**
  * Khởi chạy Browser Context cho một profile
  */
 export async function launchProfileContext(
@@ -92,16 +78,13 @@ export async function launchProfileContext(
     headless,
     viewport: null, // Full màn hình
     args: [...CLEAN_CHROME_ARGS],
+    // Tắt hoàn toàn cờ --no-sandbox để không hiện thanh cảnh báo của Chrome
+    ignoreDefaultArgs: ['--no-sandbox'],
     locale: 'en-US',
     extraHTTPHeaders: {
       'Accept-Language': 'en-US,en;q=0.9'
     }
   };
-
-  // Ưu tiên dùng Google Chrome thật nếu có trên máy (tránh hoàn toàn lỗi "max attempts" của TikTok)
-  if (hasSystemChrome()) {
-    launchOptions.channel = 'chrome';
-  }
 
   // Cấu hình Proxy nếu có
   if (profile.proxy && profile.proxy.trim()) {
@@ -124,25 +107,8 @@ export async function launchProfileContext(
     }
   }
 
-  let context: BrowserContext;
-  try {
-    context = await chromium.launchPersistentContext(userDataDir, launchOptions);
-  } catch (err: any) {
-    // Nếu channel 'chrome' bị lỗi, fallback về chromium mặc định
-    if (launchOptions.channel) {
-      delete launchOptions.channel;
-      context = await chromium.launchPersistentContext(userDataDir, launchOptions);
-    } else {
-      throw err;
-    }
-  }
-
-  // Chỉ xóa navigator.webdriver một cách tinh gọn, TUYỆT ĐỐI không mock plugins/runtime gây nghi ngờ bot
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, 'webdriver', {
-      get: () => undefined
-    });
-  });
+  // Khởi chạy persistent context thuần với cờ chống bot chuẩn của Chromium
+  const context = await chromium.launchPersistentContext(userDataDir, launchOptions);
 
   // Nạp cookies nếu có
   if (profile.cookies) {
@@ -169,8 +135,8 @@ export async function openManualBrowser(profile: ProfileRecord, onClosed?: () =>
   const { context, page } = await launchProfileContext(profile, false);
   profileRepo.updateStatus(profile.id, 'manual_session');
 
-  // Điều hướng vào trang login hoặc trang chủ với ngôn ngữ tiếng Anh
-  await page.goto('https://www.tiktok.com/login', { waitUntil: 'domcontentloaded' }).catch(() => {});
+  // Điều hướng vào trang chủ hoặc login TikTok
+  await page.goto('https://www.tiktok.com/', { waitUntil: 'domcontentloaded' }).catch(() => {});
 
   context.on('close', async () => {
     try {

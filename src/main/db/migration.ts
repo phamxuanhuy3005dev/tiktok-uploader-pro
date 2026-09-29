@@ -15,6 +15,16 @@ export function importFromOldTool(oldToolPath = '/Users/fanboyrose/Desktop/tikto
   }
 
   const oldDb = new Database(oldDbPath, { readonly: true });
+
+  // Đọc danh sách groups cũ nếu có
+  const groupMap = new Map<string, string>();
+  try {
+    const oldGroups = oldDb.prepare('SELECT id, name FROM groups').all() as any[];
+    for (const g of oldGroups) {
+      if (g.id && g.name) groupMap.set(g.id, g.name);
+    }
+  } catch (_) {}
+
   const oldProfiles = oldDb.prepare('SELECT * FROM profiles').all() as any[];
 
   let count = 0;
@@ -37,12 +47,16 @@ export function importFromOldTool(oldToolPath = '/Users/fanboyrose/Desktop/tikto
       }
     }
 
+    const groupName = oldP.group_id ? groupMap.get(oldP.group_id) || 'Mặc định' : 'Mặc định';
+
     profileRepo.create({
       id: oldP.id || `profile_${Date.now()}_${count}`,
       name: oldP.name,
+      group_name: groupName,
       status: 'idle',
       video_folder: oldP.video_folder || '',
-      music_mode: 'favorite_single',
+      enable_music: oldP.set_music !== undefined ? oldP.set_music : 1,
+      music_mode: 'favorite_rotate', // Mặc định xoay vòng theo yêu cầu của user
       favorite_index: 0,
       music_volume: -50,
       schedule_mode: oldP.auto_increment_schedule ? 'auto_increment' : 'immediate',
@@ -59,7 +73,7 @@ export function importFromOldTool(oldToolPath = '/Users/fanboyrose/Desktop/tikto
   oldDb.close();
   return {
     importedCount: count,
-    message: `Đã nhập thành công ${count} profile và phiên đăng nhập từ tool cũ!`
+    message: `Đã nhập thành công ${count} profile và các nhóm từ tool cũ!`
   };
 }
 

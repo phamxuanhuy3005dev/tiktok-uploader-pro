@@ -6,8 +6,10 @@ import { app } from 'electron';
 export interface ProfileRecord {
   id: string;
   name: string;
+  group_name: string;
   status: string;
   video_folder: string;
+  enable_music: number; // 1: Bật, 0: Tắt
   music_mode: 'favorite_single' | 'favorite_rotate';
   favorite_index: number;
   music_volume: number;
@@ -55,9 +57,11 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS profiles (
     id TEXT PRIMARY KEY NOT NULL,
     name TEXT UNIQUE NOT NULL,
+    group_name TEXT DEFAULT 'Mặc định',
     status TEXT DEFAULT 'idle',
     video_folder TEXT DEFAULT '',
-    music_mode TEXT DEFAULT 'favorite_single',
+    enable_music INTEGER DEFAULT 1,
+    music_mode TEXT DEFAULT 'favorite_rotate',
     favorite_index INTEGER DEFAULT 0,
     music_volume INTEGER DEFAULT -50,
     schedule_mode TEXT DEFAULT 'auto_increment',
@@ -82,8 +86,21 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_profiles_status ON profiles(status);
+  CREATE INDEX IF NOT EXISTS idx_profiles_group ON profiles(group_name);
   CREATE INDEX IF NOT EXISTS idx_logs_profile_id ON upload_logs(profile_id);
 `);
+
+// Safe migration: thêm cột enable_music và group_name nếu DB cũ chưa có
+try {
+  const tableInfo = db.prepare('PRAGMA table_info(profiles)').all() as any[];
+  const cols = new Set(tableInfo.map((c) => c.name));
+  if (!cols.has('enable_music')) {
+    db.exec('ALTER TABLE profiles ADD COLUMN enable_music INTEGER DEFAULT 1;');
+  }
+  if (!cols.has('group_name')) {
+    db.exec("ALTER TABLE profiles ADD COLUMN group_name TEXT DEFAULT 'Mặc định';");
+  }
+} catch (_) {}
 
 export const profileRepo = {
   getAll: (): ProfileRecord[] => {
@@ -97,15 +114,19 @@ export const profileRepo = {
   create: (profile: Omit<ProfileRecord, 'created_at'>): void => {
     db.prepare(`
       INSERT INTO profiles (
-        id, name, status, video_folder, music_mode, favorite_index,
+        id, name, group_name, status, video_folder, enable_music, music_mode, favorite_index,
         music_volume, schedule_mode, schedule_interval, golden_hours,
         caption_mode, proxy, cookies, last_run
       ) VALUES (
-        @id, @name, @status, @video_folder, @music_mode, @favorite_index,
+        @id, @name, @group_name, @status, @video_folder, @enable_music, @music_mode, @favorite_index,
         @music_volume, @schedule_mode, @schedule_interval, @golden_hours,
         @caption_mode, @proxy, @cookies, @last_run
       )
-    `).run(profile);
+    `).run({
+      ...profile,
+      group_name: profile.group_name || 'Mặc định',
+      enable_music: profile.enable_music ?? 1
+    });
   },
 
   update: (profile: Partial<ProfileRecord> & { id: string }): void => {

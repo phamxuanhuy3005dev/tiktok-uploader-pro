@@ -4,10 +4,11 @@ import { AppHeader } from './components/AppHeader';
 import { ProfileCard } from './components/ProfileCard';
 import { ProfileModal } from './components/ProfileModal';
 import { LogsDrawer } from './components/LogsDrawer';
-import { Sparkles, Terminal, Activity } from 'lucide-react';
+import { Sparkles, Terminal, Activity, Users, Layers } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [profiles, setProfiles] = useState<any[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<any | null>(null);
   const [viewingLogsProfile, setViewingLogsProfile] = useState<any | null>(null);
@@ -87,7 +88,7 @@ export const App: React.FC = () => {
   };
 
   const handleOpenBrowser = async (profile: any) => {
-    toast.info(`Đang mở Google Chrome (en-US) cho profile [${profile.name}]...`);
+    toast.info(`Đang mở trình duyệt (en-US) cho profile [${profile.name}]...`);
     try {
       await window.api.openBrowser(profile.id);
     } catch (err: any) {
@@ -109,14 +110,19 @@ export const App: React.FC = () => {
   };
 
   const handleRunBatch = async () => {
-    const readyProfiles = profiles.filter((p) => p.video_folder);
+    // Nếu đang chọn một nhóm cụ thể, chỉ chạy các profile trong nhóm đó
+    const pool = selectedGroup === 'all' 
+      ? profiles 
+      : profiles.filter((p) => (p.group_name || 'Mặc định') === selectedGroup);
+
+    const readyProfiles = pool.filter((p) => p.video_folder);
     if (readyProfiles.length === 0) {
-      toast.error('Chưa có profile nào được gán thư mục video hợp lệ!');
+      toast.error(`Chưa có profile nào ${selectedGroup !== 'all' ? `trong nhóm [${selectedGroup}]` : ''} được gán thư mục video hợp lệ!`);
       return;
     }
 
     const ids = readyProfiles.map((p) => p.id);
-    toast.info(`Bắt đầu chạy hàng loạt cho ${ids.length} kênh...`);
+    toast.info(`Bắt đầu chạy hàng loạt cho ${ids.length} kênh ${selectedGroup !== 'all' ? `(Nhóm: ${selectedGroup})` : ''}...`);
     try {
       await window.api.startQueue(ids);
     } catch (err: any) {
@@ -164,6 +170,14 @@ export const App: React.FC = () => {
     }
   };
 
+  // Trích xuất danh sách các nhóm duy nhất
+  const groups = Array.from(new Set(profiles.map((p) => p.group_name || 'Mặc định'))).filter(Boolean);
+
+  // Lọc profiles theo nhóm đã chọn
+  const filteredProfiles = selectedGroup === 'all'
+    ? profiles
+    : profiles.filter((p) => (p.group_name || 'Mặc định') === selectedGroup);
+
   const runningCount = queueStats.runningProfiles?.length || 0;
 
   return (
@@ -186,6 +200,46 @@ export const App: React.FC = () => {
           runningCount={runningCount}
         />
 
+        {/* Thanh Tabs Lọc Nhóm (Groups Bar) */}
+        {profiles.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none border-b border-zinc-800/60">
+            <span className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5 mr-1 shrink-0">
+              <Layers className="h-3.5 w-3.5 text-zinc-500" /> Nhóm:
+            </span>
+
+            {/* Tab Tất Cả */}
+            <button
+              onClick={() => setSelectedGroup('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 flex items-center gap-1.5 ${
+                selectedGroup === 'all'
+                  ? 'bg-zinc-100 text-zinc-900 font-semibold shadow'
+                  : 'bg-zinc-900/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+              }`}
+            >
+              Tất cả ({profiles.length})
+            </button>
+
+            {/* Các Tabs Từng Nhóm */}
+            {groups.map((group) => {
+              const countInGroup = profiles.filter((p) => (p.group_name || 'Mặc định') === group).length;
+              return (
+                <button
+                  key={group}
+                  onClick={() => setSelectedGroup(group)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 flex items-center gap-1.5 ${
+                    selectedGroup === group
+                      ? 'bg-rose-500 text-white font-semibold shadow-md shadow-rose-500/20'
+                      : 'bg-zinc-900/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-zinc-800/80'
+                  }`}
+                >
+                  <Users className="h-3 w-3 opacity-70" />
+                  {group} ({countInGroup})
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Live Banner nếu có profile đang chạy */}
         {runningCount > 0 && (
           <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 flex items-center justify-between gap-4 shadow-lg shadow-rose-950/20">
@@ -196,7 +250,7 @@ export const App: React.FC = () => {
                   Hàng đợi đang xử lý: {runningCount} profile đồng thời (Worker Pool Concurrency: 2)
                 </p>
                 <p className="text-xs text-rose-400/80">
-                  Chuẩn hóa giao diện en-US cho kênh US, gắn nhạc Favorites -50dB và chuyển video sang folder done/.
+                  Chuẩn hóa giao diện en-US cho kênh US, kiểm tra chèn nhạc Favorites (-50dB) và chuyển video sang folder done/.
                 </p>
               </div>
             </div>
@@ -235,9 +289,13 @@ export const App: React.FC = () => {
               </button>
             </div>
           </div>
+        ) : filteredProfiles.length === 0 ? (
+          <div className="py-16 text-center text-sm text-zinc-500">
+            Không có profile nào trong nhóm &quot;{selectedGroup}&quot;.
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {profiles.map((profile) => (
+            {filteredProfiles.map((profile) => (
               <ProfileCard
                 key={profile.id}
                 profile={profile}
