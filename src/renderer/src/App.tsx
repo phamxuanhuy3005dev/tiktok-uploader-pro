@@ -1,0 +1,263 @@
+import React, { useEffect, useState } from 'react';
+import { toast, Toaster } from 'sonner';
+import { AppHeader } from './components/AppHeader';
+import { ProfileCard } from './components/ProfileCard';
+import { ProfileModal } from './components/ProfileModal';
+import { LogsDrawer } from './components/LogsDrawer';
+import { Sparkles, Terminal, Activity } from 'lucide-react';
+
+export const App: React.FC = () => {
+  const [profiles, setProfiles] = useState<any[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProfile, setEditingProfile] = useState<any | null>(null);
+  const [viewingLogsProfile, setViewingLogsProfile] = useState<any | null>(null);
+  const [liveLogs, setLiveLogs] = useState<any[]>([]);
+  const [queueStats, setQueueStats] = useState<any>({ runningProfiles: [] });
+
+  useEffect(() => {
+    loadProfiles();
+
+    // Lắng nghe sự kiện upload progress từ Main process
+    const unsubscribeProgress = window.api.onUploadProgress((event) => {
+      setLiveLogs((prev) => [event, ...prev].slice(0, 50));
+
+      if (event.type === 'error') {
+        toast.error(`[${event.step}] ${event.message}`);
+      } else if (event.type === 'success') {
+        toast.success(`[Thành công] ${event.message}`);
+      }
+
+      loadProfiles();
+    });
+
+    // Lắng nghe sự kiện profiles được update từ browser session
+    const unsubscribeProfiles = window.api.onProfilesUpdated((updatedList) => {
+      setProfiles(updatedList);
+    });
+
+    // Polling nhẹ queue stats
+    const interval = setInterval(async () => {
+      try {
+        const stats = await window.api.getQueueStats();
+        setQueueStats(stats);
+      } catch (_) {}
+    }, 2500);
+
+    return () => {
+      unsubscribeProgress();
+      unsubscribeProfiles();
+      clearInterval(interval);
+    };
+  }, []);
+
+  const loadProfiles = async () => {
+    try {
+      const data = await window.api.getProfiles();
+      setProfiles(data || []);
+    } catch (err: any) {
+      toast.error(`Không thể tải profiles: ${err.message}`);
+    }
+  };
+
+  const handleSaveProfile = async (formData: any) => {
+    try {
+      if (editingProfile) {
+        await window.api.updateProfile(formData);
+        toast.success(`Đã cập nhật profile: ${formData.name}`);
+      } else {
+        await window.api.createProfile(formData);
+        toast.success(`Đã thêm profile mới: ${formData.name}`);
+      }
+      await loadProfiles();
+    } catch (err: any) {
+      toast.error(`Lỗi lưu profile: ${err.message}`);
+    }
+  };
+
+  const handleDeleteProfile = async (profile: any) => {
+    if (confirm(`Bạn có chắc chắn muốn xóa profile "${profile.name}"?`)) {
+      try {
+        await window.api.deleteProfile(profile.id);
+        toast.success(`Đã xóa profile: ${profile.name}`);
+        await loadProfiles();
+      } catch (err: any) {
+        toast.error(`Lỗi khi xóa: ${err.message}`);
+      }
+    }
+  };
+
+  const handleOpenBrowser = async (profile: any) => {
+    toast.info(`Đang mở trình duyệt cho profile [${profile.name}]...`);
+    try {
+      await window.api.openBrowser(profile.id);
+    } catch (err: any) {
+      toast.error(`Lỗi mở trình duyệt: ${err.message}`);
+    }
+  };
+
+  const handleRunSingle = async (profile: any) => {
+    if (!profile.video_folder) {
+      toast.error(`Vui lòng chọn thư mục video cho profile [${profile.name}] trước khi chạy!`);
+      return;
+    }
+    toast.info(`Đã đưa [${profile.name}] vào hàng đợi upload.`);
+    try {
+      await window.api.startQueue([profile.id]);
+    } catch (err: any) {
+      toast.error(`Lỗi khởi chạy: ${err.message}`);
+    }
+  };
+
+  const handleRunBatch = async () => {
+    const readyProfiles = profiles.filter((p) => p.video_folder);
+    if (readyProfiles.length === 0) {
+      toast.error('Chưa có profile nào được gán thư mục video hợp lệ!');
+      return;
+    }
+
+    const ids = readyProfiles.map((p) => p.id);
+    toast.info(`Bắt đầu chạy hàng loạt cho ${ids.length} kênh...`);
+    try {
+      await window.api.startQueue(ids);
+    } catch (err: any) {
+      toast.error(`Lỗi chạy hàng loạt: ${err.message}`);
+    }
+  };
+
+  const runningCount = queueStats.runningProfiles?.length || 0;
+
+  return (
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
+      <Toaster position="top-right" theme="dark" richColors />
+
+      {/* Main Container */}
+      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+        {/* Header */}
+        <AppHeader
+          onAddProfile={() => {
+            setEditingProfile(null);
+            setIsModalOpen(true);
+          }}
+          onRunBatch={handleRunBatch}
+          totalProfiles={profiles.length}
+          runningCount={runningCount}
+        />
+
+        {/* Live Banner nếu có profile đang chạy */}
+        {runningCount > 0 && (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 flex items-center justify-between gap-4 shadow-lg shadow-rose-950/20">
+            <div className="flex items-center gap-3">
+              <div className="h-3 w-3 rounded-full bg-rose-500 animate-ping" />
+              <div>
+                <p className="text-sm font-semibold text-rose-300">
+                  Hàng đợi đang xử lý: {runningCount} profile đồng thời (Worker Pool Concurrency: 2)
+                </p>
+                <p className="text-xs text-rose-400/80">
+                  Tự động kiểm soát tài nguyên RAM/CPU, gắn nhạc Favorites -50dB và chuyển video sang folder done/.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-mono bg-zinc-950/60 px-3 py-1.5 rounded-lg border border-zinc-800 text-zinc-300">
+              <Activity className="h-4 w-4 text-rose-400 animate-spin" />
+              Active: {queueStats.runningProfiles.join(', ')}
+            </div>
+          </div>
+        )}
+
+        {/* Danh sách Profiles */}
+        {profiles.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 border border-dashed border-zinc-800 rounded-2xl bg-zinc-900/20 text-center px-4">
+            <div className="h-16 w-16 rounded-2xl bg-zinc-900 flex items-center justify-center border border-zinc-800 mb-4 shadow-inner">
+              <Sparkles className="h-8 w-8 text-rose-500" />
+            </div>
+            <h3 className="text-base font-bold text-zinc-100">Chưa có Profile TikTok nào</h3>
+            <p className="text-xs text-zinc-400 max-w-md mt-1 mb-5">
+              Bấm nút &quot;Thêm Profile&quot; để tạo hồ sơ kênh, chọn thư mục video nguồn và cấu hình nhạc Favorites kiếm tiền.
+            </p>
+            <button
+              onClick={() => {
+                setEditingProfile(null);
+                setIsModalOpen(true);
+              }}
+              className="px-4 py-2 rounded-lg bg-zinc-100 text-zinc-900 text-xs font-semibold hover:bg-white shadow transition-all"
+            >
+              + Tạo Profile Đầu Tiên
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {profiles.map((profile) => (
+              <ProfileCard
+                key={profile.id}
+                profile={profile}
+                onEdit={() => {
+                  setEditingProfile(profile);
+                  setIsModalOpen(true);
+                }}
+                onDelete={() => handleDeleteProfile(profile)}
+                onOpenBrowser={() => handleOpenBrowser(profile)}
+                onRunUpload={() => handleRunSingle(profile)}
+                onViewLogs={() => setViewingLogsProfile(profile)}
+                isRunning={queueStats.runningProfiles?.includes(profile.id)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Live Logs Terminal Mini */}
+        {liveLogs.length > 0 && (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 space-y-2">
+            <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 border-b border-zinc-800/80 pb-2">
+              <span className="flex items-center gap-1.5">
+                <Terminal className="h-4 w-4 text-rose-400" /> Nhật Ký Tiến Trình Realtime
+              </span>
+              <button
+                onClick={() => setLiveLogs([])}
+                className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                Xóa nhật ký
+              </button>
+            </div>
+            <div className="font-mono text-xs max-h-36 overflow-y-auto space-y-1 text-zinc-300 pr-1">
+              {liveLogs.map((log, idx) => (
+                <div key={idx} className="flex items-start gap-2">
+                  <span className="text-zinc-600 select-none">›</span>
+                  <span
+                    className={
+                      log.type === 'error'
+                        ? 'text-red-400'
+                        : log.type === 'success'
+                          ? 'text-emerald-400'
+                          : log.type === 'warn'
+                            ? 'text-amber-400'
+                            : 'text-zinc-300'
+                    }
+                  >
+                    {log.message}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Modals */}
+      <ProfileModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingProfile(null);
+        }}
+        onSave={handleSaveProfile}
+        initialData={editingProfile}
+      />
+
+      <LogsDrawer
+        isOpen={Boolean(viewingLogsProfile)}
+        onClose={() => setViewingLogsProfile(null)}
+        profile={viewingLogsProfile}
+      />
+    </div>
+  );
+};
