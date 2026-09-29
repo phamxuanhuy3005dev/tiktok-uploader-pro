@@ -1,8 +1,11 @@
 import path from 'path';
 import fs from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { chromium, BrowserContext, Page } from 'playwright';
 import { ProfileRecord, PROFILES_DIR, profileRepo } from '../db/database';
 
+const execAsync = promisify(exec);
 const activeContexts = new Map<string, BrowserContext>();
 
 const CLEAN_CHROME_ARGS = [
@@ -22,20 +25,88 @@ const CLEAN_CHROME_ARGS = [
   '--lang=en-US'
 ];
 
+const LOCK_FILES = ['SingletonLock', 'SingletonCookie', 'SingletonSocket', 'lockfile'];
+
 /**
- * Dọn sạch các file lock của Chromium khi phiên trước đó tắt đột ngột
+ * Quét danh sách PID của Chromium/Chrome đang chạy trên thư mục UserDataDir này
  */
-export function cleanBrowserLocks(userDataDir: string): void {
-  if (!fs.existsSync(userDataDir)) return;
-  const lockFiles = ['SingletonLock', 'SingletonCookie', 'SingletonSocket', 'lockfile'];
-  for (const file of lockFiles) {
-    const lockPath = path.join(userDataDir, file);
+export async function getProfilePids(userDataDir: string): Promise<number[]> {
+  if (!userDataDir || !fs.existsSync(userDataDir)) return [];
+  try {
+    if (process.platform === 'win32') {
+      const dirName = path.basename(userDataDir).replace(/["'\\]/g, '');
+      if (!dirName) return [];
+      const psCmd = `powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { ($_.Name -like '*chrome*') -and ($_.CommandLine -like '*${dirName}*') } | Select-Object -ExpandProperty ProcessId"`;
+      const { stdout } = await execAsync(psCmd).catch(() => ({ stdout: '' }));
+      return stdout
+        .split('\n')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((pid) => pid && !isNaN(pid) && pid > 0);
+    } else {
+      // macOS và Linux
+      const { stdout } = await execAsync('ps -Ao pid,args').catch(() => ({ stdout: '' }));
+      const pids: number[] = [];
+      for (const line of stdout.split('\n')) {
+        if (
+          line.includes(userDataDir) &&
+          (line.includes('chrome') || line.includes('Chromium') || line.includes('Google Chrome'))
+        ) {
+          const parts = line.trim().split(/\s+/);
+          const pid = parseInt(parts[0], 10);
+          if (pid && !isNaN(pid) && pid !== process.pid) {
+            pids.push(pid);
+          }
+        }
+      }
+      return pids;
+    }
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Dọn sạch triệt để các tiến trình Chromium chạy ngầm và file lock trên macOS/Win
+ * Giải quyết 100% lỗi nhấp nháy, kẹt process khi bấm X đóng rồi mở lại
+ */
+export async function releaseProfileLocks(userDataDir: string, profileName: string): Promise<void> {
+  if (!userDataDir || !fs.existsSync(userDataDir)) return;
+
+  let foundLocks: string[] = [];
+  for (const file of LOCK_FILES) {
+    const p = path.join(userDataDir, file);
     try {
-      if (fs.existsSync(lockPath)) {
-        fs.unlinkSync(lockPath);
+      const s = fs.lstatSync(p);
+      if (s.isSymbolicLink() || s.isFile() || s.isSocket()) {
+        foundLocks.push(p);
       }
     } catch (_) {}
   }
+
+  // 1. Kill toàn bộ process Chrome cũ đang giữ thư mục này
+  const pids = await getProfilePids(userDataDir);
+  if (pids.length > 0) {
+    console.log(`[${profileName}] Phát hiện ${pids.length} tiến trình Chrome cũ còn chạy ngầm. Đang dọn sạch...`);
+    for (const pid of pids) {
+      try {
+        if (process.platform === 'win32') {
+          await execAsync(`taskkill /F /T /PID ${pid}`).catch(() => {});
+        } else {
+          process.kill(pid, 'SIGKILL');
+        }
+      } catch (_) {}
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+
+  // 2. Unlink lock files
+  for (const lockPath of foundLocks) {
+    try {
+      fs.unlinkSync(lockPath);
+    } catch (_) {}
+  }
+
+  await new Promise((r) => setTimeout(r, 100));
 }
 
 /**
@@ -71,14 +142,14 @@ export async function launchProfileContext(
     fs.mkdirSync(userDataDir, { recursive: true });
   }
 
-  cleanBrowserLocks(userDataDir);
+  // Dọn sạch hoàn toàn các tiến trình Chrome cũ và lock files trước khi mở
+  await releaseProfileLocks(userDataDir, profile.name);
   cleanProfileGpuCache(userDataDir);
 
   const launchOptions: any = {
     headless,
     viewport: null, // Full màn hình
     args: [...CLEAN_CHROME_ARGS],
-    // Tắt hoàn toàn cờ --no-sandbox để không hiện thanh cảnh báo của Chrome
     ignoreDefaultArgs: ['--no-sandbox'],
     locale: 'en-US',
     extraHTTPHeaders: {
@@ -107,7 +178,6 @@ export async function launchProfileContext(
     }
   }
 
-  // Khởi chạy persistent context thuần với cờ chống bot chuẩn của Chromium
   const context = await chromium.launchPersistentContext(userDataDir, launchOptions);
 
   // Nạp cookies nếu có
@@ -135,8 +205,9 @@ export async function openManualBrowser(profile: ProfileRecord, onClosed?: () =>
   const { context, page } = await launchProfileContext(profile, false);
   profileRepo.updateStatus(profile.id, 'manual_session');
 
-  // Điều hướng vào trang chủ hoặc login TikTok
   await page.goto('https://www.tiktok.com/', { waitUntil: 'domcontentloaded' }).catch(() => {});
+
+  const userDataDir = path.join(PROFILES_DIR, profile.name);
 
   context.on('close', async () => {
     try {
@@ -154,6 +225,10 @@ export async function openManualBrowser(profile: ProfileRecord, onClosed?: () =>
       profileRepo.updateStatus(profile.id, 'idle');
     }
     activeContexts.delete(profile.id);
+
+    // Giải phóng triệt để process Chrome còn treo sau khi bấm đóng
+    await releaseProfileLocks(userDataDir, profile.name).catch(() => {});
+
     if (onClosed) onClosed();
   });
 }
@@ -162,6 +237,7 @@ export async function openManualBrowser(profile: ProfileRecord, onClosed?: () =>
  * Đóng an toàn phiên của một profile
  */
 export async function closeProfileContext(profileId: string): Promise<void> {
+  const profile = profileRepo.getById(profileId);
   const ctx = activeContexts.get(profileId);
   if (ctx) {
     try {
@@ -175,5 +251,10 @@ export async function closeProfileContext(profileId: string): Promise<void> {
       await ctx.close().catch(() => {});
     } catch (_) {}
     activeContexts.delete(profileId);
+  }
+
+  if (profile) {
+    const userDataDir = path.join(PROFILES_DIR, profile.name);
+    await releaseProfileLocks(userDataDir, profile.name).catch(() => {});
   }
 }

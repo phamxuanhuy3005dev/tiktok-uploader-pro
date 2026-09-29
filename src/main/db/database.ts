@@ -147,6 +147,10 @@ export const profileRepo = {
 
   delete: (id: string): void => {
     db.prepare('DELETE FROM profiles WHERE id = ?').run(id);
+  },
+
+  deleteAll: (): void => {
+    db.prepare('DELETE FROM profiles').run();
   }
 };
 

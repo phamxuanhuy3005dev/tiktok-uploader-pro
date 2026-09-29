@@ -33,6 +33,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return profileRepo.getAll();
   });
 
+  ipcMain.handle('profiles:deleteAll', async () => {
+    const all = profileRepo.getAll();
+    for (const p of all) {
+      await closeProfileContext(p.id).catch(() => {});
+    }
+    profileRepo.deleteAll();
+    return profileRepo.getAll();
+  });
+
   // Import từ tool cũ tiktok-at
   ipcMain.handle('profiles:importOld', async () => {
     const res = importFromOldTool();

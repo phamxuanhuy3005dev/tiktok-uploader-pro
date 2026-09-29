@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Play, Music, Sparkles, FolderSync, Download, Upload, FolderDown } from 'lucide-react';
+import { Plus, Play, Music, Sparkles, FolderSync, Download, Upload, FolderDown, Trash2 } from 'lucide-react';
 import { Button } from './ui/Button';
 
 interface AppHeaderProps {
@@ -8,6 +8,7 @@ interface AppHeaderProps {
   onImportOldTool: () => void;
   onExportJson: () => void;
   onImportJson: () => void;
+  onDeleteAll: () => void;
   totalProfiles: number;
   runningCount: number;
 }
@@ -18,6 +19,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onImportOldTool,
   onExportJson,
   onImportJson,
+  onDeleteAll,
   totalProfiles,
   runningCount
 }) => {
@@ -73,6 +75,19 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         >
           <Upload className="h-3.5 w-3.5 mr-1 text-zinc-400" /> Nhập JSON
         </Button>
+
+        {/* Nút Xóa Tất Cả (Nếu có profile) */}
+        {totalProfiles > 0 && (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={onDeleteAll}
+            title="Xóa toàn bộ profiles để làm sạch và nạp lại"
+            className="text-xs"
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1" /> Xóa Tất Cả
+          </Button>
+        )}
 
         {/* Nút Thêm Profile */}
         <Button

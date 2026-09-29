@@ -9,13 +9,15 @@ interface ProfileModalProps {
   onClose: () => void;
   onSave: (data: any) => Promise<void>;
   initialData?: any;
+  availableGroups?: string[];
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  initialData
+  initialData,
+  availableGroups = []
 }) => {
   const [name, setName] = useState('');
   const [groupName, setGroupName] = useState('Mặc định');
@@ -126,10 +128,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <Users className="h-3.5 w-3.5 text-zinc-400" /> Nhóm Kênh (Group)
             </label>
             <Input
+              list="existing-groups"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
-              placeholder="ví dụ: Huy nuoi 1, US Clone, Affiliate..."
+              placeholder="Chọn nhóm có sẵn hoặc gõ nhóm mới..."
             />
+            <datalist id="existing-groups">
+              {availableGroups.map((g) => (
+                <option key={g} value={g} />
+              ))}
+            </datalist>
+            <span className="text-[10px] text-zinc-500">Bấm mũi tên hoặc click đúp để chọn nhóm có sẵn.</span>
           </div>
         </div>
 

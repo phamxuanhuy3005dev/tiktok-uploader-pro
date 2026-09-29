@@ -31,9 +31,18 @@ export function importFromOldTool(oldToolPath = '/Users/fanboyrose/Desktop/tikto
   for (const oldP of oldProfiles) {
     if (!oldP.name) continue;
 
+    const groupName = oldP.group_id ? groupMap.get(oldP.group_id) || 'Mặc định' : 'Mặc định';
+
     // Kiểm tra xem profile đã tồn tại trong app mới chưa
     const existing = profileRepo.getAll().find((p) => p.name === oldP.name);
-    if (existing) continue;
+    if (existing) {
+      profileRepo.update({
+        id: existing.id,
+        group_name: groupName
+      });
+      count++;
+      continue;
+    }
 
     // Copy thư mục session cũ sang thư mục mới nếu có
     const srcDir = path.join(oldProfilesDir, oldP.name);
@@ -46,8 +55,6 @@ export function importFromOldTool(oldToolPath = '/Users/fanboyrose/Desktop/tikto
         console.warn(`Không thể copy thư mục profile ${oldP.name}:`, cpErr.message);
       }
     }
-
-    const groupName = oldP.group_id ? groupMap.get(oldP.group_id) || 'Mặc định' : 'Mặc định';
 
     profileRepo.create({
       id: oldP.id || `profile_${Date.now()}_${count}`,

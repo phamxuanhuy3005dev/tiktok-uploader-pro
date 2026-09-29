@@ -170,6 +170,18 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleDeleteAll = async () => {
+    if (confirm(`CẢNH BÁO: Bạn có chắc chắn muốn xóa TOÀN BỘ ${profiles.length} profiles để làm sạch dữ liệu không?`)) {
+      try {
+        await window.api.deleteAllProfiles();
+        toast.success('Đã xóa sạch toàn bộ profiles thành công!');
+        await loadProfiles();
+      } catch (err: any) {
+        toast.error(`Lỗi khi xóa toàn bộ: ${err.message}`);
+      }
+    }
+  };
+
   // Trích xuất danh sách các nhóm duy nhất
   const groups = Array.from(new Set(profiles.map((p) => p.group_name || 'Mặc định'))).filter(Boolean);
 
@@ -196,6 +208,7 @@ export const App: React.FC = () => {
           onImportOldTool={handleImportOldTool}
           onExportJson={handleExportJson}
           onImportJson={handleImportJson}
+          onDeleteAll={handleDeleteAll}
           totalProfiles={profiles.length}
           runningCount={runningCount}
         />
@@ -360,6 +373,7 @@ export const App: React.FC = () => {
         }}
         onSave={handleSaveProfile}
         initialData={editingProfile}
+        availableGroups={groups}
       />
 
       <LogsDrawer

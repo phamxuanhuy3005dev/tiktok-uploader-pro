@@ -6,6 +6,7 @@ export const api = {
   createProfile: (profile: any) => ipcRenderer.invoke('profiles:create', profile),
   updateProfile: (profile: any) => ipcRenderer.invoke('profiles:update', profile),
   deleteProfile: (id: string) => ipcRenderer.invoke('profiles:delete', id),
+  deleteAllProfiles: () => ipcRenderer.invoke('profiles:deleteAll'),
   openBrowser: (id: string) => ipcRenderer.invoke('profiles:openBrowser', id),
   closeBrowser: (id: string) => ipcRenderer.invoke('profiles:closeBrowser', id),
 

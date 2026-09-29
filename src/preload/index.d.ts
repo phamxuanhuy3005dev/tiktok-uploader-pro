@@ -3,6 +3,7 @@ export interface IElectronAPI {
   createProfile: (profile: any) => Promise<any[]>;
   updateProfile: (profile: any) => Promise<any[]>;
   deleteProfile: (id: string) => Promise<any[]>;
+  deleteAllProfiles: () => Promise<any[]>;
   openBrowser: (id: string) => Promise<boolean>;
   closeBrowser: (id: string) => Promise<boolean>;
   importFromOldTool: () => Promise<{ profiles: any[]; importedCount: number; message: string }>;
