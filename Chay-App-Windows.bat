@@ -1,4 +1,7 @@
 @echo off
+chcp 65001 >nul
+set PYTHONIOENCODING=utf-8
+set NODE_OPTIONS=--enable-source-maps
 title TikTok Uploader Pro - MMO Edition
 color 0A
 

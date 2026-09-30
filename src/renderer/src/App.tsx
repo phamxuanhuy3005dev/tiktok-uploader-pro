@@ -347,6 +347,45 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleExportJson = async () => {
+    try {
+      setIsProcessing(true);
+      setProcessingMessage('Đang xuất danh sách profiles ra file JSON...');
+      const res = await window.api.exportJson();
+      if (res.success && res.filePath) {
+        const fileName = res.filePath.split(/[/\\]/).pop();
+        toast.success(`Đã xuất thành công file backup JSON [${fileName}]!`);
+      }
+    } catch (err: any) {
+      toast.error(`Lỗi xuất JSON: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+      setProcessingMessage('');
+    }
+  };
+
+  const handleImportJson = async () => {
+    try {
+      setIsProcessing(true);
+      setProcessingMessage('Đang nạp danh sách profiles từ file JSON...');
+      const res = await window.api.importJson();
+      if (res.success) {
+        toast.success(`Đã nạp thành công ${res.count || 0} profiles từ file JSON!`);
+        if (res.profiles) {
+          setProfiles(res.profiles);
+        } else {
+          await loadProfiles();
+        }
+        await loadGroupsList();
+      }
+    } catch (err: any) {
+      toast.error(`Lỗi nhập JSON: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+      setProcessingMessage('');
+    }
+  };
+
   const handleQuickSelectFolder = async (profile: any) => {
     try {
       const folder = await window.api.selectFolder();
@@ -794,6 +833,10 @@ export const App: React.FC = () => {
           <SettingsScreen
             concurrency={concurrency}
             onUpdateConcurrency={handleUpdateConcurrency}
+            totalProfiles={profiles.length}
+            onExportJson={handleExportJson}
+            onImportJson={handleImportJson}
+            isProcessing={isProcessing}
           />
         )}
       </main>

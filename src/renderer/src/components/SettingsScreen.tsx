@@ -7,17 +7,29 @@ import {
   Music,
   Clock,
   CheckCircle2,
+  HardDrive,
+  Download,
+  Upload
 } from 'lucide-react';
 import { Badge } from './ui/Badge';
+import { Button } from './ui/Button';
 
 interface SettingsScreenProps {
   concurrency: number;
   onUpdateConcurrency: (concurrency: number) => void;
+  totalProfiles?: number;
+  onExportJson?: () => void;
+  onImportJson?: () => void;
+  isProcessing?: boolean;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   concurrency,
   onUpdateConcurrency,
+  totalProfiles,
+  onExportJson,
+  onImportJson,
+  isProcessing
 }) => {
   const [selectedConcurrency, setSelectedConcurrency] = useState(concurrency);
 
@@ -110,6 +122,67 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             luồng. Với 16GB RAM trở lên, bạn có thể chạy 3-5 luồng mượt mà để
             tăng tốc độ đẩy video.
           </span>
+        </div>
+      </div>
+
+      {/* Quản lý Dữ liệu & Sao lưu JSON */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200/90 shadow-sm space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200">
+            <HardDrive className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">
+              Sao Lưu & Phục Hồi Dữ Liệu JSON {totalProfiles !== undefined ? `(${totalProfiles} Profiles)` : ''}
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Xuất/nhập file JSON tương thích với cả tool cũ (tiktok-at) và phiên bản hiện tại để lưu trữ hoặc chuyển máy.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+          {/* Xuất file JSON */}
+          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex flex-col justify-between gap-3 hover:border-slate-300 transition-colors">
+            <div>
+              <div className="flex items-center gap-2 font-bold text-xs text-slate-700">
+                <Download className="h-4 w-4 text-sky-500" /> Xuất File JSON (Backup)
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                Lưu toàn bộ danh sách kênh, tên nhóm, video folder, thông tin đăng nhập và mảng cookies ra file JSON an toàn trên máy tính.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isProcessing}
+              onClick={onExportJson}
+              className="text-xs w-full bg-white hover:bg-slate-100 border-slate-200 font-semibold gap-1.5"
+            >
+              <Download className="h-3.5 w-3.5 text-sky-600" /> Xuất File Backup JSON
+            </Button>
+          </div>
+
+          {/* Nhập file JSON */}
+          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex flex-col justify-between gap-3 hover:border-slate-300 transition-colors">
+            <div>
+              <div className="flex items-center gap-2 font-bold text-xs text-slate-700">
+                <Upload className="h-4 w-4 text-emerald-500" /> Nhập File JSON (Phục Hồi)
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                Nạp lại danh sách profiles, nhóm và cookies từ file JSON đã sao lưu trước đó hoặc từ tool cũ vào hệ thống.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isProcessing}
+              onClick={onImportJson}
+              className="text-xs w-full bg-white hover:bg-slate-100 border-slate-200 font-semibold gap-1.5"
+            >
+              <Upload className="h-3.5 w-3.5 text-emerald-600" /> Chọn File JSON Phục Hồi
+            </Button>
+          </div>
         </div>
       </div>
 

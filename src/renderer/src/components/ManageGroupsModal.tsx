@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
@@ -34,6 +34,9 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
 
+  // Input ref để luôn focus mượt mà vào ô tạo nhóm
+  const inputRef = useRef<HTMLInputElement>(null);
+
   // Trạng thái đang chỉnh sửa tên nhóm
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -55,6 +58,12 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
       loadGroups();
       setEditingGroupId(null);
       setNewGroupName('');
+      setIsSubmitting(false);
+
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 80);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
@@ -63,6 +72,7 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
     const trimmed = newGroupName.trim();
     if (!trimmed) {
       toast.warning('Vui lòng nhập tên nhóm mới!');
+      inputRef.current?.focus();
       return;
     }
 
@@ -73,6 +83,9 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
       setNewGroupName('');
       await loadGroups();
       onGroupsUpdated();
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
     } catch (err: any) {
       toast.error(`Lỗi tạo nhóm: ${err.message}`);
     } finally {
@@ -106,6 +119,9 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
         updatedProfiles: res.updatedProfiles,
         updatedGroups: res.updatedGroups
       });
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
     } catch (err: any) {
       toast.error(`Lỗi đổi tên nhóm: ${err.message}`);
     }
@@ -135,6 +151,9 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
         updatedProfiles: res?.updatedProfiles,
         updatedGroups: res?.updatedGroups
       });
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
     } catch (err: any) {
       toast.error(`Lỗi xóa nhóm: ${err.message}`);
     } finally {
@@ -154,12 +173,19 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
         {/* Form thêm nhóm mới */}
         <form onSubmit={handleCreateGroup} className="flex gap-2">
           <input
+            ref={inputRef}
+            autoFocus
             type="text"
+            id="new-group-name-input"
             value={newGroupName}
             onChange={(e) => setNewGroupName(e.target.value)}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.currentTarget.focus();
+            }}
             placeholder="Nhập tên nhóm mới (ví dụ: Kênh US, Phim Review...)"
             disabled={isSubmitting}
-            className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="flex-1 px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 shadow-sm cursor-text transition-all disabled:bg-slate-100 disabled:cursor-not-allowed select-text"
           />
           <Button
             type="submit"

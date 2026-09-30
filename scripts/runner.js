@@ -103,6 +103,12 @@ function calculateSourceHash() {
 }
 
 async function main() {
+  if (process.platform === 'win32') {
+    try {
+      execSync('chcp 65001', { stdio: 'ignore' });
+    } catch (_) {}
+  }
+
   console.log('==========================================================');
   console.log('    🚀 TikTok Uploader Pro (MMO Automation Engine)');
   console.log('==========================================================\n');
@@ -203,7 +209,9 @@ async function main() {
     stdio: 'inherit',
     env: {
       ...process.env,
-      NODE_ENV: 'production'
+      NODE_ENV: 'production',
+      PYTHONIOENCODING: 'utf-8',
+      LANG: 'en_US.UTF-8'
     }
   });
 

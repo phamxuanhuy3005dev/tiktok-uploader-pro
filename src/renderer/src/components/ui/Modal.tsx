@@ -45,6 +45,7 @@ export const Modal: React.FC<ModalProps> = ({
 
       {/* Content */}
       <div
+        onClick={(e) => e.stopPropagation()}
         className={cn(
           'relative w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl text-slate-800 transition-all duration-200 z-10 max-h-[90vh] overflow-y-auto',
           className

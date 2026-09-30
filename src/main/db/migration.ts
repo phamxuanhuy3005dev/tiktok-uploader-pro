@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
-import { profileRepo, PROFILES_DIR } from './database';
+import { profileRepo, groupRepo, PROFILES_DIR } from './database';
 
 export function importFromOldTool(oldToolPath = '/Users/fanboyrose/Desktop/tiktok-at'): {
   importedCount: number;
@@ -96,7 +96,40 @@ export function importFromOldTool(oldToolPath = '/Users/fanboyrose/Desktop/tikto
 
 export function exportProfilesToJson(targetFilePath: string): void {
   const profiles = profileRepo.getAll();
-  fs.writeFileSync(targetFilePath, JSON.stringify(profiles, null, 2), 'utf-8');
+  const formatted = profiles.map((p) => {
+    let parsedCookies = p.cookies;
+    if (typeof p.cookies === 'string') {
+      try {
+        parsedCookies = JSON.parse(p.cookies);
+      } catch (_) {
+        parsedCookies = p.cookies;
+      }
+    }
+    return {
+      name: p.name,
+      group: p.group_name || 'Mặc định',
+      group_name: p.group_name || 'Mặc định',
+      account_id: p.account_id || p.name,
+      pass: p.pass || '',
+      email: p.email || '',
+      pass_email: p.pass_email || '',
+      mail_ao: p.mail_ao || '',
+      proxy: p.proxy || '',
+      video_folder: p.video_folder || '',
+      cookies: parsedCookies,
+      status: p.status || 'idle',
+      enable_music: p.enable_music !== undefined ? p.enable_music : 1,
+      music_mode: p.music_mode || 'favorite_rotate',
+      favorite_index: p.favorite_index || 0,
+      music_volume: p.music_volume !== undefined ? p.music_volume : -50,
+      schedule_mode: p.schedule_mode || 'auto_increment',
+      schedule_interval: p.schedule_interval || 10,
+      golden_hours: p.golden_hours || '11:30,17:30,20:00',
+      caption_mode: p.caption_mode || 'remove_title',
+      max_videos: p.max_videos || 50
+    };
+  });
+  fs.writeFileSync(targetFilePath, JSON.stringify(formatted, null, 2), 'utf-8');
 }
 
 export function importProfilesFromJson(sourceFilePath: string): number {
@@ -128,19 +161,32 @@ export function importProfilesFromJson(sourceFilePath: string): number {
     const name = String(item.name).trim();
     if (!name) continue;
 
+    const targetGroup = String(item.group_name || item.group || 'Mặc định').trim() || 'Mặc định';
+    if (targetGroup !== 'Mặc định') {
+      try {
+        groupRepo.create(targetGroup);
+      } catch (_) {}
+    }
+
+    let cookiesStr: string | null = null;
+    if (item.cookies) {
+      cookiesStr = typeof item.cookies === 'string' ? item.cookies : JSON.stringify(item.cookies);
+    }
+
     const existing = currentProfiles.find((p) => p.name.toLowerCase() === name.toLowerCase());
     if (!existing) {
-      profileRepo.create(item);
+      profileRepo.create({
+        ...item,
+        name,
+        group_name: targetGroup,
+        cookies: cookiesStr
+      });
       count++;
     } else {
       // Cập nhật thông tin / cookie mới nếu có
-      let cookiesStr: string | null = null;
-      if (item.cookies) {
-        cookiesStr = typeof item.cookies === 'string' ? item.cookies : JSON.stringify(item.cookies);
-      }
       profileRepo.update({
         id: existing.id,
-        group_name: item.group_name || item.group || existing.group_name,
+        group_name: targetGroup,
         cookies: cookiesStr || existing.cookies,
         account_id: item.account_id !== undefined ? item.account_id : existing.account_id,
         pass: item.pass !== undefined ? item.pass : existing.pass,
