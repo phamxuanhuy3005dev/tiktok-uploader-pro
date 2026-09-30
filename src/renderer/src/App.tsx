@@ -173,13 +173,28 @@ export const App: React.FC = () => {
 
   const handleOpenBrowser = async (profile: any) => {
     setOpeningBrowserProfileId(profile.id);
-    toast.info(`Đang mở trình duyệt (en-US) cho profile [${profile.name}]...`);
     try {
-      await window.api.openBrowser(profile.id);
+      const res = await window.api.openBrowser(profile.id);
+      if (res && typeof res === 'object' && res.alreadyOpen) {
+        toast.info(`Trình duyệt của "${profile.name}" đang mở sẵn! Đã chuyển cửa sổ lên trước.`, {
+          icon: '🌐'
+        });
+      } else {
+        toast.info(`Đang mở trình duyệt (en-US) cho profile [${profile.name}]...`);
+      }
     } catch (err: any) {
       toast.error(`Lỗi mở trình duyệt: ${err.message}`);
     } finally {
       setOpeningBrowserProfileId(null);
+    }
+  };
+
+  const handleCloseBrowser = async (profile: any) => {
+    try {
+      await window.api.closeBrowser(profile.id);
+      toast.info(`Đã đóng trình duyệt của "${profile.name}".`);
+    } catch (err: any) {
+      toast.error(`Lỗi đóng trình duyệt: ${err.message}`);
     }
   };
 
@@ -795,6 +810,7 @@ export const App: React.FC = () => {
                     }}
                     onDelete={() => handleDeleteProfile(profile)}
                     onOpenBrowser={() => handleOpenBrowser(profile)}
+                    onCloseBrowser={() => handleCloseBrowser(profile)}
                     onRunUpload={() => handleRunSingle(profile)}
                     onViewLogs={() => setViewingLogsProfile(profile)}
                     onQuickSelectFolder={() => handleQuickSelectFolder(profile)}

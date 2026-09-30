@@ -12,7 +12,8 @@ import {
   Users,
   KeyRound,
   ShieldCheck,
-  Loader2
+  Loader2,
+  X
 } from 'lucide-react';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
@@ -25,6 +26,7 @@ interface ProfileCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onOpenBrowser: () => void;
+  onCloseBrowser?: () => void;
   onRunUpload: () => void;
   onViewLogs: () => void;
   onQuickSelectFolder?: () => void;
@@ -40,6 +42,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   onEdit,
   onDelete,
   onOpenBrowser,
+  onCloseBrowser,
   onRunUpload,
   onViewLogs,
   onQuickSelectFolder,
@@ -48,7 +51,9 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   isProcessing = false
 }) => {
   const [isGettingOtp, setIsGettingOtp] = useState(false);
-  const hasCookies = Boolean(profile.cookies);
+  const isLoggedIn = Boolean(
+    profile.cookies && /sessionid|sessionid_ss|sid_tt/i.test(profile.cookies)
+  );
 
   const handleCopyOtp = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -152,7 +157,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         <div className="flex items-center gap-1.5 flex-wrap text-[11px] mb-2">
           {getStatusBadge()}
 
-          {hasCookies ? (
+          {isLoggedIn ? (
             <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-1.5 py-0.5 rounded-full font-medium shrink-0">
               <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Đã đăng nhập
             </span>
@@ -233,20 +238,46 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 
       {/* Row 4: Action Buttons */}
       <div className="flex items-center gap-2 pt-0.5">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onOpenBrowser}
-          disabled={isOpeningBrowser || isRunning}
-          className="flex-1 h-7 text-xs text-slate-700 border-slate-200 hover:bg-slate-50 rounded-lg disabled:opacity-50"
-        >
-          {isOpeningBrowser ? (
-            <Loader2 className="h-3 w-3 mr-1 text-sky-500 animate-spin" />
-          ) : (
-            <ExternalLink className="h-3 w-3 mr-1 text-slate-400" />
-          )}
-          {isOpeningBrowser ? 'Đang Mở...' : 'Mở Trình Duyệt'}
-        </Button>
+        {profile.status === 'manual_session' ? (
+          <div className="flex items-center gap-1 flex-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenBrowser}
+              disabled={isOpeningBrowser}
+              title="Trình duyệt đang mở - Bấm để chuyển cửa sổ lên trước"
+              className="flex-1 h-7 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200 rounded-lg"
+            >
+              <ExternalLink className="h-3 w-3 mr-1 text-emerald-600" />
+              Đang Mở (Focus)
+            </Button>
+            {onCloseBrowser && (
+              <button
+                type="button"
+                onClick={onCloseBrowser}
+                title="Đóng trình duyệt của profile này"
+                className="h-7 px-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenBrowser}
+            disabled={isOpeningBrowser || isRunning}
+            className="flex-1 h-7 text-xs text-slate-700 border-slate-200 hover:bg-slate-50 rounded-lg disabled:opacity-50"
+          >
+            {isOpeningBrowser ? (
+              <Loader2 className="h-3 w-3 mr-1 text-sky-500 animate-spin" />
+            ) : (
+              <ExternalLink className="h-3 w-3 mr-1 text-slate-400" />
+            )}
+            {isOpeningBrowser ? 'Đang Mở...' : 'Mở Trình Duyệt'}
+          </Button>
+        )}
 
         <Button
           variant="tiktok"

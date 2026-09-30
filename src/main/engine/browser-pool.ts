@@ -425,6 +425,29 @@ export function normalizeTikTokCookies(rawCookies?: string | any[] | null): TikT
 }
 
 /**
+ * Kiểm tra xem dữ liệu cookies có chứa phiên đăng nhập TikTok hợp lệ hay không.
+ * Phiên đăng nhập TikTok bắt buộc phải có sessionid hoặc sessionid_ss hoặc sid_tt.
+ * Tránh trường hợp chỉ có các cookie theo dõi ẩn danh (ttwid, tt_csrf_token...) nhưng báo "Đã đăng nhập".
+ */
+export function isTikTokLoggedIn(rawCookies?: string | any[] | null): boolean {
+  if (!rawCookies) return false;
+  if (typeof rawCookies === 'string') {
+    if (!rawCookies.trim()) return false;
+    return /sessionid|sessionid_ss|sid_tt/i.test(rawCookies);
+  }
+  if (Array.isArray(rawCookies)) {
+    return rawCookies.some(
+      (c) =>
+        c &&
+        (c.name === 'sessionid' || c.name === 'sessionid_ss' || c.name === 'sid_tt') &&
+        c.value &&
+        String(c.value).trim().length > 5
+    );
+  }
+  return false;
+}
+
+/**
  * Khởi chạy Browser Context cho một profile
  */
 export async function launchProfileContext(
@@ -497,20 +520,45 @@ export async function launchProfileContext(
   const pages = context.pages();
   const page = pages.length > 0 ? pages[0] : await context.newPage();
 
-  // Tự động đóng context khi tất cả các tab bị đóng (khắc phục treo trên macOS)
-  const onPageClosed = () => {
+  // Tự động đóng context khi TẤT CẢ các tab đều bị đóng (cho phép mở/đóng tab linh hoạt)
+  const checkAllPagesClosed = () => {
     setTimeout(async () => {
       try {
-        if (context.pages().length === 0) {
+        const remaining = context.pages().filter((p) => !p.isClosed());
+        if (remaining.length === 0) {
           await context.close().catch(() => {});
         }
       } catch (_) {}
-    }, 150);
+    }, 250);
   };
-  page.on('close', onPageClosed);
-  context.on('page', (p) => p.on('close', onPageClosed));
+  page.on('close', checkAllPagesClosed);
+  context.on('page', (p) => p.on('close', checkAllPagesClosed));
 
   return { context, page };
+}
+
+/**
+ * Đưa cửa sổ trình duyệt đang mở của profile lên tiền cảnh (focus / bring to front)
+ */
+export async function focusProfileBrowser(profileId: string): Promise<boolean> {
+  const context = activeContexts.get(profileId);
+  if (!context) return false;
+
+  const pages = context.pages().filter((p) => !p.isClosed());
+  if (pages.length === 0) return false;
+
+  try {
+    const page = pages[pages.length - 1];
+    await page.bringToFront().catch(() => {});
+
+    if (process.platform === 'darwin') {
+      execAsync(`osascript -e 'tell application "Google Chrome" to activate'`).catch(() => {});
+      execAsync(`osascript -e 'tell application "Chromium" to activate'`).catch(() => {});
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -531,14 +579,22 @@ export async function openManualBrowser(profile: ProfileRecord, onClosed?: () =>
 
     try {
       const cookies = await context.cookies().catch(() => []);
-      if (cookies.length > 0) {
+      const loggedIn = isTikTokLoggedIn(cookies);
+      if (loggedIn) {
         profileRepo.update({
           id: profile.id,
           cookies: JSON.stringify(cookies),
           status: 'idle'
         });
+        console.log(`[${profile.name}] ✅ Đã xác nhận đăng nhập TikTok thành công (Có sessionid)!`);
       } else {
-        profileRepo.updateStatus(profile.id, 'idle');
+        // Nếu không có sessionid -> Chưa đăng nhập hoặc login thất bại
+        profileRepo.update({
+          id: profile.id,
+          cookies: null,
+          status: 'idle'
+        });
+        console.log(`[${profile.name}] ⚠️ Đóng trình duyệt: Chưa đăng nhập hoặc login thất bại (Không có sessionid).`);
       }
     } catch (_) {
       profileRepo.updateStatus(profile.id, 'idle');
@@ -553,8 +609,8 @@ export async function openManualBrowser(profile: ProfileRecord, onClosed?: () =>
     if (onClosed) onClosed();
   };
 
-  // Lắng nghe cả event đóng của page và context
-  page.on('close', handleClose);
+  // QUAN TRỌNG: Chỉ lắng nghe context.on('close'), TUYỆT ĐỐI KHÔNG gán page.on('close', handleClose)
+  // để người dùng đóng tab đầu tiên (tiktok.com) vẫn không bị đóng luôn toàn bộ trình duyệt!
   context.on('close', handleClose);
 }
 
@@ -574,7 +630,7 @@ export async function closeProfileContext(profileId: string): Promise<void> {
   if (ctx) {
     try {
       const cookies = await ctx.cookies().catch(() => []);
-      if (cookies.length > 0) {
+      if (isTikTokLoggedIn(cookies)) {
         profileRepo.update({
           id: profileId,
           cookies: JSON.stringify(cookies)
@@ -601,3 +657,4 @@ export async function closeAllActiveContexts(): Promise<void> {
   }
   activeContexts.clear();
 }
+

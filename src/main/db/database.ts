@@ -142,6 +142,15 @@ try {
       db.exec(`ALTER TABLE profiles ADD COLUMN ${c} TEXT DEFAULT NULL;`);
     }
   }
+
+  // Dọn sạch cookies ẩn danh rác (không chứa sessionid) lưu nhầm từ các phiên trước
+  db.exec(`
+    UPDATE profiles 
+    SET cookies = NULL 
+    WHERE cookies IS NOT NULL 
+      AND cookies NOT LIKE '%sessionid%' 
+      AND cookies NOT LIKE '%sid_tt%'
+  `);
 } catch (_) {}
 
 // 3. Tự động sync tài khoản, pass, email từ DB tiktok-at cũ nếu có

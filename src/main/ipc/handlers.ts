@@ -2,7 +2,13 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { profileRepo, logRepo, configRepo, groupRepo, ProfileRecord } from '../db/database';
-import { openManualBrowser, closeProfileContext, testProxyConnection, isProfileActive } from '../engine/browser-pool';
+import {
+  openManualBrowser,
+  closeProfileContext,
+  testProxyConnection,
+  isProfileActive,
+  focusProfileBrowser
+} from '../engine/browser-pool';
 import { uploadQueue } from '../queue/task-queue';
 import { importFromOldTool, exportProfilesToJson, importProfilesFromJson } from '../db/migration';
 import { generateTotp } from '../engine/totp';
@@ -343,13 +349,21 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const profile = profileRepo.getById(id);
     if (!profile) throw new Error('Không tìm thấy profile');
 
+    // Nếu trình duyệt của profile này đang mở sẵn -> Kích hoạt lên trước thay vì đóng đi mở lại
+    if (isProfileActive(id)) {
+      const brought = await focusProfileBrowser(id);
+      if (brought) {
+        return { success: true, alreadyOpen: true };
+      }
+    }
+
     await openManualBrowser(profile, () => {
       const activeWin = getValidWindow();
       if (activeWin && !activeWin.isDestroyed()) {
         activeWin.webContents.send('profiles:updated', profileRepo.getAll());
       }
     });
-    return true;
+    return { success: true, alreadyOpen: false };
   });
 
   ipcMain.handle('profiles:closeBrowser', async (_, id: string) => {

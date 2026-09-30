@@ -7,7 +7,7 @@ export interface IElectronAPI {
   deleteProfile: (id: string) => Promise<any[]>;
   bulkDeleteProfiles: (profileIds: string[]) => Promise<any[]>;
   deleteAllProfiles: () => Promise<any[]>;
-  openBrowser: (id: string) => Promise<boolean>;
+  openBrowser: (id: string) => Promise<{ success: boolean; alreadyOpen?: boolean }>;
   closeBrowser: (id: string) => Promise<boolean>;
   testProxy: (rawProxy: string) => Promise<{ success: boolean; ip?: string; latencyMs?: number; error?: string }>;
   importFromOldTool: () => Promise<{ profiles: any[]; importedCount: number; message: string }>;

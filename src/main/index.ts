@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, nativeImage } from 'electron';
+import { app, shell, BrowserWindow, nativeImage, Menu } from 'electron';
 import { join } from 'path';
 import fs from 'fs';
 import { execSync } from 'child_process';
@@ -16,6 +16,7 @@ if (process.platform === 'win32') {
 // Đặt tên ứng dụng hiển thị chuẩn trên macOS Dock & Tooltip
 app.setName('TikTok Uploader Pro');
 app.name = 'TikTok Uploader Pro';
+process.title = 'TikTok Uploader Pro';
 
 function getIconPath(): string | undefined {
   const possiblePaths = [
@@ -79,15 +80,56 @@ app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.tiktok.uploaderpro');
 
   const iconPath = getIconPath();
-  if (process.platform === 'darwin' && iconPath) {
-    try {
-      const img = nativeImage.createFromPath(iconPath);
-      if (!img.isEmpty()) {
-        app.dock.setIcon(img);
+  if (process.platform === 'darwin') {
+    if (iconPath) {
+      try {
+        const img = nativeImage.createFromPath(iconPath);
+        if (!img.isEmpty()) {
+          app.dock.setIcon(img);
+        }
+      } catch (err) {
+        console.error('Lỗi set dock icon:', err);
       }
-    } catch (err) {
-      console.error('Lỗi set dock icon:', err);
     }
+
+    // Đặt Menu bar chuẩn của macOS với tên app "TikTok Uploader Pro"
+    const template: Electron.MenuItemConstructorOptions[] = [
+      {
+        label: 'TikTok Uploader Pro',
+        submenu: [
+          { role: 'about', label: 'Giới thiệu TikTok Uploader Pro' },
+          { type: 'separator' },
+          { role: 'services', label: 'Dịch vụ' },
+          { type: 'separator' },
+          { role: 'hide', label: 'Ẩn TikTok Uploader Pro' },
+          { role: 'hideOthers', label: 'Ẩn các ứng dụng khác' },
+          { role: 'unhide', label: 'Hiện tất cả' },
+          { type: 'separator' },
+          { role: 'quit', label: 'Thoát TikTok Uploader Pro' }
+        ]
+      },
+      {
+        label: 'Chỉnh sửa',
+        submenu: [
+          { role: 'undo', label: 'Hoàn tác' },
+          { role: 'redo', label: 'Làm lại' },
+          { type: 'separator' },
+          { role: 'cut', label: 'Cắt' },
+          { role: 'copy', label: 'Sao chép' },
+          { role: 'paste', label: 'Dán' },
+          { role: 'selectAll', label: 'Chọn tất cả' }
+        ]
+      },
+      {
+        label: 'Cửa sổ',
+        submenu: [
+          { role: 'minimize', label: 'Thu nhỏ' },
+          { role: 'zoom', label: 'Phóng to' },
+          { role: 'close', label: 'Đóng' }
+        ]
+      }
+    ];
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   }
 
   app.on('browser-window-created', (_, window) => {
