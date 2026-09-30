@@ -78,7 +78,8 @@ export async function runUploadPipeline(
 
   // 2. Khởi chạy trình duyệt
   currentStep = 'LAUNCH_BROWSER';
-  const { context, page } = await launchProfileContext(profile, false);
+  const { context, page: initialPage } = await launchProfileContext(profile, false);
+  let page = initialPage;
   registerAutoDismissHandlers(page, (m) => log(m));
 
   try {
@@ -170,6 +171,27 @@ export async function runUploadPipeline(
         if (videoError.message.includes('MỤC FAVORITES RỖNG')) {
           log('Dừng toàn bộ hàng đợi vì kênh không có nhạc yêu thích!', 'error');
           break;
+        }
+
+        // Nếu trình duyệt hoặc context bị đóng (người dùng tắt hoặc crash) -> Dừng luôn profile này, không lặp lỗi 50 lần
+        if (
+          videoError.message.includes('Target page, context or browser has been closed') ||
+          videoError.message.includes('Target closed') ||
+          context.pages().length === 0
+        ) {
+          log('Trình duyệt của kênh đã bị đóng. Dừng các video còn lại của profile này.', 'warn');
+          break;
+        }
+
+        // Nếu chỉ tab hiện tại bị crash/đóng nhưng context vẫn còn sống: tạo lại tab mới
+        if (page.isClosed()) {
+          try {
+            page = await context.newPage();
+            registerAutoDismissHandlers(page, (m) => log(m));
+          } catch {
+            log('Không thể mở lại tab mới, dừng profile này.', 'warn');
+            break;
+          }
         }
 
         // Reset trang upload để chuẩn bị video tiếp theo

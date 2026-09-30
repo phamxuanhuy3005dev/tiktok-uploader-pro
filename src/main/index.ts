@@ -1,9 +1,17 @@
 import { app, shell, BrowserWindow, nativeImage } from 'electron';
 import { join } from 'path';
 import fs from 'fs';
+import { execSync } from 'child_process';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { registerIpcHandlers, setMainWindow } from './ipc/handlers';
 import { closeAllActiveContexts } from './engine/browser-pool';
+
+// Tự động kích hoạt mã hóa UTF-8 chuẩn trên Windows CMD / PowerShell (tránh lỗi font tiếng Việt / tiếng Trung)
+if (process.platform === 'win32') {
+  try {
+    execSync('chcp 65001', { stdio: 'ignore' });
+  } catch (_) {}
+}
 
 // Đặt tên ứng dụng hiển thị chuẩn trên macOS Dock & Tooltip
 app.setName('TikTok Uploader Pro');
