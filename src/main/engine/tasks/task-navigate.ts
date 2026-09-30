@@ -48,6 +48,19 @@ export function registerAutoDismissHandlers(page: Page, log?: (msg: string) => v
         await gotItBtn.click({ force: true }).catch(() => {});
       }
     );
+
+    // 4. Tự động bấm "Allow" trên popup "Allow your video to be saved for scheduled posting?"
+    page.addLocatorHandler(
+      page
+        .locator(
+          'div:has-text("scheduled posting") button:has-text("Allow"), div[role="dialog"]:has-text("scheduled posting") button:has-text("Allow")'
+        )
+        .first(),
+      async (allowBtn) => {
+        if (log) log('[Playwright AutoDismiss] Tự động bấm "Allow" trên popup cho phép lưu video lên lịch.');
+        await allowBtn.click({ force: true }).catch(() => {});
+      }
+    );
   } catch (err: any) {
     if (log) log(`Không thể đăng ký addLocatorHandler: ${err.message}`);
   }

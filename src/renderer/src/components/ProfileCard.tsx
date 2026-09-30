@@ -239,60 +239,62 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       {/* Row 4: Action Buttons */}
       <div className="flex items-center gap-2 pt-0.5">
         {profile.status === 'manual_session' ? (
-          <div className="flex items-center gap-1 flex-1">
+          <>
             <Button
               variant="outline"
               size="sm"
               onClick={onOpenBrowser}
               disabled={isOpeningBrowser}
-              title="Trình duyệt đang mở - Bấm để chuyển cửa sổ lên trước"
-              className="flex-1 h-7 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200 rounded-lg"
+              title="Trình duyệt đang mở - Bấm để chuyển cửa sổ lên trước màn hình"
+              className="flex-1 h-7 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200 rounded-lg truncate shadow-none"
             >
-              <ExternalLink className="h-3 w-3 mr-1 text-emerald-600" />
-              Đang Mở (Focus)
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse mr-1.5 shrink-0" />
+              <span className="truncate">Đang Mở</span>
             </Button>
-            {onCloseBrowser && (
-              <button
-                type="button"
-                onClick={onCloseBrowser}
-                title="Đóng trình duyệt của profile này"
-                className="h-7 px-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onCloseBrowser}
+              title="Đóng cửa sổ trình duyệt của profile này"
+              className="flex-1 h-7 text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 border-rose-200 rounded-lg truncate shadow-none"
+            >
+              <X className="h-3.5 w-3.5 mr-1 text-rose-500 shrink-0" />
+              <span className="truncate">Đóng Chrome</span>
+            </Button>
+          </>
         ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenBrowser}
-            disabled={isOpeningBrowser || isRunning}
-            className="flex-1 h-7 text-xs text-slate-700 border-slate-200 hover:bg-slate-50 rounded-lg disabled:opacity-50"
-          >
-            {isOpeningBrowser ? (
-              <Loader2 className="h-3 w-3 mr-1 text-sky-500 animate-spin" />
-            ) : (
-              <ExternalLink className="h-3 w-3 mr-1 text-slate-400" />
-            )}
-            {isOpeningBrowser ? 'Đang Mở...' : 'Mở Trình Duyệt'}
-          </Button>
-        )}
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenBrowser}
+              disabled={isOpeningBrowser || isRunning}
+              className="flex-1 h-7 text-xs text-slate-700 border-slate-200 hover:bg-slate-50 rounded-lg disabled:opacity-50 truncate"
+            >
+              {isOpeningBrowser ? (
+                <Loader2 className="h-3 w-3 mr-1 text-sky-500 animate-spin shrink-0" />
+              ) : (
+                <ExternalLink className="h-3 w-3 mr-1 text-slate-400 shrink-0" />
+              )}
+              <span className="truncate">{isOpeningBrowser ? 'Đang Mở...' : 'Mở Trình Duyệt'}</span>
+            </Button>
 
-        <Button
-          variant="tiktok"
-          size="sm"
-          onClick={onRunUpload}
-          disabled={isRunning || isProcessing || !profile.video_folder}
-          className="flex-1 h-7 text-xs font-semibold bg-sky-500 hover:bg-sky-600 shadow-sm shadow-sky-500/20 text-white rounded-lg disabled:opacity-50"
-        >
-          {isRunning ? (
-            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-          ) : (
-            <Play className="h-3 w-3 mr-1 fill-current" />
-          )}
-          {isRunning ? 'Đang Xử Lý...' : 'Upload'}
-        </Button>
+            <Button
+              variant="tiktok"
+              size="sm"
+              onClick={onRunUpload}
+              disabled={isRunning || isProcessing || !profile.video_folder}
+              className="flex-1 h-7 text-xs font-semibold bg-sky-500 hover:bg-sky-600 shadow-sm shadow-sky-500/20 text-white rounded-lg disabled:opacity-50 truncate"
+            >
+              {isRunning ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin shrink-0" />
+              ) : (
+                <Play className="h-3 w-3 mr-1 fill-current shrink-0" />
+              )}
+              <span className="truncate">{isRunning ? 'Đang Xử Lý...' : 'Upload'}</span>
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );

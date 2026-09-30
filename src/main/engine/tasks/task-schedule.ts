@@ -244,6 +244,22 @@ export async function applySchedule(
 
   await dismissPopups(page, log);
 
+  // Hàm tự động bấm "Allow" cho popup tài khoản mới: "Allow your video to be saved for scheduled posting?"
+  const checkAndAllowSchedule = async () => {
+    const allowBtn = page
+      .locator(
+        'div:has-text("scheduled posting") button:has-text("Allow"), div[role="dialog"]:has-text("scheduled posting") button:has-text("Allow"), div[role="dialog"] button:has-text("Allow")'
+      )
+      .first();
+    if (await allowBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+      log('Phát hiện popup "Allow your video to be saved for scheduled posting?". Đang tự động bấm "Allow"...');
+      await allowBtn.click({ force: true }).catch(() => {});
+      await page.waitForTimeout(800);
+      return true;
+    }
+    return false;
+  };
+
   // 1. Kích hoạt Radio "Schedule"
   const scheduleRadioInput = page.locator('input[value="schedule"]').first();
   let isChecked = await scheduleRadioInput.isChecked().catch(() => false);
@@ -254,7 +270,8 @@ export async function applySchedule(
       .last();
     await scheduleLabel.scrollIntoViewIfNeeded().catch(() => {});
     await scheduleLabel.click({ force: true }).catch(() => {});
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(600);
+    await checkAndAllowSchedule();
     isChecked = await scheduleRadioInput.isChecked().catch(() => false);
   }
 
@@ -262,6 +279,7 @@ export async function applySchedule(
     log('Cảnh báo: Chưa kiểm tra được radio Schedule đã chọn, thử click trực tiếp radio...');
     await scheduleRadioInput.check({ force: true }).catch(() => {});
     await page.waitForTimeout(500);
+    await checkAndAllowSchedule();
   }
 
   // 2. Tính toán ngày & giờ

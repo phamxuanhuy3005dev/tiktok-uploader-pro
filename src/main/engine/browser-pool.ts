@@ -552,9 +552,18 @@ export async function focusProfileBrowser(profileId: string): Promise<boolean> {
     const page = pages[pages.length - 1];
     await page.bringToFront().catch(() => {});
 
+    // Trên macOS: Focus chính xác process Chrome/Chromium của profile này bằng unix id (PID)
     if (process.platform === 'darwin') {
-      execAsync(`osascript -e 'tell application "Google Chrome" to activate'`).catch(() => {});
-      execAsync(`osascript -e 'tell application "Chromium" to activate'`).catch(() => {});
+      const profile = profileRepo.getById(profileId);
+      if (profile) {
+        const userDataDir = path.join(PROFILES_DIR, profile.name);
+        const pids = await getProfilePids(userDataDir);
+        for (const pid of pids) {
+          execAsync(
+            `osascript -e 'tell application "System Events" to set frontmost of first process whose unix id is ${pid} to true'`
+          ).catch(() => {});
+        }
+      }
     }
     return true;
   } catch {

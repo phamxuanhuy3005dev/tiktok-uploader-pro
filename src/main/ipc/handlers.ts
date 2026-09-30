@@ -349,14 +349,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const profile = profileRepo.getById(id);
     if (!profile) throw new Error('Không tìm thấy profile');
 
-    // Nếu trình duyệt của profile này đang mở sẵn -> Kích hoạt lên trước thay vì đóng đi mở lại
-    if (isProfileActive(id)) {
-      const brought = await focusProfileBrowser(id);
-      if (brought) {
-        return { success: true, alreadyOpen: true };
-      }
-    }
-
     const notifyUpdated = () => {
       const activeWin = getValidWindow();
       if (activeWin && !activeWin.isDestroyed()) {
@@ -364,17 +356,29 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       }
     };
 
+    // Nếu trình duyệt của profile này đã mở sẵn -> Focus lên trước, TUYỆT ĐỐI không mở thêm browser thứ 2!
+    if (isProfileActive(id)) {
+      await focusProfileBrowser(id);
+      notifyUpdated();
+      return { success: true, alreadyOpen: true };
+    }
+
     await openManualBrowser(
       profile,
       () => notifyUpdated(),
       () => notifyUpdated()
     );
+    notifyUpdated(); // Cập nhật ngay lập tức sang trạng thái manual_session
     return { success: true, alreadyOpen: false };
   });
 
   ipcMain.handle('profiles:closeBrowser', async (_, id: string) => {
     await closeProfileContext(id);
     profileRepo.updateStatus(id, 'idle');
+    const activeWin = getValidWindow();
+    if (activeWin && !activeWin.isDestroyed()) {
+      activeWin.webContents.send('profiles:updated', profileRepo.getAll());
+    }
     return true;
   });
 
