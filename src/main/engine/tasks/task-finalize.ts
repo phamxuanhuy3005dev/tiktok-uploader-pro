@@ -141,15 +141,39 @@ export async function submitAndConfirmPost(
     if (!fs.existsSync(doneDir)) fs.mkdirSync(doneDir, { recursive: true });
 
     const fileName = path.basename(videoPath);
-    const destPath = path.join(doneDir, fileName);
-    fs.renameSync(videoPath, destPath);
+    let destPath = path.join(doneDir, fileName);
+
+    // Xử lý nếu tên file đã tồn tại trong done/
+    if (fs.existsSync(destPath)) {
+      const ext = path.extname(fileName);
+      const base = path.basename(fileName, ext);
+      destPath = path.join(doneDir, `${base}_${Date.now()}${ext}`);
+    }
+
+    try {
+      fs.renameSync(videoPath, destPath);
+    } catch {
+      // Fallback trên Windows khi file bị lock hoặc khác ổ đĩa
+      fs.copyFileSync(videoPath, destPath);
+      try {
+        fs.unlinkSync(videoPath);
+      } catch (_) {}
+    }
     log(`[Lưu trữ] Đã chuyển file ${fileName} sang thư mục "done/" an toàn.`);
 
     // Nếu có file text đi kèm thì chuyển luôn
     const ext = path.extname(videoPath);
     const txtPath = videoPath.slice(0, -ext.length) + '.txt';
     if (fs.existsSync(txtPath)) {
-      fs.renameSync(txtPath, path.join(doneDir, path.basename(txtPath)));
+      const destTxt = path.join(doneDir, path.basename(txtPath));
+      try {
+        fs.renameSync(txtPath, destTxt);
+      } catch {
+        try {
+          fs.copyFileSync(txtPath, destTxt);
+          fs.unlinkSync(txtPath);
+        } catch (_) {}
+      }
     }
   } catch (mvErr: any) {
     log(`Cảnh báo di chuyển file: ${mvErr.message}`);

@@ -449,3 +449,14 @@ export async function closeProfileContext(profileId: string): Promise<void> {
     await releaseProfileLocks(userDataDir, profile.name).catch(() => {});
   }
 }
+
+/**
+ * Đóng toàn bộ các context browser đang chạy khi app thoát hoặc tắt
+ */
+export async function closeAllActiveContexts(): Promise<void> {
+  const ids = Array.from(activeContexts.keys());
+  for (const id of ids) {
+    await closeProfileContext(id).catch(() => {});
+  }
+  activeContexts.clear();
+}

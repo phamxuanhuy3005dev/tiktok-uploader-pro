@@ -142,11 +142,21 @@ export function importProfilesFromJson(sourceFilePath: string): number {
         id: existing.id,
         group_name: item.group_name || item.group || existing.group_name,
         cookies: cookiesStr || existing.cookies,
-        account_id: item.account_id || existing.account_id,
-        pass: item.pass || existing.pass,
-        email: item.email || existing.email,
-        pass_email: item.pass_email || existing.pass_email,
-        mail_ao: item.mail_ao || existing.mail_ao
+        account_id: item.account_id !== undefined ? item.account_id : existing.account_id,
+        pass: item.pass !== undefined ? item.pass : existing.pass,
+        email: item.email !== undefined ? item.email : existing.email,
+        pass_email: item.pass_email !== undefined ? item.pass_email : existing.pass_email,
+        mail_ao: item.mail_ao !== undefined ? item.mail_ao : existing.mail_ao,
+        video_folder: item.video_folder !== undefined ? item.video_folder : existing.video_folder,
+        max_videos: item.max_videos !== undefined ? Number(item.max_videos) : existing.max_videos,
+        proxy: item.proxy !== undefined ? item.proxy : existing.proxy,
+        enable_music: item.enable_music !== undefined ? Number(item.enable_music) : existing.enable_music,
+        music_mode: item.music_mode || existing.music_mode,
+        favorite_index: item.favorite_index !== undefined ? Number(item.favorite_index) : existing.favorite_index,
+        music_volume: item.music_volume !== undefined ? Number(item.music_volume) : existing.music_volume,
+        schedule_mode: item.schedule_mode || existing.schedule_mode,
+        schedule_interval: item.schedule_interval !== undefined ? Number(item.schedule_interval) : existing.schedule_interval,
+        golden_hours: item.golden_hours || existing.golden_hours
       });
       count++;
     }

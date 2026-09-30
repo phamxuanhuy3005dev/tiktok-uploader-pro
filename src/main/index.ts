@@ -3,6 +3,7 @@ import { join } from 'path';
 import fs from 'fs';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { registerIpcHandlers, setMainWindow } from './ipc/handlers';
+import { closeAllActiveContexts } from './engine/browser-pool';
 
 // Đặt tên ứng dụng hiển thị chuẩn trên macOS Dock & Tooltip
 app.setName('TikTok Uploader Pro');
@@ -92,6 +93,12 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+});
+
+app.on('before-quit', async () => {
+  try {
+    await closeAllActiveContexts().catch(() => {});
+  } catch (_) {}
 });
 
 app.on('window-all-closed', () => {

@@ -115,8 +115,11 @@ async function selectTimeInPicker(
         container.children[0];
       if (leftCol) {
         const items = Array.from(leftCol.querySelectorAll('li, div, span'));
+        const hNum = parseInt(hour, 10);
         for (const item of items) {
-          if (item.children.length === 0 && item.textContent?.trim() === hour) {
+          const txt = item.textContent?.trim() || '';
+          if (item.children.length === 0 && (txt === hour || parseInt(txt, 10) === hNum)) {
+            (item as HTMLElement).scrollIntoView?.({ block: 'center' });
             (item as HTMLElement).click();
             hourFound = true;
             break;
@@ -130,8 +133,11 @@ async function selectTimeInPicker(
         container.children[1];
       if (rightCol) {
         const items = Array.from(rightCol.querySelectorAll('li, div, span'));
+        const mNum = parseInt(minute, 10);
         for (const item of items) {
-          if (item.children.length === 0 && item.textContent?.trim() === minute) {
+          const txt = item.textContent?.trim() || '';
+          if (item.children.length === 0 && (txt === minute || parseInt(txt, 10) === mNum)) {
+            (item as HTMLElement).scrollIntoView?.({ block: 'center' });
             (item as HTMLElement).click();
             minuteFound = true;
             break;
@@ -220,6 +226,24 @@ async function selectDateInPicker(
   await page.keyboard.press(selectAll).catch(() => {});
   await page.keyboard.type(dateStr, { delay: 20 }).catch(() => {});
   await page.keyboard.press('Enter').catch(() => {});
+
+  // Nếu popup calendar đang mở, thử click trực tiếp ngày đích trong calendar grid
+  const targetDayNum = parseInt(dateStr.split('-')[2] || '0', 10);
+  if (targetDayNum > 0) {
+    await page.evaluate(({ day }) => {
+      const dayCells = Array.from(
+        document.querySelectorAll(
+          '.day:not(.disabled), [class*="calendar-day"]:not([class*="disabled"]), [class*="picker-cell"]:not([class*="disabled"]), td:not([class*="disabled"])'
+        )
+      );
+      for (const cell of dayCells) {
+        if (cell.textContent?.trim() === String(day)) {
+          (cell as HTMLElement).click();
+          break;
+        }
+      }
+    }, { day: targetDayNum }).catch(() => {});
+  }
 
   await page.evaluate(() => {
     (document.activeElement as HTMLElement)?.blur();
