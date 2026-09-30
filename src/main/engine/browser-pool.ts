@@ -447,19 +447,38 @@ export function normalizeTikTokCookies(rawCookies?: string | any[] | null): TikT
     return data
       .map((item: any) => {
         if (!item || !item.name || item.value === undefined) return null;
-        let domain = item.domain || '.tiktok.com';
-        if (!domain.includes('tiktok.com')) {
-          domain = '.tiktok.com';
+        const name = String(item.name).trim();
+        const value = String(item.value).trim();
+        if (!name) return null;
+
+        // Bỏ qua các cookie prefix __Host- ngoại lai để tránh lỗi CDP Protocol error
+        if (name.startsWith('__Host-')) return null;
+
+        // Giữ nguyên domain gốc của cookie (không ép đổi domain nếu là cookie phụ trợ)
+        const domain = item.domain ? String(item.domain).trim() : '.tiktok.com';
+
+        let expires: number | undefined;
+        if (typeof item.expires === 'number' && item.expires > 0) {
+          expires = Math.floor(item.expires);
+        } else if (typeof item.expirationDate === 'number' && item.expirationDate > 0) {
+          expires = Math.floor(item.expirationDate);
         }
-        return {
-          name: String(item.name).trim(),
-          value: String(item.value).trim(),
+
+        const res: TikTokCookieObject = {
+          name,
+          value,
           domain,
           path: item.path || '/',
-          expires: item.expires || item.expirationDate || undefined,
+          expires,
           httpOnly: item.httpOnly !== undefined ? Boolean(item.httpOnly) : undefined,
           secure: item.secure !== undefined ? Boolean(item.secure) : true
-        } as TikTokCookieObject;
+        };
+
+        if (item.sameSite === 'Strict' || item.sameSite === 'Lax' || item.sameSite === 'None') {
+          res.sameSite = item.sameSite;
+        }
+
+        return res;
       })
       .filter((c): c is TikTokCookieObject => c !== null && Boolean(c.name));
   }
@@ -542,10 +561,25 @@ export async function launchProfileContext(
     try {
       const parsedCookies = normalizeTikTokCookies(profile.cookies);
       if (parsedCookies.length > 0) {
-        await context.addCookies(parsedCookies as any);
+        let loadedCount = 0;
+        try {
+          // Thử nạp toàn bộ mảng cookie trong 1 lần
+          await context.addCookies(parsedCookies as any);
+          loadedCount = parsedCookies.length;
+        } catch (batchErr: any) {
+          console.warn(`[${profile.name}] Nạp batch cookies thất bại, đang nạp từng cookie:`, batchErr.message);
+          // Fallback nạp từng cookie riêng lẻ để 1 cookie lạ không làm mất sessionid
+          for (const c of parsedCookies) {
+            try {
+              await context.addCookies([c as any]);
+              loadedCount++;
+            } catch (_) {}
+          }
+        }
+
         const hasSession = parsedCookies.some((c) => c.name === 'sessionid' || c.name === 'sessionid_ss');
         console.log(
-          `[${profile.name}] 🍪 Đã nạp thành công ${parsedCookies.length} cookies vào trình duyệt ${
+          `[${profile.name}] 🍪 Đã nạp thành công ${loadedCount}/${parsedCookies.length} cookies vào trình duyệt ${
             hasSession ? '(Có sessionid login)' : ''
           }.`
         );

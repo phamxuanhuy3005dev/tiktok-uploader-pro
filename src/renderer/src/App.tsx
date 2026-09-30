@@ -25,7 +25,7 @@ import {
   Copy,
   Trash2,
   FolderInput,
-  FileSpreadsheet,
+  FileJson,
   Loader2
 } from 'lucide-react';
 import { Button } from './components/ui/Button';
@@ -327,83 +327,23 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleExportSelectedTxt = async () => {
-    const targetProfiles = selectedProfileIds.size > 0 
-      ? profiles.filter((p) => selectedProfileIds.has(p.id))
-      : filteredProfiles;
-
-    if (targetProfiles.length === 0) {
-      toast.error('Không có tài khoản nào để xuất!');
-      return;
-    }
-
-    const cleanCookie = (raw: any): string => {
-      if (!raw) return '';
-      let str = typeof raw === 'string' ? raw.trim() : '';
-      if (!str) return '';
-      if (str.startsWith('[') || str.startsWith('{')) {
-        try {
-          const parsed = JSON.parse(str);
-          if (Array.isArray(parsed)) {
-            const TIKTOK_COOKIE_NAMES = new Set([
-              'sessionid', 'sessionid_ss', 'sid_tt', 'sid_guard', 'uid_tt', 'uid_tt_ss',
-              'tt_chain_token', 'csrf_token', 'ttwid', 'msToken', 'odin_tt', 'store-country-sign',
-              'passport_csrf_token', 'passport_csrf_token_default', 'tt_csrf_token', 's_v_web_id'
-            ]);
-            const matched = parsed.filter((c: any) => c && c.name && TIKTOK_COOKIE_NAMES.has(c.name));
-            const listToUse = matched.length > 0 ? matched : parsed.slice(0, 15);
-            return listToUse
-              .map((c: any) => `${c.name}=${c.value}`)
-              .join('; ')
-              .replace(/[\r\n|]/g, ' ')
-              .trim();
-          }
-        } catch (_) {}
-      }
-      return str.replace(/[\r\n|]/g, ' ').trim();
-    };
-
-    const lines = targetProfiles.map((p) => {
-      const items = [
-        p.account_id || p.name || '',
-        p.pass || '',
-        p.two_factor || '',
-        p.email || '',
-        p.pass_email || '',
-        p.mail_ao || '',
-        p.proxy || '',
-        cleanCookie(p.cookies),
-        p.group_name || 'Mặc định'
-      ];
-      return items.join('|');
-    });
-
-    const header = '# Username|Password|2FA|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
-    const clipboardContent = [header, ...lines].join('\n');
-    await navigator.clipboard.writeText(clipboardContent).catch(() => {});
-
+  const handleExportJson = async (customProfiles?: any[]) => {
     try {
-      const res = await window.api.exportAccounts(targetProfiles);
-      if (res.success && res.filePath) {
-        const fileName = res.filePath.split(/[/\\]/).pop();
-        const typeLabel = res.format === 'csv' ? 'Excel CSV' : (res.format === 'json' ? 'JSON' : 'TXT');
-        toast.success(`Đã xuất ${targetProfiles.length} tài khoản ra file [${fileName}] (${typeLabel}) & copy vào clipboard!`);
-      } else if (!res.canceled) {
-        toast.success(`Đã copy ${targetProfiles.length} tài khoản vào clipboard!`);
-      }
-    } catch (_) {
-      toast.success(`Đã copy ${targetProfiles.length} tài khoản vào clipboard!`);
-    }
-  };
+      const targetProfiles = customProfiles || (selectedProfileIds.size > 0 
+        ? profiles.filter((p) => selectedProfileIds.has(p.id))
+        : filteredProfiles);
 
-  const handleExportJson = async () => {
-    try {
+      if (targetProfiles.length === 0) {
+        toast.error('Không có tài khoản nào để xuất!');
+        return;
+      }
+
       setIsProcessing(true);
-      setProcessingMessage('Đang xuất danh sách profiles ra file JSON...');
-      const res = await window.api.exportJson();
+      setProcessingMessage(`Đang xuất ${targetProfiles.length} profiles ra file JSON...`);
+      const res = await window.api.exportJson(targetProfiles);
       if (res.success && res.filePath) {
         const fileName = res.filePath.split(/[/\\]/).pop();
-        toast.success(`Đã xuất thành công file backup JSON [${fileName}]!`);
+        toast.success(`Đã xuất thành công ${targetProfiles.length} profiles ra file JSON [${fileName}]!`);
       }
     } catch (err: any) {
       toast.error(`Lỗi xuất JSON: ${err.message}`);
@@ -619,16 +559,28 @@ export const App: React.FC = () => {
                     <Shuffle className="h-3.5 w-3.5 mr-1 text-sky-600" /> Chia Đều Video
                   </Button>
 
-                  {/* Nút Xuất Danh Sách File (CSV / TXT / JSON) */}
+                  {/* Nút Nhập JSON */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isProcessing}
+                    onClick={() => setIsBulkImportOpen(true)}
+                    title="Nhập danh sách profiles từ file JSON hoặc dán JSON"
+                    className="h-8 text-xs border-sky-300 text-sky-700 bg-sky-50/60 hover:bg-sky-100/80 shrink-0 px-2.5"
+                  >
+                    <FileJson className="h-3.5 w-3.5 mr-1 text-sky-600" /> Nhập JSON
+                  </Button>
+
+                  {/* Nút Xuất JSON */}
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={isProcessing || filteredProfiles.length === 0}
-                    onClick={handleExportSelectedTxt}
-                    title="Xuất danh sách tài khoản ra file Excel CSV, TXT (chuẩn MMO) hoặc JSON"
+                    onClick={() => handleExportJson()}
+                    title="Xuất danh sách profiles ra file JSON an toàn, đầy đủ cookies"
                     className="h-8 text-xs border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80 shrink-0 px-2.5"
                   >
-                    <FileSpreadsheet className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Xuất File ({filteredProfiles.length})
+                    <FileJson className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Xuất JSON ({filteredProfiles.length})
                   </Button>
                 </div>
               </div>
@@ -693,16 +645,16 @@ export const App: React.FC = () => {
                         </select>
                       </div>
 
-                      {/* Xuất File Excel CSV / TXT / JSON các kênh đang chọn */}
+                      {/* Xuất JSON các kênh đang chọn */}
                       <Button
                         variant="outline"
                         size="sm"
                         disabled={isProcessing}
-                        onClick={handleExportSelectedTxt}
-                        title="Xuất file Excel CSV, TXT (chuẩn MMO) hoặc JSON các kênh đang chọn"
+                        onClick={() => handleExportJson(profiles.filter((p) => selectedProfileIds.has(p.id)))}
+                        title="Xuất file JSON an toàn các kênh đang chọn"
                         className="h-8 text-xs border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80 px-2.5 disabled:opacity-50"
                       >
-                        <FileSpreadsheet className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Xuất Đã Chọn ({selectedProfileIds.size})
+                        <FileJson className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Xuất Đã Chọn ({selectedProfileIds.size})
                       </Button>
 
                       {/* Xóa hàng loạt */}
@@ -813,7 +765,7 @@ export const App: React.FC = () => {
                 </div>
                 <h3 className="text-base font-bold text-slate-800">Chưa có Profile TikTok nào</h3>
                 <p className="text-xs text-slate-500 max-w-md mt-1 mb-5">
-                  Bắt đầu ngay bằng cách nhập danh sách tài khoản hàng loạt từ file TXT hoặc tạo từng profile.
+                  Bắt đầu ngay bằng cách nhập danh sách profiles từ file JSON hoặc tạo từng profile.
                 </p>
                 <div className="flex gap-3">
                   <Button
@@ -822,7 +774,7 @@ export const App: React.FC = () => {
                     onClick={() => setIsBulkImportOpen(true)}
                     className="border-sky-300 bg-sky-50/60 hover:bg-sky-100 text-sky-700 text-xs font-semibold"
                   >
-                    <Plus className="h-3.5 w-3.5 mr-1" /> Nhập Hàng Loạt (TXT)
+                    <FileJson className="h-3.5 w-3.5 mr-1" /> Nhập Profiles (JSON)
                   </Button>
                   <Button
                     variant="default"
@@ -895,10 +847,6 @@ export const App: React.FC = () => {
           <SettingsScreen
             concurrency={concurrency}
             onUpdateConcurrency={handleUpdateConcurrency}
-            totalProfiles={profiles.length}
-            onExportJson={handleExportJson}
-            onImportJson={handleImportJson}
-            isProcessing={isProcessing}
           />
         )}
       </main>

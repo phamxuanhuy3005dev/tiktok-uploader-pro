@@ -11,8 +11,9 @@ export interface IElectronAPI {
   closeBrowser: (id: string) => Promise<boolean>;
   testProxy: (rawProxy: string) => Promise<{ success: boolean; ip?: string; latencyMs?: number; error?: string }>;
   importFromOldTool: () => Promise<{ profiles: any[]; importedCount: number; message: string }>;
-  exportJson: () => Promise<{ success: boolean; filePath?: string }>;
-  importJson: () => Promise<{ success: boolean; count?: number; profiles?: any[] }>;
+  exportJson: (profiles?: any[]) => Promise<{ success: boolean; filePath?: string; count?: number; canceled?: boolean }>;
+  importJson: () => Promise<{ success: boolean; count?: number; filePath?: string; profiles?: any[]; canceled?: boolean }>;
+  importJsonString: (content: string) => Promise<{ success: boolean; count?: number; profiles?: any[] }>;
   exportTxt: (content: string) => Promise<{ success: boolean; filePath?: string; canceled?: boolean }>;
   exportAccounts: (accounts: any[]) => Promise<{ success: boolean; filePath?: string; format?: string; canceled?: boolean }>;
   downloadTemplate: () => Promise<{ success: boolean; filePath?: string; format?: string; canceled?: boolean }>;

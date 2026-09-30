@@ -5,7 +5,8 @@ import {
   Layers, 
   Activity, 
   Terminal, 
-  Settings 
+  Settings,
+  FileJson 
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import appIcon from '../assets/icon.png';
@@ -94,10 +95,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={onBulkImport}
-                title="Nhập danh sách tài khoản từ file TXT, CSV hoặc JSON"
+                title="Nhập danh sách profiles từ file JSON hoặc dán JSON"
                 className="text-xs border-slate-200 text-slate-700 bg-white hover:bg-slate-50"
               >
-                <Plus className="h-3.5 w-3.5 mr-1 text-sky-500" /> Nhập Hàng Loạt
+                <FileJson className="h-3.5 w-3.5 mr-1 text-sky-500" /> Nhập JSON
               </Button>
             )}
 

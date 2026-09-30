@@ -16,8 +16,9 @@ export const api = {
 
   // Import / Export
   importFromOldTool: () => ipcRenderer.invoke('profiles:importOld'),
-  exportJson: () => ipcRenderer.invoke('profiles:exportJson'),
+  exportJson: (profiles?: any[]) => ipcRenderer.invoke('profiles:exportJson', profiles),
   importJson: () => ipcRenderer.invoke('profiles:importJson'),
+  importJsonString: (content: string) => ipcRenderer.invoke('profiles:importJsonString', content),
   exportTxt: (content: string) => ipcRenderer.invoke('profiles:exportTxt', content),
   exportAccounts: (accounts: any[]) => ipcRenderer.invoke('profiles:exportAccounts', accounts),
   downloadTemplate: () => ipcRenderer.invoke('profiles:downloadTemplate'),

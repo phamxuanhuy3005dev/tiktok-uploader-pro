@@ -94,8 +94,8 @@ export function importFromOldTool(oldToolPath = '/Users/fanboyrose/Desktop/tikto
   };
 }
 
-export function exportProfilesToJson(targetFilePath: string): void {
-  const profiles = profileRepo.getAll();
+export function exportProfilesToJson(targetFilePath: string, specificProfiles?: any[]): void {
+  const profiles = specificProfiles && specificProfiles.length > 0 ? specificProfiles : profileRepo.getAll();
   const formatted = profiles.map((p) => {
     let parsedCookies = p.cookies;
     if (typeof p.cookies === 'string') {
@@ -107,7 +107,6 @@ export function exportProfilesToJson(targetFilePath: string): void {
     }
     return {
       name: p.name,
-      group: p.group_name || 'Mặc định',
       group_name: p.group_name || 'Mặc định',
       account_id: p.account_id || p.name,
       pass: p.pass || '',
@@ -118,7 +117,7 @@ export function exportProfilesToJson(targetFilePath: string): void {
       proxy: p.proxy || '',
       video_folder: p.video_folder || '',
       cookies: parsedCookies,
-      status: p.status || 'idle',
+      status: 'idle',
       enable_music: p.enable_music !== undefined ? p.enable_music : 1,
       music_mode: p.music_mode || 'favorite_rotate',
       favorite_index: p.favorite_index || 0,
@@ -133,11 +132,7 @@ export function exportProfilesToJson(targetFilePath: string): void {
   fs.writeFileSync(targetFilePath, JSON.stringify(formatted, null, 2), 'utf-8');
 }
 
-export function importProfilesFromJson(sourceFilePath: string): number {
-  if (!fs.existsSync(sourceFilePath)) {
-    throw new Error('File không tồn tại.');
-  }
-  const content = fs.readFileSync(sourceFilePath, 'utf-8');
+export function importProfilesFromJsonString(content: string): number {
   let list: any;
   try {
     list = JSON.parse(content);
@@ -150,7 +145,7 @@ export function importProfilesFromJson(sourceFilePath: string): number {
     if (list && Array.isArray(list.profiles)) {
       list = list.profiles;
     } else {
-      throw new Error('Định dạng file JSON không hợp lệ (cần danh sách mảng profiles).');
+      throw new Error('Định dạng JSON không hợp lệ (cần mảng profiles).');
     }
   }
 
@@ -210,4 +205,12 @@ export function importProfilesFromJson(sourceFilePath: string): number {
     }
   }
   return count;
+}
+
+export function importProfilesFromJson(sourceFilePath: string): number {
+  if (!fs.existsSync(sourceFilePath)) {
+    throw new Error('File không tồn tại.');
+  }
+  const content = fs.readFileSync(sourceFilePath, 'utf-8');
+  return importProfilesFromJsonString(content);
 }

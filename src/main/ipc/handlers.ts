@@ -11,7 +11,7 @@ import {
   deleteProfileDiskData
 } from '../engine/browser-pool';
 import { uploadQueue } from '../queue/task-queue';
-import { importFromOldTool, exportProfilesToJson, importProfilesFromJson } from '../db/migration';
+import { importFromOldTool, exportProfilesToJson, importProfilesFromJson, importProfilesFromJsonString } from '../db/migration';
 import { generateTotp } from '../engine/totp';
 
 let currentMainWindow: BrowserWindow | null = null;
@@ -155,24 +155,63 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Export profiles ra file JSON
-  const handleExport = async () => {
+  ipcMain.handle('profiles:exportJson', async (_, specificProfiles?: any[]) => {
     const activeWin = getValidWindow();
+    const today = new Date().toISOString().slice(0, 10);
     const options = {
-      title: 'Xuất danh sách Profiles',
-      defaultPath: 'tiktok_profiles_backup.json',
-      filters: [{ name: 'JSON Files', extensions: ['json'] }]
+      title: 'Xuất Danh Sách Profiles (JSON)',
+      defaultPath: `tiktok_profiles_backup_${today}.json`,
+      filters: [{ name: 'JSON Backup Files (*.json)', extensions: ['json'] }]
     };
     const res = activeWin 
       ? await dialog.showSaveDialog(activeWin, options)
       : await dialog.showSaveDialog(options);
 
     if (!res.canceled && res.filePath) {
-      exportProfilesToJson(res.filePath);
-      return { success: true, filePath: res.filePath };
+      exportProfilesToJson(res.filePath, specificProfiles);
+      return { success: true, filePath: res.filePath, count: (specificProfiles || profileRepo.getAll()).length };
     }
-    return { success: false };
-  };
-  ipcMain.handle('profiles:exportJson', handleExport);
+    return { success: false, canceled: true };
+  });
+
+  // Import profiles từ file JSON
+  ipcMain.handle('profiles:importJson', async () => {
+    const activeWin = getValidWindow();
+    const options = {
+      title: 'Chọn File JSON Profiles Cần Nhập',
+      filters: [
+        { name: 'JSON Backup Files (*.json)', extensions: ['json'] },
+        { name: 'All Files (*.*)', extensions: ['*'] }
+      ],
+      properties: ['openFile'] as ('openFile')[]
+    };
+    const res = activeWin 
+      ? await dialog.showOpenDialog(activeWin, options)
+      : await dialog.showOpenDialog(options);
+
+    if (!res.canceled && res.filePaths.length > 0) {
+      const filePath = res.filePaths[0];
+      const count = importProfilesFromJson(filePath);
+      const updated = profileRepo.getAll();
+      const validWin = getValidWindow();
+      if (validWin && !validWin.isDestroyed()) {
+        validWin.webContents.send('profiles:updated', updated);
+      }
+      return { success: true, count, filePath, profiles: updated };
+    }
+    return { success: false, canceled: true };
+  });
+
+  // Import profiles từ chuỗi JSON (paste hoặc drag-drop)
+  ipcMain.handle('profiles:importJsonString', async (_, jsonContent: string) => {
+    const count = importProfilesFromJsonString(jsonContent);
+    const updated = profileRepo.getAll();
+    const activeWin = getValidWindow();
+    if (activeWin && !activeWin.isDestroyed()) {
+      activeWin.webContents.send('profiles:updated', updated);
+    }
+    return { success: true, count, profiles: updated };
+  });
 
   // Hàm hỗ trợ escape chuỗi sang định dạng ô CSV (Excel tương thích)
   const escapeCsvCell = (val: any): string => {
@@ -356,16 +395,13 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return { success: false, canceled: true };
   });
 
-  // Chọn và đọc file TXT / CSV / JSON từ máy tính
+  // Chọn và đọc file JSON từ máy tính
   ipcMain.handle('profiles:readTxtFile', async () => {
     const activeWin = getValidWindow();
     const options = {
-      title: 'Chọn File Danh Sách Tài Khoản (CSV, TXT hoặc JSON)',
+      title: 'Chọn File JSON Profiles',
       filters: [
-        { name: 'Mọi định dạng tài khoản (*.txt, *.csv, *.json)', extensions: ['txt', 'csv', 'json'] },
-        { name: 'Excel Spreadsheet (*.csv)', extensions: ['csv'] },
-        { name: 'Text Document (*.txt)', extensions: ['txt'] },
-        { name: 'JSON Backup (*.json)', extensions: ['json'] },
+        { name: 'JSON Profiles (*.json)', extensions: ['json'] },
         { name: 'All Files (*.*)', extensions: ['*'] }
       ],
       properties: ['openFile'] as ('openFile')[]
@@ -382,30 +418,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     }
     return { success: false, canceled: true };
   });
-
-  // Import profiles từ file JSON
-  const handleImport = async () => {
-    const activeWin = getValidWindow();
-    const options = {
-      title: 'Nhập danh sách Profiles từ JSON',
-      filters: [{ name: 'JSON Files', extensions: ['json'] }],
-      properties: ['openFile'] as ('openFile')[]
-    };
-    const res = activeWin
-      ? await dialog.showOpenDialog(activeWin, options)
-      : await dialog.showOpenDialog(options);
-
-    if (!res.canceled && res.filePaths.length > 0) {
-      const count = importProfilesFromJson(res.filePaths[0]);
-      return {
-        success: true,
-        count,
-        profiles: profileRepo.getAll()
-      };
-    }
-    return { success: false };
-  };
-  ipcMain.handle('profiles:importJson', handleImport);
 
   // Mở trình duyệt đăng nhập thủ công
   ipcMain.handle('profiles:openBrowser', async (_, id: string) => {
