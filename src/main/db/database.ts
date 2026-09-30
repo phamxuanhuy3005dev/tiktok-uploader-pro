@@ -22,6 +22,7 @@ export interface ProfileRecord {
   max_videos?: number;
   account_id?: string | null;
   pass?: string | null;
+  two_factor?: string | null;
   email?: string | null;
   pass_email?: string | null;
   mail_ao?: string | null;
@@ -79,6 +80,7 @@ db.exec(`
     max_videos INTEGER DEFAULT 50,
     account_id TEXT DEFAULT NULL,
     pass TEXT DEFAULT NULL,
+    two_factor TEXT DEFAULT NULL,
     email TEXT DEFAULT NULL,
     pass_email TEXT DEFAULT NULL,
     mail_ao TEXT DEFAULT NULL,
@@ -134,7 +136,7 @@ try {
   if (!cols.has('max_videos')) {
     db.exec('ALTER TABLE profiles ADD COLUMN max_videos INTEGER DEFAULT 50;');
   }
-  const credCols = ['account_id', 'pass', 'email', 'pass_email', 'mail_ao'];
+  const credCols = ['account_id', 'pass', 'two_factor', 'email', 'pass_email', 'mail_ao'];
   for (const c of credCols) {
     if (!cols.has(c)) {
       db.exec(`ALTER TABLE profiles ADD COLUMN ${c} TEXT DEFAULT NULL;`);
@@ -238,6 +240,7 @@ export const profileRepo = {
       max_videos: profile.max_videos !== undefined && profile.max_videos !== null && profile.max_videos !== '' ? Number(profile.max_videos) : 50,
       account_id: profile.account_id || null,
       pass: profile.pass || null,
+      two_factor: profile.two_factor || (profile as any).two_fa || (profile as any)['2fa'] || null,
       email: profile.email || null,
       pass_email: profile.pass_email || null,
       mail_ao: profile.mail_ao || null,
@@ -248,11 +251,11 @@ export const profileRepo = {
       INSERT INTO profiles (
         id, name, group_name, status, video_folder, enable_music, music_mode, favorite_index,
         music_volume, schedule_mode, schedule_interval, golden_hours,
-        caption_mode, proxy, cookies, max_videos, account_id, pass, email, pass_email, mail_ao, last_run
+        caption_mode, proxy, cookies, max_videos, account_id, pass, two_factor, email, pass_email, mail_ao, last_run
       ) VALUES (
         @id, @name, @group_name, @status, @video_folder, @enable_music, @music_mode, @favorite_index,
         @music_volume, @schedule_mode, @schedule_interval, @golden_hours,
-        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @email, @pass_email, @mail_ao, @last_run
+        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run
       )
     `).run(normalized);
   },
@@ -277,11 +280,11 @@ export const profileRepo = {
       INSERT OR IGNORE INTO profiles (
         id, name, group_name, status, video_folder, enable_music, music_mode, favorite_index,
         music_volume, schedule_mode, schedule_interval, golden_hours,
-        caption_mode, proxy, cookies, max_videos, account_id, pass, email, pass_email, mail_ao, last_run
+        caption_mode, proxy, cookies, max_videos, account_id, pass, two_factor, email, pass_email, mail_ao, last_run
       ) VALUES (
         @id, @name, @group_name, @status, @video_folder, @enable_music, @music_mode, @favorite_index,
         @music_volume, @schedule_mode, @schedule_interval, @golden_hours,
-        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @email, @pass_email, @mail_ao, @last_run
+        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run
       )
     `);
 
@@ -308,6 +311,7 @@ export const profileRepo = {
           max_videos: p.max_videos !== undefined ? Number(p.max_videos) : 50,
           account_id: p.account_id || null,
           pass: p.pass || null,
+          two_factor: p.two_factor || p.two_fa || p['2fa'] || null,
           email: p.email || null,
           pass_email: p.pass_email || null,
           mail_ao: p.mail_ao || null,

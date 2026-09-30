@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Globe,
   Folder,
@@ -11,10 +11,12 @@ import {
   AlertCircle,
   Users,
   KeyRound,
+  ShieldCheck,
   Loader2
 } from 'lucide-react';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
+import { toast } from 'sonner';
 
 interface ProfileCardProps {
   profile: any;
@@ -45,7 +47,29 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   isOpeningBrowser = false,
   isProcessing = false
 }) => {
+  const [isGettingOtp, setIsGettingOtp] = useState(false);
   const hasCookies = Boolean(profile.cookies);
+
+  const handleCopyOtp = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!profile.two_factor) return;
+    setIsGettingOtp(true);
+    try {
+      const res = await window.api.get2FaCode(profile.two_factor);
+      if (res && res.otp) {
+        await navigator.clipboard.writeText(res.otp);
+        toast.success(`Mã 2FA của "${profile.name}": ${res.otp} (Đã copy, còn ${res.remainingSec}s)`, {
+          icon: '🔐'
+        });
+      } else {
+        toast.error('Mã bí mật 2FA không hợp lệ!');
+      }
+    } catch (err: any) {
+      toast.error(`Lỗi lấy mã 2FA: ${err.message}`);
+    } finally {
+      setIsGettingOtp(false);
+    }
+  };
 
   const getStatusBadge = () => {
     switch (profile.status) {
@@ -136,6 +160,23 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 rounded-full font-medium shrink-0">
               <AlertCircle className="h-3 w-3 text-amber-500" /> Chưa login
             </span>
+          )}
+
+          {profile.two_factor && (
+            <button
+              type="button"
+              onClick={handleCopyOtp}
+              disabled={isGettingOtp}
+              title="Nhấn để lấy mã 2FA OTP 6 số (tự động copy vào clipboard)"
+              className="inline-flex items-center gap-1 text-[10px] text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 px-1.5 py-0.5 rounded-full font-semibold transition-colors cursor-pointer shrink-0"
+            >
+              {isGettingOtp ? (
+                <Loader2 className="h-2.5 w-2.5 animate-spin text-purple-600" />
+              ) : (
+                <ShieldCheck className="h-2.5 w-2.5 text-purple-600" />
+              )}
+              <span>2FA OTP</span>
+            </button>
           )}
 
           {profile.account_id && profile.account_id !== profile.name && (

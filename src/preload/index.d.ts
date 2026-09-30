@@ -17,6 +17,7 @@ export interface IElectronAPI {
   exportAccounts: (accounts: any[]) => Promise<{ success: boolean; filePath?: string; format?: string; canceled?: boolean }>;
   downloadTemplate: () => Promise<{ success: boolean; filePath?: string; format?: string; canceled?: boolean }>;
   readTxtFile: () => Promise<{ success: boolean; content?: string; fileName?: string; filePath?: string; canceled?: boolean }>;
+  get2FaCode: (secret: string) => Promise<{ otp: string; remainingSec: number } | null>;
   selectFolder: () => Promise<string | null>;
   scanVideoFolder: (folderPath: string) => Promise<{
     exists: boolean;

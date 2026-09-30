@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, Music, Calendar, Globe, AlertTriangle, Users, KeyRound, Mail, ShieldCheck } from 'lucide-react';
+import { Folder, Music, Calendar, Globe, AlertTriangle, Users, KeyRound, Mail, ShieldCheck, Copy } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
+import { toast } from 'sonner';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -26,6 +27,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [videoFolder, setVideoFolder] = useState('');
   const [accountId, setAccountId] = useState('');
   const [pass, setPass] = useState('');
+  const [twoFactor, setTwoFactor] = useState('');
+  const [otpResult, setOtpResult] = useState<{ otp: string; remainingSec: number } | null>(null);
+  const [isGettingOtp, setIsGettingOtp] = useState(false);
   const [email, setEmail] = useState('');
   const [passEmail, setPassEmail] = useState('');
   const [mailAo, setMailAo] = useState('');
@@ -47,6 +51,28 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     latencyMs?: number;
     error?: string;
   } | null>(null);
+
+  const handleGenerateOtp = async () => {
+    if (!twoFactor.trim()) {
+      toast.warning('Vui lòng nhập mã bí mật 2FA trước!');
+      return;
+    }
+    setIsGettingOtp(true);
+    try {
+      const res = await window.api.get2FaCode(twoFactor.trim());
+      if (res && res.otp) {
+        setOtpResult(res);
+        await navigator.clipboard.writeText(res.otp);
+        toast.success(`Đã tạo mã OTP: ${res.otp} (Đã copy, còn ${res.remainingSec}s)!`);
+      } else {
+        toast.error('Mã 2FA không hợp lệ (cần chuỗi Base32 chuẩn RFC 6238)!');
+      }
+    } catch (err: any) {
+      toast.error(`Lỗi tạo mã OTP: ${err.message}`);
+    } finally {
+      setIsGettingOtp(false);
+    }
+  };
 
   const handleTestProxy = async () => {
     if (!proxy.trim()) return;
@@ -73,6 +99,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setMaxVideos(initialData.max_videos !== undefined && initialData.max_videos !== null ? initialData.max_videos : 50);
       setAccountId(initialData.account_id || '');
       setPass(initialData.pass || '');
+      setTwoFactor(initialData.two_factor || '');
+      setOtpResult(null);
       setEmail(initialData.email || '');
       setPassEmail(initialData.pass_email || '');
       setMailAo(initialData.mail_ao || '');
@@ -92,6 +120,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setMaxVideos(50);
       setAccountId('');
       setPass('');
+      setTwoFactor('');
+      setOtpResult(null);
       setEmail('');
       setPassEmail('');
       setMailAo('');
@@ -128,6 +158,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         max_videos: maxVideos === '' ? 50 : Math.max(0, Number(maxVideos)),
         account_id: accountId.trim() || null,
         pass: pass.trim() || null,
+        two_factor: twoFactor.trim() || null,
         email: email.trim() || null,
         pass_email: passEmail.trim() || null,
         mail_ao: mailAo.trim() || null,
@@ -279,6 +310,60 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 placeholder="Mật khẩu TikTok"
                 className="text-xs h-8 font-mono"
               />
+            </div>
+
+            {/* Mã 2FA (Authenticator App) */}
+            <div className="sm:col-span-2 bg-purple-50/50 p-2.5 rounded-xl border border-purple-100">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-semibold text-purple-900 flex items-center gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-purple-600" /> Mã 2FA (Authenticator Secret Key / 2FA Live)
+                </label>
+                {twoFactor.trim() && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGenerateOtp}
+                    disabled={isGettingOtp}
+                    className="h-6 px-2 text-[10px] bg-white border-purple-200 text-purple-700 hover:bg-purple-100/70"
+                  >
+                    {isGettingOtp ? 'Đang tạo...' : '🔑 Lấy mã OTP 6 số'}
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  value={twoFactor}
+                  onChange={(e) => {
+                    setTwoFactor(e.target.value);
+                    setOtpResult(null);
+                  }}
+                  placeholder="Ví dụ: JBSWY3DPEHPK3PXP (Mã bí mật dạng Base32 khi mua acc)"
+                  className="text-xs h-8 font-mono bg-white flex-1"
+                />
+              </div>
+              {otpResult && (
+                <div className="mt-2 flex items-center justify-between bg-white px-3 py-1.5 rounded-lg border border-purple-200 text-xs">
+                  <span className="text-slate-600">
+                    Mã OTP hiện tại: <strong className="font-mono text-sm tracking-wider text-purple-700 font-bold ml-1">{otpResult.otp}</strong>
+                    <span className="text-slate-400 text-[10px] ml-2">(Hết hạn sau: {otpResult.remainingSec}s)</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(otpResult.otp);
+                      toast.success(`Đã copy mã OTP: ${otpResult.otp}`);
+                    }}
+                    className="flex items-center gap-1 text-[11px] text-purple-600 hover:text-purple-800 font-medium"
+                  >
+                    <Copy className="h-3 w-3" /> Copy
+                  </button>
+                </div>
+              )}
+              <p className="text-[10px] text-purple-600/80 mt-1">
+                * Dùng cho acc có định dạng <code>user|pass|2fa</code>. Bấm "Lấy mã OTP 6 số" để lấy mã đăng nhập tức thì mà không cần vào web 2fa.live.
+              </p>
             </div>
 
             <div>

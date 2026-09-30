@@ -25,6 +25,7 @@ interface ParsedAccount {
   name: string;
   account_id?: string;
   pass?: string;
+  two_factor?: string;
   email?: string;
   pass_email?: string;
   mail_ao?: string;
@@ -32,6 +33,13 @@ interface ParsedAccount {
   cookies?: string;
   group_name?: string;
 }
+
+const is2FaSecret = (t: string): boolean => {
+  if (!t) return false;
+  const clean = t.replace(/[\s=-]/g, '');
+  // Mã bí mật 2FA Base32 thường có độ dài từ 16 đến 64 ký tự (A-Z và 2-7)
+  return /^[A-Za-z2-7]{16,64}$/.test(clean);
+};
 
 function parseCsvLine(text: string, delimiter: string = ','): string[] {
   const result: string[] = [];
@@ -61,14 +69,19 @@ const isHeaderRow = (parts: string[]): boolean => {
   if (parts.length === 0) return false;
   const col0 = (parts[0] || '').toLowerCase().trim();
   const col1 = (parts[1] || '').toLowerCase().trim();
+  const col2 = (parts[2] || '').toLowerCase().trim();
   const headerKeywordsCol0 = [
     'username', 'tài khoản', 'tai khoan', 'user', 'account', 'acc', 'name', 'tên kênh', 'ten kenh', 'id'
   ];
   const headerKeywordsCol1 = [
     'password', 'mật khẩu', 'mat khau', 'pass', 'pwd', 'email', 'proxy'
   ];
+  const headerKeywordsCol2 = [
+    '2fa', 'two_factor', 'two factor', 'otp', 'secret', 'mã 2fa'
+  ];
   if (headerKeywordsCol0.some((k) => col0.includes(k))) return true;
   if (headerKeywordsCol1.some((k) => col1.includes(k))) return true;
+  if (headerKeywordsCol2.some((k) => col2.includes(k))) return true;
   return false;
 };
 
@@ -195,25 +208,59 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
         account_id: rawParts[0]
       };
 
-      if (rawParts.length >= 8) {
-        // user|pass|email|pass_email|mail_ao|proxy|cookies|group
+      if (rawParts.length >= 9) {
+        // Cấu trúc 9 cột chuẩn hóa: user|pass|2fa|email|pass_email|mail_ao|proxy|cookies|group
         acc.pass = rawParts[1];
-        acc.email = rawParts[2];
-        acc.pass_email = rawParts[3];
-        acc.mail_ao = rawParts[4];
-        acc.proxy = rawParts[5];
-        acc.cookies = rawParts[6];
-        acc.group_name = rawParts[7];
-      } else if (rawParts.length === 7) {
-        acc.pass = rawParts[1];
-        acc.email = rawParts[2];
-        acc.pass_email = rawParts[3];
-        acc.mail_ao = rawParts[4];
-        acc.proxy = rawParts[5];
-        if (isCookieToken(rawParts[6])) {
+        acc.two_factor = rawParts[2];
+        acc.email = rawParts[3];
+        acc.pass_email = rawParts[4];
+        acc.mail_ao = rawParts[5];
+        acc.proxy = rawParts[6];
+        acc.cookies = rawParts[7];
+        acc.group_name = rawParts[8];
+      } else if (rawParts.length === 8) {
+        if (is2FaSecret(rawParts[2])) {
+          // user|pass|2fa|email|pass_email|proxy|cookies|group
+          acc.pass = rawParts[1];
+          acc.two_factor = rawParts[2];
+          acc.email = rawParts[3];
+          acc.pass_email = rawParts[4];
+          acc.proxy = rawParts[5];
           acc.cookies = rawParts[6];
+          acc.group_name = rawParts[7];
         } else {
-          acc.group_name = rawParts[6];
+          // Định dạng 8 cột cũ: user|pass|email|pass_email|mail_ao|proxy|cookies|group
+          acc.pass = rawParts[1];
+          acc.email = rawParts[2];
+          acc.pass_email = rawParts[3];
+          acc.mail_ao = rawParts[4];
+          acc.proxy = rawParts[5];
+          acc.cookies = rawParts[6];
+          acc.group_name = rawParts[7];
+        }
+      } else if (rawParts.length === 7) {
+        if (is2FaSecret(rawParts[2])) {
+          acc.pass = rawParts[1];
+          acc.two_factor = rawParts[2];
+          acc.email = rawParts[3];
+          acc.pass_email = rawParts[4];
+          acc.proxy = rawParts[5];
+          if (isCookieToken(rawParts[6])) {
+            acc.cookies = rawParts[6];
+          } else {
+            acc.group_name = rawParts[6];
+          }
+        } else {
+          acc.pass = rawParts[1];
+          acc.email = rawParts[2];
+          acc.pass_email = rawParts[3];
+          acc.mail_ao = rawParts[4];
+          acc.proxy = rawParts[5];
+          if (isCookieToken(rawParts[6])) {
+            acc.cookies = rawParts[6];
+          } else {
+            acc.group_name = rawParts[6];
+          }
         }
       } else {
         // Tách cookie nếu phát hiện thấy trong các cột
@@ -241,7 +288,10 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           }
         } else if (parts.length === 3) {
           acc.pass = parts[1];
-          if (parts[2].includes('@')) {
+          if (is2FaSecret(parts[2])) {
+            // Định dạng phổ biến: user|pass|2fa
+            acc.two_factor = parts[2];
+          } else if (parts[2].includes('@')) {
             acc.email = parts[2];
           } else if (parts[2].includes(':') || parts[2].includes('://')) {
             acc.proxy = parts[2];
@@ -250,7 +300,15 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           }
         } else if (parts.length === 4) {
           acc.pass = parts[1];
-          if (parts[2].includes('@')) {
+          if (is2FaSecret(parts[2])) {
+            // user|pass|2fa|nhom hoặc user|pass|2fa|proxy
+            acc.two_factor = parts[2];
+            if (parts[3].includes(':') || parts[3].includes('://')) {
+              acc.proxy = parts[3];
+            } else {
+              acc.group_name = parts[3];
+            }
+          } else if (parts[2].includes('@')) {
             acc.email = parts[2];
             acc.pass_email = parts[3];
           } else if (parts[2].includes(':') || parts[2].includes('://')) {
@@ -261,19 +319,46 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           }
         } else if (parts.length === 5) {
           acc.pass = parts[1];
-          acc.email = parts[2];
-          acc.pass_email = parts[3];
-          acc.mail_ao = parts[4];
+          if (is2FaSecret(parts[2])) {
+            acc.two_factor = parts[2];
+            if (parts[3].includes('@')) {
+              acc.email = parts[3];
+              acc.pass_email = parts[4];
+            } else {
+              if (parts[3].includes(':') || parts[3].includes('://')) {
+                acc.proxy = parts[3];
+                acc.group_name = parts[4];
+              } else {
+                acc.group_name = parts[3];
+              }
+            }
+          } else {
+            acc.email = parts[2];
+            acc.pass_email = parts[3];
+            acc.mail_ao = parts[4];
+          }
         } else if (parts.length >= 6) {
           acc.pass = parts[1];
-          acc.email = parts[2];
-          acc.pass_email = parts[3];
-          acc.mail_ao = parts[4];
-          if (parts[5].includes(':') || parts[5].includes('://')) {
-            acc.proxy = parts[5];
-            if (parts[6]) acc.group_name = parts[6];
+          if (is2FaSecret(parts[2])) {
+            acc.two_factor = parts[2];
+            acc.email = parts[3];
+            acc.pass_email = parts[4];
+            if (parts[5].includes(':') || parts[5].includes('://')) {
+              acc.proxy = parts[5];
+              if (parts[6]) acc.group_name = parts[6];
+            } else {
+              acc.group_name = parts[5];
+            }
           } else {
-            acc.group_name = parts[5];
+            acc.email = parts[2];
+            acc.pass_email = parts[3];
+            acc.mail_ao = parts[4];
+            if (parts[5].includes(':') || parts[5].includes('://')) {
+              acc.proxy = parts[5];
+              if (parts[6]) acc.group_name = parts[6];
+            } else {
+              acc.group_name = parts[5];
+            }
           }
         }
       }
@@ -302,6 +387,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           group_name: assignedGroup || 'Mặc định',
           account_id: acc.account_id || acc.name,
           pass: acc.pass || null,
+          two_factor: acc.two_factor || null,
           email: acc.email || null,
           pass_email: acc.pass_email || null,
           mail_ao: acc.mail_ao || null,
@@ -436,7 +522,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
         <div className="bg-slate-50/90 p-2.5 rounded-lg border border-slate-200/80 text-[11px] text-slate-600 space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-slate-700 font-bold flex items-center gap-1">
-              <FileSpreadsheet className="h-3.5 w-3.5 text-sky-600" /> Thứ tự 8 cột chuẩn hóa:
+              <FileSpreadsheet className="h-3.5 w-3.5 text-sky-600" /> Thứ tự 9 cột chuẩn hóa (Tự nhận diện cả user|pass|2fa):
             </span>
             <span className="text-slate-400 text-[10px] flex items-center gap-1">
               <Info className="h-3 w-3" /> Tự động bỏ qua dòng tiêu đề nếu có
@@ -447,17 +533,19 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
             <span className="text-slate-300">→</span>
             <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">2. Password</span>
             <span className="text-slate-300">→</span>
-            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">3. Email</span>
+            <span className="bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 text-purple-700 font-semibold">3. 2FA (Secret)</span>
             <span className="text-slate-300">→</span>
-            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">4. Pass Email</span>
+            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">4. Email</span>
             <span className="text-slate-300">→</span>
-            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">5. Mail Ảo</span>
+            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">5. Pass Email</span>
             <span className="text-slate-300">→</span>
-            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">6. Proxy</span>
+            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">6. Mail Ảo</span>
             <span className="text-slate-300">→</span>
-            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">7. Cookie</span>
+            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">7. Proxy</span>
             <span className="text-slate-300">→</span>
-            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700 font-bold">8. Nhóm Kênh</span>
+            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">8. Cookie</span>
+            <span className="text-slate-300">→</span>
+            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700 font-bold">9. Nhóm Kênh</span>
           </div>
         </div>
 
@@ -469,7 +557,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
             onChange={(e) => setRawText(e.target.value)}
             onDrop={handleDrop}
             onDragOver={(e) => e.preventDefault()}
-            placeholder={`Dán danh sách tài khoản tại đây HOẶC kéo thả file .csv / .txt vào đây (mỗi dòng 1 acc):\nUsername,Password,Email,Pass_Email,Mail_Ao,Proxy,Cookie,Nhom\ntiktok_user_01,Pass123456,user01@outlook.com,PassMail123,mailao01@gmail.com,http://user:pass@127.0.0.1:8080,sessionid=xxxxx...,Nhóm Nuôi US\ntiktok_user_02,Pass654321,,,,socks5://192.168.1.100:1080,,Nhóm Reup\nuser_demo_03|Pass789|demo@gmail.com|passdemo||||Nhóm Test`}
+            placeholder={`Dán danh sách tài khoản tại đây HOẶC kéo thả file .csv / .txt vào đây (mỗi dòng 1 acc):\n# Định dạng 1 (Acc mua 2FA): user|pass|2fa\ntiktok_user_01|Pass123456|JBSWY3DPEHPK3PXP\n\n# Định dạng 2 (Kèm nhóm): user|pass|2fa|nhom\ntiktok_user_02|Pass654321|4W67ZQLU5Q4V476W|Nhóm Reup\n\n# Định dạng 3 (Đầy đủ 9 cột CSV / TXT):\ntiktok_user_03,Pass123456,JBSWY3DPEHPK3PXP,user03@outlook.com,PassMail123,mailao03@gmail.com,http://user:pass@127.0.0.1:8080,,Nhóm Nuôi US`}
             className="w-full p-2.5 font-mono text-xs rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all"
           />
         </div>
@@ -493,14 +581,15 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
               <div className="sticky top-0 bg-slate-50 p-2 flex items-center justify-between gap-2 font-bold text-slate-600 text-[10px] border-b border-slate-200">
                 <div className="flex items-center gap-2 truncate min-w-0">
                   <span className="w-5 shrink-0 text-right">STT</span>
-                  <span className="w-32 truncate">Tài khoản / User</span>
-                  <span className="w-24 truncate hidden sm:inline">Mật khẩu</span>
-                  <span className="w-32 truncate hidden md:inline">Email</span>
+                  <span className="w-28 truncate">Tài khoản / User</span>
+                  <span className="w-20 truncate hidden sm:inline">Mật khẩu</span>
+                  <span className="w-28 truncate hidden md:inline">Email</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="w-28 text-center truncate">Nhóm</span>
-                  <span className="w-14 text-center">Cookie</span>
-                  <span className="w-14 text-center">Proxy</span>
+                  <span className="w-24 text-center truncate">Nhóm</span>
+                  <span className="w-12 text-center">2FA</span>
+                  <span className="w-12 text-center">Cookie</span>
+                  <span className="w-12 text-center">Proxy</span>
                 </div>
               </div>
 
@@ -508,19 +597,28 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                 <div key={idx} className="p-2 flex items-center justify-between gap-2 font-mono hover:bg-slate-50/70 transition-colors">
                   <div className="flex items-center gap-2 truncate min-w-0">
                     <span className="text-slate-400 w-5 shrink-0 text-right text-[10px]">{idx + 1}.</span>
-                    <strong className="text-slate-800 w-32 truncate" title={acc.name}>{acc.name}</strong>
-                    <span className="text-slate-400 w-24 truncate hidden sm:inline" title={acc.pass || ''}>
+                    <strong className="text-slate-800 w-28 truncate" title={acc.name}>{acc.name}</strong>
+                    <span className="text-slate-400 w-20 truncate hidden sm:inline" title={acc.pass || ''}>
                       {acc.pass ? `• ${acc.pass}` : '-'}
                     </span>
-                    <span className="text-sky-600 w-32 truncate hidden md:inline" title={acc.email || ''}>
+                    <span className="text-sky-600 w-28 truncate hidden md:inline" title={acc.email || ''}>
                       {acc.email || '-'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200 font-medium truncate max-w-[120px] text-center" title={acc.group_name || targetGroup}>
+                    <span className="text-[10px] text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200 font-medium truncate max-w-[100px] text-center" title={acc.group_name || targetGroup}>
                       {acc.group_name || (isNewGroup && newGroupName.trim() ? newGroupName.trim() : targetGroup)}
                     </span>
-                    <span className="w-14 text-center">
+                    <span className="w-12 text-center">
+                      {acc.two_factor ? (
+                        <span className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 font-semibold truncate inline-block max-w-[50px]" title={`Mã 2FA: ${acc.two_factor}`}>
+                          🔐 Có
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 text-[10px]">-</span>
+                      )}
+                    </span>
+                    <span className="w-12 text-center">
                       {acc.cookies ? (
                         <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-semibold" title={acc.cookies}>
                           🍪 Có
@@ -529,7 +627,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                         <span className="text-slate-300 text-[10px]">-</span>
                       )}
                     </span>
-                    <span className="w-14 text-center">
+                    <span className="w-12 text-center">
                       {acc.proxy ? (
                         <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200" title={acc.proxy}>
                           🌐 Có

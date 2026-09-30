@@ -5,6 +5,7 @@ import { profileRepo, logRepo, configRepo, groupRepo, ProfileRecord } from '../d
 import { openManualBrowser, closeProfileContext, testProxyConnection, isProfileActive } from '../engine/browser-pool';
 import { uploadQueue } from '../queue/task-queue';
 import { importFromOldTool, exportProfilesToJson, importProfilesFromJson } from '../db/migration';
+import { generateTotp } from '../engine/totp';
 
 let currentMainWindow: BrowserWindow | null = null;
 let isIpcRegistered = false;
@@ -175,10 +176,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       const isCsv = filePath.toLowerCase().endsWith('.csv');
 
       if (isCsv) {
-        const header = ['Username', 'Password', 'Email', 'Pass_Email', 'Mail_Ao', 'Proxy', 'Cookie', 'Nhom'];
+        const header = ['Username', 'Password', '2FA', 'Email', 'Pass_Email', 'Mail_Ao', 'Proxy', 'Cookie', 'Nhom'];
         const rows = (accounts || []).map((p) => [
           escapeCsvCell(p.account_id || p.name || ''),
           escapeCsvCell(p.pass || ''),
+          escapeCsvCell(p.two_factor || ''),
           escapeCsvCell(p.email || ''),
           escapeCsvCell(p.pass_email || ''),
           escapeCsvCell(p.mail_ao || ''),
@@ -191,10 +193,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         const csvContent = '\uFEFF' + [header.join(','), ...rows].join('\r\n');
         fs.writeFileSync(filePath, csvContent, 'utf-8');
       } else {
-        const header = '# Username|Password|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
+        const header = '# Username|Password|2FA|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
         const rows = (accounts || []).map((p) => [
           p.account_id || p.name || '',
           p.pass || '',
+          p.two_factor || '',
           p.email || '',
           p.pass_email || '',
           p.mail_ao || '',
@@ -232,21 +235,21 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       const isCsv = filePath.toLowerCase().endsWith('.csv');
 
       if (isCsv) {
-        const header = ['Username', 'Password', 'Email', 'Pass_Email', 'Mail_Ao', 'Proxy', 'Cookie', 'Nhom'];
+        const header = ['Username', 'Password', '2FA', 'Email', 'Pass_Email', 'Mail_Ao', 'Proxy', 'Cookie', 'Nhom'];
         const sampleRows = [
-          ['tiktok_user_demo1', 'Pass123456', 'user01@outlook.com', 'PassMail123', 'mailao01@gmail.com', 'http://user:pass@127.0.0.1:8080', 'sessionid=9f8e7d6c5b4a3...', 'Nhóm Nuôi US'],
-          ['tiktok_user_demo2', 'Pass654321', 'user02@gmail.com', 'PassMail456', '', 'socks5://192.168.1.100:1080', '', 'Nhóm Reup Phim'],
-          ['tiktok_user_demo3', 'Pass789xyz', '', '', '', '', '', 'Mặc định']
+          ['tiktok_user_demo1', 'Pass123456', 'JBSWY3DPEHPK3PXP', 'user01@outlook.com', 'PassMail123', 'mailao01@gmail.com', 'http://user:pass@127.0.0.1:8080', 'sessionid=9f8e7d6c5b4a3...', 'Nhóm Nuôi US'],
+          ['tiktok_user_demo2', 'Pass654321', '', 'user02@gmail.com', 'PassMail456', '', 'socks5://192.168.1.100:1080', '', 'Nhóm Reup Phim'],
+          ['tiktok_user_demo3', 'Pass789xyz', 'KRSXG5CTMVRXEZLU', '', '', '', '', '', 'Mặc định']
         ].map((row) => row.map(escapeCsvCell).join(','));
 
         const csvContent = '\uFEFF' + [header.join(','), ...sampleRows].join('\r\n');
         fs.writeFileSync(filePath, csvContent, 'utf-8');
       } else {
-        const header = '# CẤU TRÚC: Username|Password|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
+        const header = '# CẤU TRÚC: Username|Password|2FA|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
         const sampleRows = [
-          'tiktok_user_demo1|Pass123456|user01@outlook.com|PassMail123|mailao01@gmail.com|http://user:pass@127.0.0.1:8080|sessionid=9f8e7d6c5b4a3...|Nhóm Nuôi US',
-          'tiktok_user_demo2|Pass654321|user02@gmail.com|PassMail456||socks5://192.168.1.100:1080||Nhóm Reup Phim',
-          'tiktok_user_demo3|Pass789xyz||||||Mặc định'
+          'tiktok_user_demo1|Pass123456|JBSWY3DPEHPK3PXP|user01@outlook.com|PassMail123|mailao01@gmail.com|http://user:pass@127.0.0.1:8080|sessionid=9f8e7d6c5b4a3...|Nhóm Nuôi US',
+          'tiktok_user_demo2|Pass654321||user02@gmail.com|PassMail456||socks5://192.168.1.100:1080||Nhóm Reup Phim',
+          'tiktok_user_demo3|Pass789xyz|KRSXG5CTMVRXEZLU||||||Mặc định'
         ];
         const txtContent = [header, ...sampleRows].join('\r\n');
         fs.writeFileSync(filePath, txtContent, 'utf-8');
@@ -254,6 +257,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       return { success: true, filePath, format: isCsv ? 'csv' : 'txt' };
     }
     return { success: false, canceled: true };
+  });
+
+  // Lấy mã OTP 2FA trực tiếp từ chuỗi secret theo thuật toán RFC 6238
+  ipcMain.handle('profiles:get2FaCode', async (_, secret: string) => {
+    return generateTotp(secret);
   });
 
   // Export danh sách tài khoản ra file TXT (Legacy)

@@ -22,6 +22,7 @@ export const api = {
   exportAccounts: (accounts: any[]) => ipcRenderer.invoke('profiles:exportAccounts', accounts),
   downloadTemplate: () => ipcRenderer.invoke('profiles:downloadTemplate'),
   readTxtFile: () => ipcRenderer.invoke('profiles:readTxtFile'),
+  get2FaCode: (secret: string) => ipcRenderer.invoke('profiles:get2FaCode', secret),
 
   // File / Folder Picker & Video Distribution
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),

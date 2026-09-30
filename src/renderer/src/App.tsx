@@ -319,6 +319,7 @@ export const App: React.FC = () => {
       const items = [
         p.account_id || p.name || '',
         p.pass || '',
+        p.two_factor || '',
         p.email || '',
         p.pass_email || '',
         p.mail_ao || '',
@@ -329,7 +330,7 @@ export const App: React.FC = () => {
       return items.join('|');
     });
 
-    const header = '# Username|Password|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
+    const header = '# Username|Password|2FA|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
     const clipboardContent = [header, ...lines].join('\n');
     await navigator.clipboard.writeText(clipboardContent).catch(() => {});
 
