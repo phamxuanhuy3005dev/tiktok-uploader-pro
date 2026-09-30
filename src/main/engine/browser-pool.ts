@@ -83,6 +83,9 @@ export async function releaseProfileLocks(userDataDir: string, profileName: stri
     } catch (_) {}
   }
 
+  // Nếu không có bất kỳ file lock nào, không cần quét tiến trình ngầm (tăng tốc độ 100x)
+  if (foundLocks.length === 0) return;
+
   // 1. Kill toàn bộ process Chrome cũ đang giữ thư mục này
   const pids = await getProfilePids(userDataDir);
   if (pids.length > 0) {
@@ -553,6 +556,13 @@ export async function openManualBrowser(profile: ProfileRecord, onClosed?: () =>
   // Lắng nghe cả event đóng của page và context
   page.on('close', handleClose);
   context.on('close', handleClose);
+}
+
+/**
+ * Kiểm tra xem profile có đang mở trình duyệt trong browser pool hay không
+ */
+export function isProfileActive(profileId: string): boolean {
+  return activeContexts.has(profileId);
 }
 
 /**

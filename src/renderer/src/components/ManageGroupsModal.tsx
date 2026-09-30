@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
-import { Users, Plus, Edit2, Trash2, Check, X, ShieldAlert } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, Check, X, ShieldAlert, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface GroupItem {
@@ -32,6 +32,7 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
 
   // Trạng thái đang chỉnh sửa tên nhóm
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -124,6 +125,7 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
     if (!window.confirm(confirmMsg)) return;
 
     try {
+      setDeletingGroupId(group.id);
       const res: any = await window.api.deleteGroup(group.id);
       toast.success(`Đã xóa nhóm "${group.name}".`);
       await loadGroups();
@@ -135,6 +137,8 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
       });
     } catch (err: any) {
       toast.error(`Lỗi xóa nhóm: ${err.message}`);
+    } finally {
+      setDeletingGroupId(null);
     }
   };
 
@@ -163,7 +167,12 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
             size="sm"
             className="gap-1.5 shrink-0 text-xs shadow-sm shadow-sky-500/10"
           >
-            <Plus className="h-3.5 w-3.5" /> Thêm Nhóm
+            {isSubmitting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plus className="h-3.5 w-3.5" />
+            )}
+            {isSubmitting ? 'Đang thêm...' : 'Thêm Nhóm'}
           </Button>
         </form>
 
@@ -249,15 +258,19 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
                           <button
                             type="button"
                             onClick={() => handleDeleteGroup(group)}
-                            disabled={isDefault}
+                            disabled={isDefault || deletingGroupId === group.id}
                             className={`p-1.5 rounded-lg transition-colors ${
-                              isDefault
-                                ? 'opacity-20 cursor-not-allowed text-slate-300'
+                              isDefault || deletingGroupId === group.id
+                                ? 'opacity-30 cursor-not-allowed text-slate-300'
                                 : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
                             }`}
                             title={isDefault ? 'Không thể xóa nhóm mặc định' : 'Xóa nhóm'}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            {deletingGroupId === group.id ? (
+                              <Loader2 className="h-3.5 w-3.5 text-rose-500 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
                           </button>
                         </div>
                       </>

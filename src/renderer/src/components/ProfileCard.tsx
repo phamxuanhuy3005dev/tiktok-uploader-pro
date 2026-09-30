@@ -10,7 +10,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Users,
-  KeyRound
+  KeyRound,
+  Loader2
 } from 'lucide-react';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
@@ -26,6 +27,8 @@ interface ProfileCardProps {
   onViewLogs: () => void;
   onQuickSelectFolder?: () => void;
   isRunning: boolean;
+  isOpeningBrowser?: boolean;
+  isProcessing?: boolean;
 }
 
 export const ProfileCard: React.FC<ProfileCardProps> = ({
@@ -38,7 +41,9 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   onRunUpload,
   onViewLogs,
   onQuickSelectFolder,
-  isRunning
+  isRunning,
+  isOpeningBrowser = false,
+  isProcessing = false
 }) => {
   const hasCookies = Boolean(profile.cookies);
 
@@ -110,8 +115,9 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             </button>
             <button
               onClick={onDelete}
+              disabled={isProcessing}
               title="Xóa Profile"
-              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -190,19 +196,29 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           variant="outline"
           size="sm"
           onClick={onOpenBrowser}
-          className="flex-1 h-7 text-xs text-slate-700 border-slate-200 hover:bg-slate-50 rounded-lg"
+          disabled={isOpeningBrowser || isRunning}
+          className="flex-1 h-7 text-xs text-slate-700 border-slate-200 hover:bg-slate-50 rounded-lg disabled:opacity-50"
         >
-          <ExternalLink className="h-3 w-3 mr-1 text-slate-400" /> Mở Trình Duyệt
+          {isOpeningBrowser ? (
+            <Loader2 className="h-3 w-3 mr-1 text-sky-500 animate-spin" />
+          ) : (
+            <ExternalLink className="h-3 w-3 mr-1 text-slate-400" />
+          )}
+          {isOpeningBrowser ? 'Đang Mở...' : 'Mở Trình Duyệt'}
         </Button>
 
         <Button
           variant="tiktok"
           size="sm"
           onClick={onRunUpload}
-          disabled={isRunning || !profile.video_folder}
-          className="flex-1 h-7 text-xs font-semibold bg-sky-500 hover:bg-sky-600 shadow-sm shadow-sky-500/20 text-white rounded-lg"
+          disabled={isRunning || isProcessing || !profile.video_folder}
+          className="flex-1 h-7 text-xs font-semibold bg-sky-500 hover:bg-sky-600 shadow-sm shadow-sky-500/20 text-white rounded-lg disabled:opacity-50"
         >
-          <Play className="h-3 w-3 mr-1 fill-current" />
+          {isRunning ? (
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+          ) : (
+            <Play className="h-3 w-3 mr-1 fill-current" />
+          )}
           {isRunning ? 'Đang Xử Lý...' : 'Upload'}
         </Button>
       </div>

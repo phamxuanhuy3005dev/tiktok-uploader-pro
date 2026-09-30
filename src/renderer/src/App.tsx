@@ -25,7 +25,8 @@ import {
   Copy,
   Trash2,
   FolderInput,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Loader2
 } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
@@ -38,6 +39,11 @@ export const App: React.FC = () => {
   const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(new Set());
   const [concurrency, setConcurrency] = useState<number>(2);
   const [batchMaxVideos, setBatchMaxVideos] = useState<number>(50);
+
+  // Trạng thái xử lý tác vụ (tránh cảm giác đơ/treo ứng dụng)
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [processingMessage, setProcessingMessage] = useState<string>('');
+  const [openingBrowserProfileId, setOpeningBrowserProfileId] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
@@ -143,11 +149,13 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteProfile = async (profile: any) => {
+    if (isProcessing) return;
     if (confirm(`Bạn có chắc chắn muốn xóa profile "${profile.name}"?`)) {
+      setIsProcessing(true);
+      setProcessingMessage(`Đang xóa profile [${profile.name}]...`);
       try {
         await window.api.deleteProfile(profile.id);
         toast.success(`Đã xóa profile: ${profile.name}`);
-        // Xóa khỏi danh sách đã chọn nếu có
         setSelectedProfileIds((prev) => {
           const next = new Set(prev);
           next.delete(profile.id);
@@ -156,16 +164,22 @@ export const App: React.FC = () => {
         await loadProfiles();
       } catch (err: any) {
         toast.error(`Lỗi khi xóa: ${err.message}`);
+      } finally {
+        setIsProcessing(false);
+        setProcessingMessage('');
       }
     }
   };
 
   const handleOpenBrowser = async (profile: any) => {
+    setOpeningBrowserProfileId(profile.id);
     toast.info(`Đang mở trình duyệt (en-US) cho profile [${profile.name}]...`);
     try {
       await window.api.openBrowser(profile.id);
     } catch (err: any) {
       toast.error(`Lỗi mở trình duyệt: ${err.message}`);
+    } finally {
+      setOpeningBrowserProfileId(null);
     }
   };
 
@@ -187,7 +201,7 @@ export const App: React.FC = () => {
 
   // Chạy các profile được tích chọn
   const handleRunSelected = async () => {
-    if (selectedProfileIds.size === 0) {
+    if (selectedProfileIds.size === 0 || isProcessing) {
       toast.error('Vui lòng tích chọn ít nhất 1 profile để chạy!');
       return;
     }
@@ -212,16 +226,22 @@ export const App: React.FC = () => {
     const ids = readyProfiles.map((p) => p.id);
     const limitInfo = batchMaxVideos > 0 ? ` (Tối đa ${batchMaxVideos} video/kênh)` : ' (Upload toàn bộ video)';
     toast.info(`Bắt đầu chạy cho ${ids.length} kênh đã chọn${limitInfo}...`);
+    setIsProcessing(true);
+    setProcessingMessage(`Đang chuẩn bị khởi chạy ${ids.length} kênh...`);
     try {
       await window.api.startQueue(ids, { maxVideos: batchMaxVideos });
       setActiveTab('queue');
     } catch (err: any) {
       toast.error(`Lỗi khởi chạy: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+      setProcessingMessage('');
     }
   };
 
   // Chạy toàn bộ nhóm hiện tại (hoặc tất cả)
   const handleRunBatch = async () => {
+    if (isProcessing) return;
     const pool = selectedGroup === 'all' 
       ? profiles 
       : profiles.filter((p) => (p.group_name || 'Mặc định') === selectedGroup);
@@ -243,16 +263,23 @@ export const App: React.FC = () => {
     const ids = readyProfiles.map((p) => p.id);
     const limitInfo = batchMaxVideos > 0 ? ` (Tối đa ${batchMaxVideos} video/kênh)` : ' (Upload toàn bộ video)';
     toast.info(`Bắt đầu chạy cho ${ids.length} kênh ${selectedGroup !== 'all' ? `(Nhóm: ${selectedGroup})` : ''}${limitInfo}...`);
+    setIsProcessing(true);
+    setProcessingMessage(`Đang chuẩn bị chạy ${ids.length} kênh...`);
     try {
       await window.api.startQueue(ids, { maxVideos: batchMaxVideos });
       setActiveTab('queue');
     } catch (err: any) {
       toast.error(`Lỗi chạy hàng loạt: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+      setProcessingMessage('');
     }
   };
 
   const handleBulkChangeGroup = async (targetGroup: string) => {
-    if (!targetGroup || selectedProfileIds.size === 0) return;
+    if (!targetGroup || selectedProfileIds.size === 0 || isProcessing) return;
+    setIsProcessing(true);
+    setProcessingMessage(`Đang chuyển ${selectedProfileIds.size} kênh sang nhóm [${targetGroup}]...`);
     try {
       const ids = Array.from(selectedProfileIds);
       await window.api.bulkUpdateGroup(ids, targetGroup);
@@ -260,12 +287,17 @@ export const App: React.FC = () => {
       await loadProfiles();
     } catch (err: any) {
       toast.error(`Lỗi chuyển nhóm: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+      setProcessingMessage('');
     }
   };
 
   const handleBulkDelete = async () => {
-    if (selectedProfileIds.size === 0) return;
+    if (selectedProfileIds.size === 0 || isProcessing) return;
     if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedProfileIds.size} profile đã chọn không?`)) return;
+    setIsProcessing(true);
+    setProcessingMessage(`Đang xóa ${selectedProfileIds.size} profiles...`);
     try {
       const ids = Array.from(selectedProfileIds);
       await window.api.bulkDeleteProfiles(ids);
@@ -274,6 +306,9 @@ export const App: React.FC = () => {
       await loadProfiles();
     } catch (err: any) {
       toast.error(`Lỗi khi xóa profiles: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+      setProcessingMessage('');
     }
   };
 
@@ -542,13 +577,14 @@ export const App: React.FC = () => {
                         <span className="text-slate-500 font-medium hidden sm:inline">Chuyển sang:</span>
                         <select
                           defaultValue=""
+                          disabled={isProcessing}
                           onChange={(e) => {
                             if (e.target.value) {
                               handleBulkChangeGroup(e.target.value);
                               e.target.value = '';
                             }
                           }}
-                          className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer text-xs"
+                          className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer text-xs disabled:opacity-50"
                         >
                           <option value="" disabled>Nhóm...</option>
                           {groups.map((g) => (
@@ -561,9 +597,10 @@ export const App: React.FC = () => {
                       <Button
                         variant="outline"
                         size="sm"
+                        disabled={isProcessing}
                         onClick={handleExportSelectedTxt}
                         title="Xuất file Excel CSV hoặc TXT (có tên cột rõ ràng) kèm nhóm & cookie để giao khách hoặc lưu trữ"
-                        className="h-8 text-xs border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80 px-2.5"
+                        className="h-8 text-xs border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80 px-2.5 disabled:opacity-50"
                       >
                         <FileSpreadsheet className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Xuất File (Excel / TXT)
                       </Button>
@@ -573,10 +610,16 @@ export const App: React.FC = () => {
                         variant="outline"
                         size="sm"
                         onClick={handleBulkDelete}
+                        disabled={isProcessing}
                         title="Xóa các profile đang chọn"
-                        className="h-8 text-xs border-rose-300 text-rose-700 bg-rose-50/60 hover:bg-rose-100/80 px-2.5"
+                        className="h-8 text-xs border-rose-300 text-rose-700 bg-rose-50/60 hover:bg-rose-100/80 px-2.5 disabled:opacity-50"
                       >
-                        <Trash2 className="h-3.5 w-3.5 mr-1 text-rose-600" /> Xóa
+                        {isProcessing ? (
+                          <Loader2 className="h-3.5 w-3.5 mr-1 text-rose-600 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5 mr-1 text-rose-600" />
+                        )}
+                        {isProcessing ? 'Đang xóa...' : 'Xóa'}
                       </Button>
 
                       <div className="h-4 w-[1px] bg-slate-200 mx-1" />
@@ -592,15 +635,17 @@ export const App: React.FC = () => {
                           min={0}
                           max={999}
                           value={batchMaxVideos}
+                          disabled={isProcessing}
                           onChange={(e) => setBatchMaxVideos(Math.max(0, parseInt(e.target.value) || 0))}
-                          className="w-10 h-6 text-center text-xs font-bold text-sky-700 bg-white border border-slate-200 rounded focus:outline-none focus:border-sky-500"
+                          className="w-10 h-6 text-center text-xs font-bold text-sky-700 bg-white border border-slate-200 rounded focus:outline-none focus:border-sky-500 disabled:opacity-50"
                         />
                         <span className="text-[11px] text-slate-400">vid/kênh</span>
                       </div>
 
                       <button
                         onClick={handleClearSelection}
-                        className="text-xs text-slate-500 hover:text-slate-700 px-1.5 py-1"
+                        disabled={isProcessing}
+                        className="text-xs text-slate-500 hover:text-slate-700 px-1.5 py-1 disabled:opacity-50"
                       >
                         Hủy chọn
                       </button>
@@ -609,9 +654,14 @@ export const App: React.FC = () => {
                         variant="default"
                         size="sm"
                         onClick={handleRunSelected}
-                        className="h-8 text-xs shadow-sm shadow-sky-500/30"
+                        disabled={isProcessing}
+                        className="h-8 text-xs shadow-sm shadow-sky-500/30 disabled:opacity-50"
                       >
-                        <Play className="h-3.5 w-3.5 mr-1 fill-current" />
+                        {isProcessing ? (
+                          <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        ) : (
+                          <Play className="h-3.5 w-3.5 mr-1 fill-current" />
+                        )}
                         Chạy {selectedProfileIds.size} Kênh
                       </Button>
                     </>
@@ -628,8 +678,9 @@ export const App: React.FC = () => {
                           min={0}
                           max={999}
                           value={batchMaxVideos}
+                          disabled={isProcessing}
                           onChange={(e) => setBatchMaxVideos(Math.max(0, parseInt(e.target.value) || 0))}
-                          className="w-10 h-6 text-center text-xs font-bold text-sky-700 bg-white border border-slate-200 rounded focus:outline-none focus:border-sky-500"
+                          className="w-10 h-6 text-center text-xs font-bold text-sky-700 bg-white border border-slate-200 rounded focus:outline-none focus:border-sky-500 disabled:opacity-50"
                         />
                         <span className="text-[11px] text-slate-400">vid/kênh</span>
                       </div>
@@ -638,10 +689,14 @@ export const App: React.FC = () => {
                         variant="outline"
                         size="sm"
                         onClick={handleRunBatch}
-                        disabled={filteredProfiles.length === 0 || runningCount > 0}
-                        className="h-8 text-xs border-sky-300 text-sky-700 hover:bg-sky-50 font-medium"
+                        disabled={filteredProfiles.length === 0 || runningCount > 0 || isProcessing}
+                        className="h-8 text-xs border-sky-300 text-sky-700 hover:bg-sky-50 font-medium disabled:opacity-50"
                       >
-                        <Play className="h-3.5 w-3.5 mr-1 fill-current text-sky-500" />
+                        {isProcessing ? (
+                          <Loader2 className="h-3.5 w-3.5 mr-1 text-sky-500 animate-spin" />
+                        ) : (
+                          <Play className="h-3.5 w-3.5 mr-1 fill-current text-sky-500" />
+                        )}
                         Chạy Toàn Bộ {selectedGroup === 'all' ? 'Tất Cả Kênh' : `Nhóm [${selectedGroup}]`}
                       </Button>
                     </>
@@ -704,6 +759,8 @@ export const App: React.FC = () => {
                     onViewLogs={() => setViewingLogsProfile(profile)}
                     onQuickSelectFolder={() => handleQuickSelectFolder(profile)}
                     isRunning={queueStats.runningProfiles?.includes(profile.id)}
+                    isOpeningBrowser={openingBrowserProfileId === profile.id}
+                    isProcessing={isProcessing}
                   />
                 ))}
               </div>
@@ -812,6 +869,14 @@ export const App: React.FC = () => {
           loadGroupsList();
         }}
       />
+
+      {/* Floating Processing Banner - Phản hồi tức thì khi thực hiện tác vụ nặng */}
+      {isProcessing && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900/90 text-white px-4 py-2.5 rounded-xl shadow-2xl border border-slate-700/80 backdrop-blur-md flex items-center gap-2.5 text-xs animate-in fade-in slide-in-from-bottom-2">
+          <Loader2 className="h-4 w-4 text-sky-400 animate-spin shrink-0" />
+          <span className="font-semibold text-slate-100">{processingMessage || 'Đang xử lý dữ liệu...'}</span>
+        </div>
+      )}
     </div>
   );
 };

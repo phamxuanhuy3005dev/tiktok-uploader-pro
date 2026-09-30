@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
-import { Folder, Shuffle, ArrowRight, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+import { Folder, Shuffle, ArrowRight, CheckCircle2, AlertCircle, Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface DistributeVideosModalProps {
@@ -290,6 +290,7 @@ export const DistributeVideosModal: React.FC<DistributeVideosModalProps> = ({
             disabled={loading || videoCount === 0 || targetProfiles.length === 0}
             className="text-xs shadow-sm shadow-sky-500/20"
           >
+            {loading && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
             {loading ? 'Đang phân bổ video...' : 'Tiến Hành Phân Bổ Ngay'}
           </Button>
         </div>

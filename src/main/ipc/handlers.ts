@@ -2,7 +2,7 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { profileRepo, logRepo, configRepo, groupRepo, ProfileRecord } from '../db/database';
-import { openManualBrowser, closeProfileContext, testProxyConnection } from '../engine/browser-pool';
+import { openManualBrowser, closeProfileContext, testProxyConnection, isProfileActive } from '../engine/browser-pool';
 import { uploadQueue } from '../queue/task-queue';
 import { importFromOldTool, exportProfilesToJson, importProfilesFromJson } from '../db/migration';
 
@@ -54,9 +54,16 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle('profiles:delete', async (_, id: string) => {
-    await closeProfileContext(id);
+    if (isProfileActive(id)) {
+      await closeProfileContext(id).catch(() => {});
+    }
     profileRepo.delete(id);
-    return profileRepo.getAll();
+    const updated = profileRepo.getAll();
+    const activeWin = getValidWindow();
+    if (activeWin && !activeWin.isDestroyed()) {
+      activeWin.webContents.send('profiles:updated', updated);
+    }
+    return updated;
   });
 
   ipcMain.handle('profiles:bulkCreate', async (_, profiles: any[]) => {
@@ -80,8 +87,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle('profiles:bulkDelete', async (_, profileIds: string[]) => {
-    for (const id of profileIds) {
-      await closeProfileContext(id).catch(() => {});
+    const activeIds = profileIds.filter((id) => isProfileActive(id));
+    if (activeIds.length > 0) {
+      await Promise.allSettled(activeIds.map((id) => closeProfileContext(id)));
     }
     profileRepo.bulkDelete(profileIds);
     const updated = profileRepo.getAll();

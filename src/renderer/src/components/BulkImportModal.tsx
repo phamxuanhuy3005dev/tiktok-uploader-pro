@@ -9,7 +9,8 @@ import {
   FolderOpen, 
   Download, 
   FileSpreadsheet,
-  Info
+  Info,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -562,6 +563,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
             disabled={loading || parsedAccounts.length === 0}
             className="text-xs shadow-sm shadow-sky-500/20"
           >
+            {loading && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
             {loading ? 'Đang thêm tài khoản...' : `Xác Nhận Thêm ${parsedAccounts.length} Tài Khoản`}
           </Button>
         </div>
