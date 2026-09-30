@@ -25,22 +25,7 @@ export async function processCaption(
   const selectAll = process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
   await page.keyboard.press(selectAll);
   await page.keyboard.press('Backspace');
-
-  if (profile.caption_mode === 'from_txt_file') {
-    const ext = path.extname(videoPath);
-    const txtPath = videoPath.slice(0, -ext.length) + '.txt';
-
-    if (fs.existsSync(txtPath)) {
-      const content = fs.readFileSync(txtPath, 'utf-8').trim();
-      log(`Tìm thấy file caption text: ${path.basename(txtPath)}. Đang điền caption...`);
-      await page.keyboard.type(content, { delay: 20 });
-      log('Đã điền xong caption từ file text.');
-    } else {
-      log(`Không có file .txt tương ứng (${path.basename(txtPath)}). Để trống caption.`);
-    }
-  } else {
-    log('Chế độ remove_title: Đã xóa sạch tiêu đề video.');
-  }
+  log('Đã xóa sạch tiêu đề video (để trống).');
 
   await page.waitForTimeout(1000);
 }

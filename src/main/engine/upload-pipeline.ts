@@ -42,7 +42,7 @@ export async function runUploadPipeline(
   }
 
   const validExtensions = ['.mp4', '.mov', '.webm', '.mkv'];
-  const videoFiles = fs
+  let videoFiles = fs
     .readdirSync(profile.video_folder)
     .filter((f) => {
       if (f.startsWith('.')) return false;
@@ -57,7 +57,18 @@ export async function runUploadPipeline(
     return { uploaded: 0, failed: 0 };
   }
 
-  log(`Tìm thấy ${videoFiles.length} video hợp lệ trong thư mục. Bắt đầu tiến trình...`);
+  const totalFound = videoFiles.length;
+  const maxLimit = profile.max_videos !== undefined && profile.max_videos !== null && !isNaN(Number(profile.max_videos))
+    ? Number(profile.max_videos)
+    : 50;
+
+  if (maxLimit > 0 && totalFound > maxLimit) {
+    videoFiles = videoFiles.slice(0, maxLimit);
+    log(`Tìm thấy ${totalFound} video. Áp dụng giới hạn tải lên tối đa ${maxLimit} video cho đợt này.`);
+  } else {
+    log(`Tìm thấy ${totalFound} video hợp lệ trong thư mục. Sẽ tải lên toàn bộ ${videoFiles.length} video.`);
+  }
+
   profileRepo.updateStatus(profile.id, 'uploading');
 
   let uploadedCount = 0;

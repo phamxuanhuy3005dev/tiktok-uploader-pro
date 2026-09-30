@@ -1,7 +1,7 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import fs from 'fs';
 import path from 'path';
-import { profileRepo, logRepo, configRepo, ProfileRecord } from '../db/database';
+import { profileRepo, logRepo, configRepo, groupRepo, ProfileRecord } from '../db/database';
 import { openManualBrowser, closeProfileContext, testProxyConnection } from '../engine/browser-pool';
 import { uploadQueue } from '../queue/task-queue';
 import { importFromOldTool, exportProfilesToJson, importProfilesFromJson } from '../db/migration';
@@ -304,11 +304,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   );
 
   // Bắt đầu upload cho danh sách profile
-  ipcMain.handle('queue:start', async (_, profileIds: string[]) => {
+  ipcMain.handle('queue:start', async (_, profileIds: string[], runOptions?: { maxVideos?: number }) => {
     for (const id of profileIds) {
       const profile = profileRepo.getById(id);
       if (profile) {
-        await uploadQueue.addProfile(profile);
+        await uploadQueue.addProfile(profile, runOptions);
       }
     }
     return uploadQueue.getStats();
@@ -340,5 +340,32 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle('logs:clear', async () => {
     logRepo.clear();
     return true;
+  });
+
+  // Quản lý Danh Sách Nhóm (Groups)
+  ipcMain.handle('groups:getAll', async () => {
+    return groupRepo.getAll();
+  });
+
+  ipcMain.handle('groups:create', async (_, name: string) => {
+    return groupRepo.create(name);
+  });
+
+  ipcMain.handle('groups:rename', async (_, { id, newName }: { id: string; newName: string }) => {
+    const res = groupRepo.rename(id, newName);
+    const activeWin = getValidWindow();
+    if (activeWin && !activeWin.isDestroyed()) {
+      activeWin.webContents.send('profiles:updated', profileRepo.getAll());
+    }
+    return res;
+  });
+
+  ipcMain.handle('groups:delete', async (_, id: string) => {
+    const res = groupRepo.delete(id);
+    const activeWin = getValidWindow();
+    if (activeWin && !activeWin.isDestroyed()) {
+      activeWin.webContents.send('profiles:updated', profileRepo.getAll());
+    }
+    return res;
   });
 }

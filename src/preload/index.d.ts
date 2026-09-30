@@ -31,13 +31,17 @@ export interface IElectronAPI {
     updatedProfiles: any[];
     details?: Record<string, number>;
   }>;
-  startQueue: (profileIds: string[]) => Promise<any>;
+  startQueue: (profileIds: string[], runOptions?: { maxVideos?: number }) => Promise<any>;
   getQueueStats: () => Promise<any>;
   setConcurrency: (concurrency: number) => Promise<number>;
   getConcurrency: () => Promise<number>;
   getLogs: (profileId: string) => Promise<any[]>;
   getAllLogs: () => Promise<any[]>;
   clearLogs: () => Promise<boolean>;
+  getGroups: () => Promise<Array<{ id: string; name: string; profile_count?: number; created_at: string }>>;
+  createGroup: (name: string) => Promise<{ id: string; name: string; profile_count?: number; created_at: string }>;
+  renameGroup: (id: string, newName: string) => Promise<{ success: boolean; updatedProfilesCount: number }>;
+  deleteGroup: (id: string) => Promise<boolean>;
   onUploadProgress: (callback: (event: any) => void) => () => void;
   onProfilesUpdated: (callback: (profiles: any[]) => void) => () => void;
 }

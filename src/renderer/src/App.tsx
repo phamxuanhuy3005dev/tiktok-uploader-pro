@@ -8,6 +8,7 @@ import { QueueScreen } from './components/QueueScreen';
 import { LogsScreen } from './components/LogsScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { DistributeVideosModal } from './components/DistributeVideosModal';
+import { ManageGroupsModal } from './components/ManageGroupsModal';
 import { 
   Sparkles, 
   Search, 
@@ -31,9 +32,12 @@ export const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(new Set());
   const [concurrency, setConcurrency] = useState<number>(2);
+  const [batchMaxVideos, setBatchMaxVideos] = useState<number>(50);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDistributeModalOpen, setIsDistributeModalOpen] = useState(false);
+  const [isManageGroupsOpen, setIsManageGroupsOpen] = useState(false);
+  const [dbGroups, setDbGroups] = useState<string[]>([]);
   const [editingProfile, setEditingProfile] = useState<any | null>(null);
   const [viewingLogsProfile, setViewingLogsProfile] = useState<any | null>(null);
   const [liveLogs, setLiveLogs] = useState<any[]>([]);
@@ -41,6 +45,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     loadProfiles();
+    loadGroupsList();
     loadConcurrency();
 
     // Lắng nghe sự kiện upload progress từ Main process
@@ -80,9 +85,19 @@ export const App: React.FC = () => {
     try {
       const data = await window.api.getProfiles();
       setProfiles(data || []);
+      loadGroupsList();
     } catch (err: any) {
       toast.error(`Không thể tải profiles: ${err.message}`);
     }
+  };
+
+  const loadGroupsList = async () => {
+    try {
+      const list = await window.api.getGroups();
+      if (Array.isArray(list)) {
+        setDbGroups(list.map((g: any) => g.name));
+      }
+    } catch (_) {}
   };
 
   const loadConcurrency = async () => {
@@ -151,7 +166,9 @@ export const App: React.FC = () => {
       toast.error(`Vui lòng chọn thư mục video cho profile [${profile.name}] trước khi chạy!`);
       return;
     }
-    toast.info(`Đã đưa [${profile.name}] vào hàng đợi upload.`);
+    const maxLimit = profile.max_videos !== undefined && profile.max_videos !== null ? profile.max_videos : 50;
+    const limitText = maxLimit > 0 ? ` (Tối đa ${maxLimit} video)` : ' (Upload toàn bộ video)';
+    toast.info(`Đã đưa [${profile.name}] vào hàng đợi upload${limitText}.`);
     try {
       await window.api.startQueue([profile.id]);
       setActiveTab('queue');
@@ -185,9 +202,10 @@ export const App: React.FC = () => {
     }
 
     const ids = readyProfiles.map((p) => p.id);
-    toast.info(`Bắt đầu chạy cho ${ids.length} kênh đã chọn...`);
+    const limitInfo = batchMaxVideos > 0 ? ` (Tối đa ${batchMaxVideos} video/kênh)` : ' (Upload toàn bộ video)';
+    toast.info(`Bắt đầu chạy cho ${ids.length} kênh đã chọn${limitInfo}...`);
     try {
-      await window.api.startQueue(ids);
+      await window.api.startQueue(ids, { maxVideos: batchMaxVideos });
       setActiveTab('queue');
     } catch (err: any) {
       toast.error(`Lỗi khởi chạy: ${err.message}`);
@@ -215,9 +233,10 @@ export const App: React.FC = () => {
     }
 
     const ids = readyProfiles.map((p) => p.id);
-    toast.info(`Bắt đầu chạy cho ${ids.length} kênh ${selectedGroup !== 'all' ? `(Nhóm: ${selectedGroup})` : ''}...`);
+    const limitInfo = batchMaxVideos > 0 ? ` (Tối đa ${batchMaxVideos} video/kênh)` : ' (Upload toàn bộ video)';
+    toast.info(`Bắt đầu chạy cho ${ids.length} kênh ${selectedGroup !== 'all' ? `(Nhóm: ${selectedGroup})` : ''}${limitInfo}...`);
     try {
-      await window.api.startQueue(ids);
+      await window.api.startQueue(ids, { maxVideos: batchMaxVideos });
       setActiveTab('queue');
     } catch (err: any) {
       toast.error(`Lỗi chạy hàng loạt: ${err.message}`);
@@ -262,8 +281,15 @@ export const App: React.FC = () => {
 
   // Trích xuất danh sách các nhóm duy nhất
   const groups = useMemo(() => {
-    return Array.from(new Set(profiles.map((p) => p.group_name || 'Mặc định'))).filter(Boolean);
-  }, [profiles]);
+    return Array.from(new Set(['Mặc định', ...dbGroups, ...profiles.map((p) => p.group_name || 'Mặc định')])).filter(Boolean);
+  }, [dbGroups, profiles]);
+
+  // Tự động đồng bộ selectedGroup nếu nhóm bị xóa hoặc không còn tồn tại
+  useEffect(() => {
+    if (selectedGroup !== 'all' && groups.length > 0 && !groups.includes(selectedGroup)) {
+      setSelectedGroup('all');
+    }
+  }, [groups, selectedGroup]);
 
   // Lọc profiles theo nhóm & từ khóa tìm kiếm
   const filteredProfiles = useMemo(() => {
@@ -344,27 +370,27 @@ export const App: React.FC = () => {
       />
 
       {/* Main Container */}
-      <main className="flex-1 p-4 sm:p-6 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-3 sm:p-5 max-w-[1600px] mx-auto w-full">
         {/* TAB 1: KÊNH & PROFILES */}
         {activeTab === 'profiles' && (
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             {/* Filter & Selection Toolbar */}
-            <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-sm space-y-3">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="bg-white p-3 rounded-xl border border-slate-200/90 shadow-sm space-y-2.5">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                 {/* Search Input */}
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <Search className="absolute left-3 top-2 h-4 w-4 text-slate-400" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Tìm theo tên kênh, email, ID tài khoản..."
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50/70 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white transition-all"
+                    className="w-full pl-9 pr-3 h-8 text-xs rounded-lg border border-slate-200 bg-slate-50/70 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white transition-all"
                   />
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -373,7 +399,7 @@ export const App: React.FC = () => {
 
                 {/* Group Selector Dropdown & Chia Đều Video */}
                 <div className="flex items-center gap-2 shrink-0">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 font-medium">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-2.5 h-8 rounded-lg border border-slate-200 font-medium">
                     <Filter className="h-3.5 w-3.5 text-sky-500" />
                     <span>Nhóm:</span>
                     <select
@@ -393,13 +419,24 @@ export const App: React.FC = () => {
                     </select>
                   </div>
 
+                  {/* Nút Quản lý nhóm */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsManageGroupsOpen(true)}
+                    title="Quản lý danh sách nhóm, thêm mới hoặc đổi tên nhóm"
+                    className="h-8 text-xs border-slate-200 text-slate-700 bg-white hover:bg-slate-50 shrink-0 px-2.5"
+                  >
+                    <Users className="h-3.5 w-3.5 mr-1 text-slate-500" /> Quản Lý Nhóm
+                  </Button>
+
                   {/* Nút Chia Đều Video */}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setIsDistributeModalOpen(true)}
                     title="Tự động chia đều danh sách video từ 1 thư mục cho các kênh"
-                    className="text-xs border-sky-300 text-sky-700 bg-sky-50/60 hover:bg-sky-100/80 shrink-0"
+                    className="h-8 text-xs border-sky-300 text-sky-700 bg-sky-50/60 hover:bg-sky-100/80 shrink-0 px-2.5"
                   >
                     <Shuffle className="h-3.5 w-3.5 mr-1 text-sky-600" /> Chia Đều Video
                   </Button>
@@ -441,6 +478,23 @@ export const App: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* Ô chỉnh giới hạn upload tối đa */}
+                  <div
+                    className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200/90 px-2 py-1 rounded-lg"
+                    title="Số video tối đa upload mỗi kênh trong đợt chạy này. Nhập 0 nếu muốn upload toàn bộ video có trong folder."
+                  >
+                    <span className="font-medium text-[11px] text-slate-500">Tối đa:</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={999}
+                      value={batchMaxVideos}
+                      onChange={(e) => setBatchMaxVideos(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-11 h-6 text-center text-xs font-bold text-sky-700 bg-white border border-slate-200 rounded focus:outline-none focus:border-sky-500"
+                    />
+                    <span className="text-[11px] text-slate-400">vid/kênh</span>
+                  </div>
+
                   {/* Nếu đã chọn >= 1 profile: Nút Chạy các profile đã chọn */}
                   {selectedProfileIds.size > 0 ? (
                     <>
@@ -455,7 +509,7 @@ export const App: React.FC = () => {
                         variant="default"
                         size="sm"
                         onClick={handleRunSelected}
-                        className="text-xs shadow-sm shadow-sky-500/30"
+                        className="h-8 text-xs shadow-sm shadow-sky-500/30"
                       >
                         <Play className="h-3.5 w-3.5 mr-1 fill-current" />
                         Chạy {selectedProfileIds.size} Profile Đã Chọn
@@ -468,7 +522,7 @@ export const App: React.FC = () => {
                       size="sm"
                       onClick={handleRunBatch}
                       disabled={filteredProfiles.length === 0 || runningCount > 0}
-                      className="text-xs border-sky-300 text-sky-700 hover:bg-sky-50"
+                      className="h-8 text-xs border-sky-300 text-sky-700 hover:bg-sky-50 font-medium"
                     >
                       <Play className="h-3.5 w-3.5 mr-1 fill-current text-sky-500" />
                       Chạy Toàn Bộ {selectedGroup === 'all' ? 'Tất Cả Kênh' : `Nhóm [${selectedGroup}]`}
@@ -515,7 +569,7 @@ export const App: React.FC = () => {
                 Không tìm thấy profile nào phù hợp với bộ lọc hoặc từ khóa tìm kiếm.
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
                 {filteredProfiles.map((profile) => (
                   <ProfileCard
                     key={profile.id}
@@ -601,6 +655,19 @@ export const App: React.FC = () => {
         selectedProfileIds={selectedProfileIds}
         onSuccess={(updatedProfiles) => {
           setProfiles(updatedProfiles);
+        }}
+      />
+
+      {/* Quản lý danh sách nhóm Modal */}
+      <ManageGroupsModal
+        isOpen={isManageGroupsOpen}
+        onClose={() => setIsManageGroupsOpen(false)}
+        onGroupsUpdated={(renamedFrom, renamedTo) => {
+          loadProfiles();
+          loadGroupsList();
+          if (renamedFrom && selectedGroup === renamedFrom) {
+            setSelectedGroup(renamedTo || 'all');
+          }
         }}
       />
     </div>

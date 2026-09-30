@@ -19,6 +19,7 @@ export interface ProfileRecord {
   caption_mode: 'remove_title' | 'from_txt_file';
   proxy: string | null;
   cookies: string | null;
+  max_videos?: number;
   account_id?: string | null;
   pass?: string | null;
   email?: string | null;
@@ -75,6 +76,7 @@ db.exec(`
     caption_mode TEXT DEFAULT 'remove_title',
     proxy TEXT DEFAULT NULL,
     cookies TEXT DEFAULT NULL,
+    max_videos INTEGER DEFAULT 50,
     account_id TEXT DEFAULT NULL,
     pass TEXT DEFAULT NULL,
     email TEXT DEFAULT NULL,
@@ -95,11 +97,29 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS groups (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT UNIQUE NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS config (
     key TEXT PRIMARY KEY NOT NULL,
     value TEXT
   );
 `);
+
+// Tự động seed nhóm 'Mặc định' và đồng bộ các nhóm hiện có
+try {
+  db.prepare("INSERT OR IGNORE INTO groups (id, name) VALUES ('default', 'Mặc định')").run();
+  const existingGroups = db.prepare("SELECT DISTINCT group_name FROM profiles WHERE group_name IS NOT NULL AND group_name != ''").all() as any[];
+  const insertGroup = db.prepare("INSERT OR IGNORE INTO groups (id, name) VALUES (?, ?)");
+  for (const row of existingGroups) {
+    if (row.group_name) {
+      insertGroup.run(`group_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`, row.group_name);
+    }
+  }
+} catch (_) {}
 
 // 2. Safe migration: Đảm bảo các cột mới tồn tại
 try {
@@ -110,6 +130,9 @@ try {
   }
   if (!cols.has('group_name')) {
     db.exec("ALTER TABLE profiles ADD COLUMN group_name TEXT DEFAULT 'Mặc định';");
+  }
+  if (!cols.has('max_videos')) {
+    db.exec('ALTER TABLE profiles ADD COLUMN max_videos INTEGER DEFAULT 50;');
   }
   const credCols = ['account_id', 'pass', 'email', 'pass_email', 'mail_ao'];
   for (const c of credCols) {
@@ -212,6 +235,7 @@ export const profileRepo = {
       caption_mode: profile.caption_mode || 'remove_title',
       proxy: profile.proxy || null,
       cookies: serializedCookies,
+      max_videos: profile.max_videos !== undefined && profile.max_videos !== null && profile.max_videos !== '' ? Number(profile.max_videos) : 50,
       account_id: profile.account_id || null,
       pass: profile.pass || null,
       email: profile.email || null,
@@ -224,11 +248,11 @@ export const profileRepo = {
       INSERT INTO profiles (
         id, name, group_name, status, video_folder, enable_music, music_mode, favorite_index,
         music_volume, schedule_mode, schedule_interval, golden_hours,
-        caption_mode, proxy, cookies, account_id, pass, email, pass_email, mail_ao, last_run
+        caption_mode, proxy, cookies, max_videos, account_id, pass, email, pass_email, mail_ao, last_run
       ) VALUES (
         @id, @name, @group_name, @status, @video_folder, @enable_music, @music_mode, @favorite_index,
         @music_volume, @schedule_mode, @schedule_interval, @golden_hours,
-        @caption_mode, @proxy, @cookies, @account_id, @pass, @email, @pass_email, @mail_ao, @last_run
+        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @email, @pass_email, @mail_ao, @last_run
       )
     `).run(normalized);
   },
@@ -280,3 +304,78 @@ export const logRepo = {
     db.prepare('DELETE FROM upload_logs').run();
   }
 };
+
+export interface GroupRecord {
+  id: string;
+  name: string;
+  profile_count?: number;
+  created_at: string;
+}
+
+export const groupRepo = {
+  getAll: (): GroupRecord[] => {
+    db.prepare("INSERT OR IGNORE INTO groups (id, name) VALUES ('default', 'Mặc định')").run();
+
+    return db.prepare(`
+      SELECT 
+        g.id, 
+        g.name, 
+        g.created_at, 
+        COUNT(p.id) as profile_count
+      FROM groups g
+      LEFT JOIN profiles p ON p.group_name = g.name
+      GROUP BY g.id, g.name
+      ORDER BY CASE WHEN g.name = 'Mặc định' THEN 0 ELSE 1 END, g.name ASC
+    `).all() as GroupRecord[];
+  },
+
+  create: (name: string): GroupRecord => {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Tên nhóm không được để trống.');
+
+    const existing = db.prepare('SELECT * FROM groups WHERE name = ?').get(trimmed) as GroupRecord | undefined;
+    if (existing) return existing;
+
+    const id = `group_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    db.prepare('INSERT INTO groups (id, name) VALUES (?, ?)').run(id, trimmed);
+    return { id, name: trimmed, profile_count: 0, created_at: new Date().toISOString() };
+  },
+
+  rename: (id: string, newName: string): { success: boolean; updatedProfilesCount: number } => {
+    const trimmed = newName.trim();
+    if (!trimmed) throw new Error('Tên nhóm mới không được để trống.');
+
+    const current = db.prepare('SELECT * FROM groups WHERE id = ?').get(id) as GroupRecord | undefined;
+    if (!current) throw new Error('Không tìm thấy nhóm cần đổi tên.');
+    if (current.name === trimmed) return { success: true, updatedProfilesCount: 0 };
+
+    const duplicate = db.prepare('SELECT * FROM groups WHERE name = ? AND id != ?').get(trimmed, id);
+    if (duplicate) throw new Error(`Tên nhóm "${trimmed}" đã tồn tại. Vui lòng chọn tên khác.`);
+
+    const renameTx = db.transaction(() => {
+      db.prepare('UPDATE groups SET name = ? WHERE id = ?').run(trimmed, id);
+      const res = db.prepare('UPDATE profiles SET group_name = ? WHERE group_name = ?').run(trimmed, current.name);
+      return res.changes;
+    });
+
+    const updatedProfilesCount = renameTx();
+    return { success: true, updatedProfilesCount };
+  },
+
+  delete: (id: string): boolean => {
+    const current = db.prepare('SELECT * FROM groups WHERE id = ?').get(id) as GroupRecord | undefined;
+    if (!current) return false;
+    if (current.name === 'Mặc định') {
+      throw new Error('Không thể xóa nhóm "Mặc định".');
+    }
+
+    const deleteTx = db.transaction(() => {
+      db.prepare("UPDATE profiles SET group_name = 'Mặc định' WHERE group_name = ?").run(current.name);
+      db.prepare('DELETE FROM groups WHERE id = ?').run(id);
+    });
+
+    deleteTx();
+    return true;
+  }
+};
+

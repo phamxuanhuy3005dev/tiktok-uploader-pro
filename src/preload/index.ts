@@ -26,13 +26,19 @@ export const api = {
   }) => ipcRenderer.invoke('videos:distribute', params),
 
   // Queue & Upload
-  startQueue: (profileIds: string[]) => ipcRenderer.invoke('queue:start', profileIds),
+  startQueue: (profileIds: string[], runOptions?: { maxVideos?: number }) => ipcRenderer.invoke('queue:start', profileIds, runOptions),
   getQueueStats: () => ipcRenderer.invoke('queue:getStats'),
   setConcurrency: (concurrency: number) => ipcRenderer.invoke('queue:setConcurrency', concurrency),
   getConcurrency: () => ipcRenderer.invoke('queue:getConcurrency'),
   getLogs: (profileId: string) => ipcRenderer.invoke('logs:getByProfile', profileId),
   getAllLogs: () => ipcRenderer.invoke('logs:getAll'),
   clearLogs: () => ipcRenderer.invoke('logs:clear'),
+
+  // Groups Management
+  getGroups: () => ipcRenderer.invoke('groups:getAll'),
+  createGroup: (name: string) => ipcRenderer.invoke('groups:create', name),
+  renameGroup: (id: string, newName: string) => ipcRenderer.invoke('groups:rename', { id, newName }),
+  deleteGroup: (id: string) => ipcRenderer.invoke('groups:delete', id),
 
   // Events from Main process
   onUploadProgress: (callback: (event: any) => void) => {

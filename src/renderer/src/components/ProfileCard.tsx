@@ -10,8 +10,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Users,
-  KeyRound,
-  Mail
+  KeyRound
 } from 'lucide-react';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
@@ -60,108 +59,102 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 
   return (
     <div
-      className={`group relative rounded-2xl border transition-all duration-200 p-4 flex flex-col justify-between ${
+      className={`group relative rounded-xl border transition-all duration-150 p-3 sm:p-3.5 flex flex-col justify-between ${
         isSelected
-          ? 'bg-sky-50/40 border-sky-400 ring-2 ring-sky-500/20 shadow-md'
-          : 'bg-white border-slate-200/90 hover:border-sky-300 hover:shadow-md'
+          ? 'bg-sky-50/50 border-sky-400 ring-2 ring-sky-500/20 shadow-sm'
+          : 'bg-white border-slate-200/80 hover:border-sky-300 hover:shadow-md'
       }`}
     >
-      {/* Top Header: Checkbox + Name + Status + Action Buttons */}
       <div>
-        <div className="flex items-start justify-between gap-2 mb-2.5">
-          {/* Left: Checkbox & Name */}
-          <div className="flex items-start gap-2.5 min-w-0 flex-1">
+        {/* Row 1: Checkbox + Name + Group Tag + Action Icons */}
+        <div className="flex items-center justify-between gap-1.5 mb-1.5">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             {onToggleSelect && (
               <input
                 type="checkbox"
                 checked={isSelected}
                 onChange={(e) => onToggleSelect(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500/20 cursor-pointer shrink-0"
+                className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500/20 cursor-pointer shrink-0"
               />
             )}
-
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h3
-                  className="font-bold text-sm text-slate-800 group-hover:text-sky-700 transition-colors truncate max-w-[200px] sm:max-w-[220px]"
-                  title={profile.name}
-                >
-                  {profile.name}
-                </h3>
-                {profile.group_name && profile.group_name !== 'Mặc định' && (
-                  <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 border border-slate-200/70 shrink-0">
-                    <Users className="h-2.5 w-2.5 text-slate-400" /> {profile.group_name}
-                  </span>
-                )}
-                {getStatusBadge()}
-              </div>
-
-              {/* Account / Email info nếu có */}
-              {(profile.account_id || profile.email) && (
-                <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5 font-mono truncate">
-                  {profile.account_id && (
-                    <span className="inline-flex items-center gap-1 truncate" title={`TikTok ID: ${profile.account_id}`}>
-                      <KeyRound className="h-3 w-3 text-sky-500 shrink-0" />
-                      <span className="truncate">{profile.account_id}</span>
-                    </span>
-                  )}
-                  {profile.email && (
-                    <span className="inline-flex items-center gap-1 truncate" title={`Email: ${profile.email}`}>
-                      <Mail className="h-3 w-3 text-slate-400 shrink-0" />
-                      <span className="truncate">{profile.email}</span>
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Login session status */}
-              <div className="flex items-center gap-1.5 text-[11px] mt-1">
-                {hasCookies ? (
-                  <span className="flex items-center gap-1 text-emerald-600 font-medium">
-                    <CheckCircle2 className="h-3 w-3" /> Đã lưu phiên đăng nhập
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-amber-600 font-medium">
-                    <AlertCircle className="h-3 w-3" /> Chưa lưu cookie
-                  </span>
-                )}
-              </div>
-            </div>
+            <h3
+              className="font-bold text-xs sm:text-sm text-slate-800 group-hover:text-sky-700 transition-colors truncate"
+              title={profile.name}
+            >
+              {profile.name}
+            </h3>
+            {profile.group_name && profile.group_name !== 'Mặc định' && (
+              <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 border border-slate-200/60 shrink-0">
+                <Users className="h-2.5 w-2.5 text-slate-400" /> {profile.group_name}
+              </span>
+            )}
           </div>
 
-          {/* Right: Action icons - Fixed shrink-0 to prevent overflowing */}
-          <div className="flex items-center gap-0.5 shrink-0 bg-slate-50 p-1 rounded-lg border border-slate-100">
+          {/* Action icons */}
+          <div className="flex items-center gap-0.5 shrink-0 bg-slate-50/80 p-0.5 rounded-lg border border-slate-100">
             <button
               onClick={onViewLogs}
               title="Xem lịch sử đăng video"
-              className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-white transition-colors"
+              className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-white transition-colors"
             >
               <ListOrdered className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={onEdit}
               title="Chỉnh sửa cấu hình & tài khoản"
-              className="p-1.5 rounded-md text-slate-400 hover:text-sky-600 hover:bg-white transition-colors"
+              className="p-1 rounded text-slate-400 hover:text-sky-600 hover:bg-white transition-colors"
             >
               <Edit2 className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={onDelete}
               title="Xóa Profile"
-              className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
 
-        {/* Configuration specs grid: Chỉ giữ lại Folder & Proxy theo yêu cầu */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 py-2.5 border-y border-slate-100 text-xs text-slate-600 my-2">
+        {/* Row 2: Status Badge + Login Session + (Optional Account ID) + Max Videos Limit */}
+        <div className="flex items-center gap-1.5 flex-wrap text-[11px] mb-2">
+          {getStatusBadge()}
+
+          {hasCookies ? (
+            <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-1.5 py-0.5 rounded-full font-medium shrink-0">
+              <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Đã đăng nhập
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 rounded-full font-medium shrink-0">
+              <AlertCircle className="h-3 w-3 text-amber-500" /> Chưa login
+            </span>
+          )}
+
+          {profile.account_id && profile.account_id !== profile.name && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] text-slate-500 font-mono truncate max-w-[110px]"
+              title={`ID: ${profile.account_id}`}
+            >
+              <KeyRound className="h-2.5 w-2.5 text-slate-400 shrink-0" />
+              <span className="truncate">{profile.account_id}</span>
+            </span>
+          )}
+
+          <span
+            className="text-[10px] text-slate-500 ml-auto font-mono bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/70 shrink-0"
+            title="Số video tối đa upload mỗi lần"
+          >
+            Tối đa: <strong className="text-sky-700">{profile.max_videos !== undefined && profile.max_videos > 0 ? `${profile.max_videos} vid` : 'Hết'}</strong>
+          </span>
+        </div>
+
+        {/* Row 3: Folder & Proxy specs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 py-2 border-y border-slate-100/90 text-xs text-slate-600 mb-2">
           <div className="flex items-center gap-1.5 overflow-hidden">
             <Folder className={`h-3.5 w-3.5 shrink-0 ${profile.video_folder ? 'text-sky-500' : 'text-amber-500'}`} />
             <span
               className={`truncate font-mono text-[11px] ${
-                profile.video_folder ? 'text-slate-700 font-medium' : 'text-amber-600 font-bold bg-amber-50 px-1 py-0.5 rounded border border-amber-200'
+                profile.video_folder ? 'text-slate-700 font-medium' : 'text-amber-600 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200'
               }`}
               title={profile.video_folder || 'Chưa gán thư mục video!'}
             >
@@ -173,22 +166,22 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 
           <div className="flex items-center gap-1.5 overflow-hidden">
             <Globe className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-            <span className="truncate font-mono text-[11px] text-slate-500" title={profile.proxy || 'Direct'}>
+            <span className="truncate font-mono text-[11px] text-slate-500" title={profile.proxy || 'Direct (No Proxy)'}>
               {profile.proxy ? profile.proxy.replace(/:[^:]*@/, ':***@') : 'Direct (No Proxy)'}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Bottom Main Action Buttons */}
-      <div className="flex items-center gap-2 pt-1 mt-1">
+      {/* Row 4: Action Buttons */}
+      <div className="flex items-center gap-2 pt-0.5">
         <Button
           variant="outline"
           size="sm"
           onClick={onOpenBrowser}
-          className="flex-1 text-xs text-slate-700 border-slate-200 hover:bg-slate-50"
+          className="flex-1 h-7 text-xs text-slate-700 border-slate-200 hover:bg-slate-50 rounded-lg"
         >
-          <ExternalLink className="h-3.5 w-3.5 mr-1 text-slate-400" /> Mở Trình Duyệt
+          <ExternalLink className="h-3 w-3 mr-1 text-slate-400" /> Mở Trình Duyệt
         </Button>
 
         <Button
@@ -196,9 +189,9 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           size="sm"
           onClick={onRunUpload}
           disabled={isRunning || !profile.video_folder}
-          className="flex-1 text-xs font-semibold bg-sky-500 hover:bg-sky-600 shadow-sm shadow-sky-500/20 text-white"
+          className="flex-1 h-7 text-xs font-semibold bg-sky-500 hover:bg-sky-600 shadow-sm shadow-sky-500/20 text-white rounded-lg"
         >
-          <Play className="h-3.5 w-3.5 mr-1 fill-current" />
+          <Play className="h-3 w-3 mr-1 fill-current" />
           {isRunning ? 'Đang Xử Lý...' : 'Upload'}
         </Button>
       </div>

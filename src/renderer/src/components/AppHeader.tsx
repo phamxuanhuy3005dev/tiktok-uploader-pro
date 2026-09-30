@@ -55,7 +55,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
   return (
     <header className="bg-white border-b border-slate-200/90 shadow-sm sticky top-0 z-30 select-none">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6">
         {/* Top bar: Added pl-20 on macOS so traffic light buttons (red, yellow, green) never overlap */}
         <div 
           className="flex items-center justify-between h-16 gap-4 pl-20 sm:pl-22"

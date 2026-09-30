@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, Music, Calendar, FileText, Globe, AlertTriangle, Users, KeyRound, Mail, ShieldCheck } from 'lucide-react';
+import { Folder, Music, Calendar, Globe, AlertTriangle, Users, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -21,6 +21,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [groupName, setGroupName] = useState('Mặc định');
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [newGroupInput, setNewGroupInput] = useState('');
   const [videoFolder, setVideoFolder] = useState('');
   const [accountId, setAccountId] = useState('');
   const [pass, setPass] = useState('');
@@ -34,8 +36,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [scheduleMode, setScheduleMode] = useState<'immediate' | 'auto_increment' | 'golden_hours'>('auto_increment');
   const [scheduleInterval, setScheduleInterval] = useState(10);
   const [goldenHours, setGoldenHours] = useState('11:30,17:30,20:00');
-  const [captionMode, setCaptionMode] = useState<'remove_title' | 'from_txt_file'>('remove_title');
   const [proxy, setProxy] = useState('');
+  const [maxVideos, setMaxVideos] = useState<number | string>(50);
   const [loading, setLoading] = useState(false);
   const [isTestingProxy, setIsTestingProxy] = useState(false);
   const [proxyTestResult, setProxyTestResult] = useState<{
@@ -61,10 +63,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
   useEffect(() => {
     setProxyTestResult(null);
+    setIsCreatingGroup(false);
+    setNewGroupInput('');
     if (initialData) {
       setName(initialData.name || '');
       setGroupName(initialData.group_name || 'Mặc định');
       setVideoFolder(initialData.video_folder || '');
+      setMaxVideos(initialData.max_videos !== undefined && initialData.max_videos !== null ? initialData.max_videos : 50);
       setAccountId(initialData.account_id || '');
       setPass(initialData.pass || '');
       setEmail(initialData.email || '');
@@ -77,12 +82,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setScheduleMode(initialData.schedule_mode || 'auto_increment');
       setScheduleInterval(initialData.schedule_interval ?? 10);
       setGoldenHours(initialData.golden_hours || '11:30,17:30,20:00');
-      setCaptionMode(initialData.caption_mode || 'remove_title');
       setProxy(initialData.proxy || '');
     } else {
       setName('');
       setGroupName('Mặc định');
       setVideoFolder('');
+      setMaxVideos(50);
       setAccountId('');
       setPass('');
       setEmail('');
@@ -95,7 +100,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setScheduleMode('auto_increment');
       setScheduleInterval(10);
       setGoldenHours('11:30,17:30,20:00');
-      setCaptionMode('remove_title');
       setProxy('');
     }
   }, [initialData, isOpen]);
@@ -118,6 +122,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         name: name.trim(),
         group_name: groupName.trim() || 'Mặc định',
         video_folder: videoFolder.trim(),
+        max_videos: maxVideos === '' ? 50 : Math.max(0, Number(maxVideos)),
         account_id: accountId.trim() || null,
         pass: pass.trim() || null,
         email: email.trim() || null,
@@ -130,7 +135,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         schedule_mode: scheduleMode,
         schedule_interval: Number(scheduleInterval) || 10,
         golden_hours: goldenHours.trim(),
-        caption_mode: captionMode,
+        caption_mode: 'remove_title',
         proxy: proxy.trim() || null,
         status: initialData?.status || 'idle',
         cookies: initialData?.cookies || null,
@@ -166,20 +171,78 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5 text-slate-400" /> Nhóm Kênh (Group)
-            </label>
-            <Input
-              list="modal-existing-groups"
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-              placeholder="Chọn nhóm có sẵn hoặc gõ nhóm mới..."
-            />
-            <datalist id="modal-existing-groups">
-              {availableGroups.map((g) => (
-                <option key={g} value={g} />
-              ))}
-            </datalist>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5 text-slate-400" /> Nhóm Kênh (Group)
+              </label>
+              {!isCreatingGroup && (
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingGroup(true)}
+                  className="text-[11px] text-sky-600 hover:text-sky-700 font-semibold hover:underline"
+                >
+                  + Thêm nhóm mới
+                </button>
+              )}
+            </div>
+
+            {isCreatingGroup ? (
+              <div className="flex gap-1.5">
+                <Input
+                  autoFocus
+                  value={newGroupInput}
+                  onChange={(e) => setNewGroupInput(e.target.value)}
+                  placeholder="Nhập tên nhóm mới..."
+                  className="text-xs h-8 flex-1"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    const trimmed = newGroupInput.trim();
+                    if (trimmed) {
+                      setGroupName(trimmed);
+                      setIsCreatingGroup(false);
+                      setNewGroupInput('');
+                    }
+                  }}
+                  className="text-xs h-8 px-2.5"
+                >
+                  OK
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsCreatingGroup(false);
+                    setNewGroupInput('');
+                  }}
+                  className="text-xs h-8 px-2"
+                >
+                  Hủy
+                </Button>
+              </div>
+            ) : (
+              <select
+                value={groupName}
+                onChange={(e) => {
+                  if (e.target.value === '__NEW__') {
+                    setIsCreatingGroup(true);
+                  } else {
+                    setGroupName(e.target.value);
+                  }
+                }}
+                className="w-full h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:border-sky-500"
+              >
+                {Array.from(new Set(['Mặc định', ...availableGroups, groupName])).filter(Boolean).map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+                <option value="__NEW__">+ Nhập nhóm mới khác...</option>
+              </select>
+            )}
           </div>
         </div>
 
@@ -256,25 +319,45 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
         </div>
 
-        {/* 3. Thư mục Video nguồn */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-            Thư mục Video nguồn
-          </label>
-          <div className="flex gap-2">
-            <Input
-              value={videoFolder}
-              onChange={(e) => setVideoFolder(e.target.value)}
-              placeholder="/Users/username/Videos/Channel1"
-              className="flex-1 font-mono text-xs"
-            />
-            <Button type="button" variant="secondary" onClick={handleSelectFolder}>
-              <Folder className="h-4 w-4 mr-1 text-slate-500" /> Chọn Folder
-            </Button>
+        {/* 3. Thư mục Video nguồn & Giới hạn số lượng */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+              Thư mục Video nguồn
+            </label>
+            <div className="flex gap-2">
+              <Input
+                value={videoFolder}
+                onChange={(e) => setVideoFolder(e.target.value)}
+                placeholder="/Users/username/Videos/Channel1"
+                className="flex-1 font-mono text-xs"
+              />
+              <Button type="button" variant="secondary" onClick={handleSelectFolder}>
+                <Folder className="h-4 w-4 mr-1 text-slate-500" /> Chọn Folder
+              </Button>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1">
+              * Video đăng thành công sẽ tự động chuyển vào thư mục con <code className="text-slate-700 font-semibold">done/</code>.
+            </p>
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">
-            * Video sau khi đăng thành công sẽ tự động được chuyển sang thư mục con <code className="text-slate-700 font-semibold">done/</code>.
-          </p>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+              Tối đa video / đợt
+            </label>
+            <Input
+              type="number"
+              min="0"
+              max="999"
+              value={maxVideos}
+              onChange={(e) => setMaxVideos(e.target.value)}
+              placeholder="50"
+              className="text-xs font-bold text-sky-700 h-9"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              Mặc định 50. Nhập 0 để upload hết.
+            </p>
+          </div>
         </div>
 
         {/* 4. Khối Gắn Nhạc Favorites */}
@@ -411,74 +494,58 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
         </div>
 
-        {/* 6. Caption & Proxy */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-              <FileText className="h-3.5 w-3.5 text-slate-400" /> Xử lý Tiêu Đề (Caption)
+        {/* 6. Proxy */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Globe className="h-3.5 w-3.5 text-slate-400" /> Cấu Hình Proxy (Tùy chọn)
             </label>
-            <select
-              value={captionMode}
-              onChange={(e: any) => setCaptionMode(e.target.value)}
-              className="w-full h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 focus:outline-none focus:border-sky-500"
-            >
-              <option value="remove_title">Xóa sạch tiêu đề (Để trống)</option>
-              <option value="from_txt_file">Đọc từ file .txt cùng tên video</option>
-            </select>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <Globe className="h-3.5 w-3.5 text-slate-400" /> Proxy (Tùy chọn)
-              </label>
-              {proxy.trim() && (
-                <button
-                  type="button"
-                  onClick={handleTestProxy}
-                  disabled={isTestingProxy}
-                  className="text-[11px] text-sky-600 hover:text-sky-700 font-semibold hover:underline disabled:opacity-50 flex items-center gap-1"
-                >
-                  {isTestingProxy ? (
-                    <span className="flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-full bg-sky-500 animate-ping" /> Đang kiểm tra...
-                    </span>
-                  ) : (
-                    'Kiểm tra kết nối'
-                  )}
-                </button>
-              )}
-            </div>
-            <Input
-              value={proxy}
-              onChange={(e) => {
-                setProxy(e.target.value);
-                setProxyTestResult(null);
-              }}
-              placeholder="http://user:pass@ip:port hoặc ip:port:user:pass"
-              className="font-mono text-xs h-8"
-            />
-            {proxyTestResult && (
-              <div
-                className={`mt-1.5 px-2.5 py-1.5 rounded-md text-[11px] leading-tight flex items-start gap-1.5 ${
-                  proxyTestResult.success
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'bg-rose-50 text-rose-700 border border-rose-200'
-                }`}
+            {proxy.trim() && (
+              <button
+                type="button"
+                onClick={handleTestProxy}
+                disabled={isTestingProxy}
+                className="text-[11px] text-sky-600 hover:text-sky-700 font-semibold hover:underline disabled:opacity-50 flex items-center gap-1"
               >
-                <span className="shrink-0">{proxyTestResult.success ? '✅' : '❌'}</span>
-                <div>
-                  {proxyTestResult.success ? (
-                    <span>
-                      Proxy hoạt động tốt! IP xuất cảnh: <strong>{proxyTestResult.ip}</strong> (Độ trễ: {proxyTestResult.latencyMs}ms)
-                    </span>
-                  ) : (
-                    <span>{proxyTestResult.error}</span>
-                  )}
-                </div>
-              </div>
+                {isTestingProxy ? (
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-sky-500 animate-ping" /> Đang kiểm tra...
+                  </span>
+                ) : (
+                  'Kiểm tra kết nối'
+                )}
+              </button>
             )}
           </div>
+          <Input
+            value={proxy}
+            onChange={(e) => {
+              setProxy(e.target.value);
+              setProxyTestResult(null);
+            }}
+            placeholder="http://user:pass@ip:port hoặc ip:port:user:pass"
+            className="font-mono text-xs h-8 bg-white"
+          />
+          {proxyTestResult && (
+            <div
+              className={`mt-1.5 px-2.5 py-1.5 rounded-md text-[11px] leading-tight flex items-start gap-1.5 ${
+                proxyTestResult.success
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+              }`}
+            >
+              <span className="shrink-0">{proxyTestResult.success ? '✅' : '❌'}</span>
+              <div>
+                {proxyTestResult.success ? (
+                  <span>
+                    Proxy hoạt động tốt! IP xuất cảnh: <strong>{proxyTestResult.ip}</strong> (Độ trễ: {proxyTestResult.latencyMs}ms)
+                  </span>
+                ) : (
+                  <span>{proxyTestResult.error}</span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Nút bấm */}

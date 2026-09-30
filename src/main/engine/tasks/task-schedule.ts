@@ -92,37 +92,86 @@ async function selectTimeInPicker(
   const [targetHour, targetMinute] = timeStr.split(':');
   log(`Cài đặt Giờ phát hành: ${timeStr} (Giờ: ${targetHour}, Phút: ${targetMinute})...`);
 
-  // 1. Mở popup timepicker
   await timeInput.scrollIntoViewIfNeeded().catch(() => {});
-  await timeInput.click({ clickCount: 3 });
-  await page.waitForTimeout(400);
 
-  const picker = page.locator('.tiktok-timepicker-time-picker-container').first();
-  const isPickerVisible = await picker.isVisible({ timeout: 2000 }).catch(() => false);
+  // 1. Mở popup timepicker bằng cách click
+  await timeInput.click().catch(() => {});
+  await page.waitForTimeout(300);
 
-  if (isPickerVisible) {
-    // Chọn Cột Giờ (.tiktok-timepicker-left)
-    const hourEl = picker.locator(`.tiktok-timepicker-left:has-text("${targetHour}")`).first();
-    if ((await hourEl.count()) > 0) {
-      await hourEl.scrollIntoViewIfNeeded().catch(() => {});
-      await hourEl.click({ force: true }).catch(() => {});
-    }
-    await page.waitForTimeout(200);
+  // 2. Tìm và click đúng leaf element của Giờ và Phút trong popup (thực thi DOM trực tiếp, 0ms, không bao giờ timeout)
+  const clickedInDom = await page.evaluate(
+    ({ hour, minute }) => {
+      const container = document.querySelector(
+        '.tiktok-timepicker-time-picker-container, [class*="time-picker-container"], [class*="timepicker-panel"], [class*="time-picker"]'
+      );
+      if (!container) return false;
 
-    // Chọn Cột Phút (.tiktok-timepicker-right)
-    const minuteEl = picker.locator(`.tiktok-timepicker-right:has-text("${targetMinute}")`).first();
-    if ((await minuteEl.count()) > 0) {
-      await minuteEl.scrollIntoViewIfNeeded().catch(() => {});
-      await minuteEl.click({ force: true }).catch(() => {});
-    }
-    await page.waitForTimeout(200);
+      let hourFound = false;
+      let minuteFound = false;
+
+      // Cột giờ bên trái
+      const leftCol =
+        container.querySelector('.tiktok-timepicker-left, [class*="timepicker-left"]') ||
+        container.children[0];
+      if (leftCol) {
+        const items = Array.from(leftCol.querySelectorAll('li, div, span'));
+        for (const item of items) {
+          if (item.children.length === 0 && item.textContent?.trim() === hour) {
+            (item as HTMLElement).click();
+            hourFound = true;
+            break;
+          }
+        }
+      }
+
+      // Cột phút bên phải
+      const rightCol =
+        container.querySelector('.tiktok-timepicker-right, [class*="timepicker-right"]') ||
+        container.children[1];
+      if (rightCol) {
+        const items = Array.from(rightCol.querySelectorAll('li, div, span'));
+        for (const item of items) {
+          if (item.children.length === 0 && item.textContent?.trim() === minute) {
+            (item as HTMLElement).click();
+            minuteFound = true;
+            break;
+          }
+        }
+      }
+
+      return hourFound && minuteFound;
+    },
+    { hour: targetHour, minute: targetMinute }
+  ).catch(() => false);
+
+  if (clickedInDom) {
+    log(`Đã chọn mốc ${targetHour}:${targetMinute} trong bảng chọn.`);
   }
 
-  // 2. Điền trực tiếp giá trị vào ô input và bấm Enter để kích hoạt sự kiện React
-  await timeInput.click({ clickCount: 3 });
-  await timeInput.fill(timeStr);
-  await page.keyboard.press('Enter');
-  await page.keyboard.press('Escape'); // Đóng picker overlay an toàn
+  // 3. Đảm bảo input value luôn được set qua React native setter (không bị lock bởi thuộc tính readonly)
+  await timeInput.evaluate((el: HTMLInputElement, val: string) => {
+    el.removeAttribute('readonly');
+    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+    if (nativeSetter) {
+      nativeSetter.call(el, val);
+    } else {
+      el.value = val;
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, timeStr).catch(() => {});
+
+  // 4. Focus và gõ bằng keyboard (không dùng .fill() vì .fill() sẽ bị treo 30s nếu có readonly)
+  await timeInput.focus().catch(() => {});
+  const selectAll = process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
+  await page.keyboard.press(selectAll).catch(() => {});
+  await page.keyboard.type(timeStr, { delay: 20 }).catch(() => {});
+  await page.keyboard.press('Enter').catch(() => {});
+
+  // 5. Đóng picker an toàn bằng cách blur (TUYỆT ĐỐI KHÔNG BẤM ESCAPE vì Escape sẽ cancel/revert lại giờ mặc định!)
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement)?.blur();
+  }).catch(() => {});
   await page.waitForTimeout(300);
 }
 
@@ -135,13 +184,46 @@ async function selectDateInPicker(
   dateStr: string,
   log: (msg: string) => void
 ): Promise<void> {
-  log(`Cài đặt Ngày phát hành: ${dateStr}...`);
-
   await dateInput.scrollIntoViewIfNeeded().catch(() => {});
-  await dateInput.click({ clickCount: 3 });
-  await dateInput.fill(dateStr);
-  await page.keyboard.press('Enter');
-  await page.keyboard.press('Escape');
+  const currentVal = ((await dateInput.inputValue().catch(() => '')) || '').trim();
+
+  // Nếu ngày hiện tại trên ô nhập đã là hôm nay hoặc đã khớp sẵn dateStr
+  const isSameDay =
+    currentVal === dateStr ||
+    (currentVal &&
+      !isNaN(new Date(currentVal).getTime()) &&
+      new Date(currentVal).toDateString() === new Date(dateStr).toDateString());
+
+  if (isSameDay) {
+    log(`Ngày phát hành trên TikTok đã là hôm nay (${currentVal}), giữ nguyên không mở popup lịch.`);
+    return;
+  }
+
+  log(`Cập nhật Ngày phát hành: từ "${currentVal}" sang "${dateStr}"...`);
+
+  // Xóa thuộc tính readonly nếu có và gán giá trị trực tiếp cho input qua React native setter
+  await dateInput.evaluate((el: HTMLInputElement, val: string) => {
+    el.removeAttribute('readonly');
+    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+    if (nativeSetter) {
+      nativeSetter.call(el, val);
+    } else {
+      el.value = val;
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, dateStr).catch(() => {});
+
+  // Dùng keyboard thay vì .fill() để tránh Playwright treo 30s
+  await dateInput.focus().catch(() => {});
+  const selectAll = process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
+  await page.keyboard.press(selectAll).catch(() => {});
+  await page.keyboard.type(dateStr, { delay: 20 }).catch(() => {});
+  await page.keyboard.press('Enter').catch(() => {});
+
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement)?.blur();
+  }).catch(() => {});
   await page.waitForTimeout(300);
 }
 
@@ -219,14 +301,37 @@ export async function applySchedule(
       }
 
       // 3.1. Thiết lập Ngày
-      await selectDateInPicker(page, dateInput, dateStr, log);
+      try {
+        await selectDateInPicker(page, dateInput, dateStr, log);
+      } catch (dateErr: any) {
+        log(`Lỗi thiết lập ngày: ${dateErr.message}`);
+      }
 
       // 3.2. Thiết lập Giờ
-      await selectTimeInPicker(page, timeInput, timeStr, log);
+      try {
+        await selectTimeInPicker(page, timeInput, timeStr, log);
+      } catch (timeErr: any) {
+        log(`Lỗi thiết lập giờ: ${timeErr.message}`);
+      }
 
       // 3.3. Xác thực giá trị thực tế sau khi thiết lập
-      const actualDate = (await dateInput.inputValue().catch(() => '')) || '';
-      const actualTime = (await timeInput.inputValue().catch(() => '')) || '';
+      let actualDate = (await dateInput.inputValue().catch(() => '')) || '';
+      let actualTime = (await timeInput.inputValue().catch(() => '')) || '';
+
+      if (actualTime && actualTime !== timeStr) {
+        log(`Cảnh báo: TikTok Studio đang giữ giờ "${actualTime}", đang ép cập nhật lại "${timeStr}"...`);
+        await timeInput.evaluate((el: any, val: string) => {
+          el.removeAttribute('readonly');
+          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+          if (nativeSetter) nativeSetter.call(el, val);
+          else el.value = val;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }, timeStr).catch(() => {});
+        await page.waitForTimeout(300);
+        actualTime = (await timeInput.inputValue().catch(() => '')) || '';
+      }
+
       log(`Xác nhận lịch phát hành trên TikTok Studio: Ngày = "${actualDate}", Giờ = "${actualTime}"`);
 
       await dismissPopups(page, log);
