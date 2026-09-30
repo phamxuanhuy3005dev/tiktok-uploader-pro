@@ -16,6 +16,7 @@ interface AppHeaderProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
   onAddProfile: () => void;
+  onBulkImport?: () => void;
   totalProfiles: number;
   runningCount: number;
 }
@@ -24,6 +25,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   activeTab,
   onTabChange,
   onAddProfile,
+  onBulkImport,
   totalProfiles,
   runningCount
 }) => {
@@ -82,11 +84,23 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             </div>
           </div>
 
-          {/* Quick Actions (Concurrency picker removed, only Add Profile button) */}
+          {/* Quick Actions */}
           <div 
-            className="flex items-center gap-2.5"
+            className="flex items-center gap-2"
             style={{ WebkitAppRegion: 'no-drag' } as any}
           >
+            {onBulkImport && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onBulkImport}
+                title="Nhập nhanh danh sách tài khoản theo định dạng dòng TXT"
+                className="text-xs border-slate-200 text-slate-700 bg-white hover:bg-slate-50"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1 text-sky-500" /> Nhập Hàng Loạt (TXT)
+              </Button>
+            )}
+
             <Button
               variant="default"
               size="sm"

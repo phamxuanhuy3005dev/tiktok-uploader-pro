@@ -4,8 +4,11 @@ export const api = {
   // Profiles
   getProfiles: () => ipcRenderer.invoke('profiles:getAll'),
   createProfile: (profile: any) => ipcRenderer.invoke('profiles:create', profile),
+  bulkCreateProfiles: (profiles: any[]) => ipcRenderer.invoke('profiles:bulkCreate', profiles),
   updateProfile: (profile: any) => ipcRenderer.invoke('profiles:update', profile),
+  bulkUpdateGroup: (profileIds: string[], groupName: string) => ipcRenderer.invoke('profiles:bulkUpdateGroup', { profileIds, groupName }),
   deleteProfile: (id: string) => ipcRenderer.invoke('profiles:delete', id),
+  bulkDeleteProfiles: (profileIds: string[]) => ipcRenderer.invoke('profiles:bulkDelete', profileIds),
   deleteAllProfiles: () => ipcRenderer.invoke('profiles:deleteAll'),
   openBrowser: (id: string) => ipcRenderer.invoke('profiles:openBrowser', id),
   closeBrowser: (id: string) => ipcRenderer.invoke('profiles:closeBrowser', id),
@@ -15,6 +18,10 @@ export const api = {
   importFromOldTool: () => ipcRenderer.invoke('profiles:importOld'),
   exportJson: () => ipcRenderer.invoke('profiles:exportJson'),
   importJson: () => ipcRenderer.invoke('profiles:importJson'),
+  exportTxt: (content: string) => ipcRenderer.invoke('profiles:exportTxt', content),
+  exportAccounts: (accounts: any[]) => ipcRenderer.invoke('profiles:exportAccounts', accounts),
+  downloadTemplate: () => ipcRenderer.invoke('profiles:downloadTemplate'),
+  readTxtFile: () => ipcRenderer.invoke('profiles:readTxtFile'),
 
   // File / Folder Picker & Video Distribution
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),

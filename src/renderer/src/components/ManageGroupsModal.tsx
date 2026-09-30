@@ -15,7 +15,12 @@ interface GroupItem {
 interface ManageGroupsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onGroupsUpdated: (renamedFrom?: string, renamedTo?: string) => void;
+  onGroupsUpdated: (info?: {
+    renamedFrom?: string;
+    renamedTo?: string;
+    updatedProfiles?: any[];
+    updatedGroups?: any[];
+  }) => void;
 }
 
 export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
@@ -90,11 +95,16 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
     const oldName = currentGroup ? currentGroup.name : undefined;
 
     try {
-      const res = await window.api.renameGroup(groupId, trimmed);
+      const res: any = await window.api.renameGroup(groupId, trimmed);
       toast.success(`Đã đổi tên nhóm thành công (${res.updatedProfilesCount} kênh đã cập nhật)!`);
       setEditingGroupId(null);
       await loadGroups();
-      onGroupsUpdated(oldName, trimmed);
+      onGroupsUpdated({
+        renamedFrom: oldName,
+        renamedTo: trimmed,
+        updatedProfiles: res.updatedProfiles,
+        updatedGroups: res.updatedGroups
+      });
     } catch (err: any) {
       toast.error(`Lỗi đổi tên nhóm: ${err.message}`);
     }
@@ -114,10 +124,15 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
     if (!window.confirm(confirmMsg)) return;
 
     try {
-      await window.api.deleteGroup(group.id);
+      const res: any = await window.api.deleteGroup(group.id);
       toast.success(`Đã xóa nhóm "${group.name}".`);
       await loadGroups();
-      onGroupsUpdated(group.name, 'Mặc định');
+      onGroupsUpdated({
+        renamedFrom: group.name,
+        renamedTo: 'Mặc định',
+        updatedProfiles: res?.updatedProfiles,
+        updatedGroups: res?.updatedGroups
+      });
     } catch (err: any) {
       toast.error(`Lỗi xóa nhóm: ${err.message}`);
     }

@@ -37,6 +37,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [scheduleInterval, setScheduleInterval] = useState(10);
   const [goldenHours, setGoldenHours] = useState('11:30,17:30,20:00');
   const [proxy, setProxy] = useState('');
+  const [cookies, setCookies] = useState('');
   const [maxVideos, setMaxVideos] = useState<number | string>(50);
   const [loading, setLoading] = useState(false);
   const [isTestingProxy, setIsTestingProxy] = useState(false);
@@ -75,6 +76,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setEmail(initialData.email || '');
       setPassEmail(initialData.pass_email || '');
       setMailAo(initialData.mail_ao || '');
+      setCookies(initialData.cookies || '');
       setEnableMusic(initialData.enable_music !== 0);
       setMusicMode(initialData.music_mode || 'favorite_rotate');
       setFavoriteIndex(initialData.favorite_index ?? 0);
@@ -93,6 +95,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setEmail('');
       setPassEmail('');
       setMailAo('');
+      setCookies('');
       setEnableMusic(true);
       setMusicMode('favorite_rotate');
       setFavoriteIndex(0);
@@ -128,6 +131,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         email: email.trim() || null,
         pass_email: passEmail.trim() || null,
         mail_ao: mailAo.trim() || null,
+        cookies: cookies.trim() || null,
         enable_music: enableMusic ? 1 : 0,
         music_mode: musicMode,
         favorite_index: Number(favoriteIndex) || 0,
@@ -138,7 +142,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         caption_mode: 'remove_title',
         proxy: proxy.trim() || null,
         status: initialData?.status || 'idle',
-        cookies: initialData?.cookies || null,
         last_run: initialData?.last_run || null
       });
       onClose();
@@ -315,6 +318,43 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 placeholder="Mail ảo liên kết..."
                 className="text-xs h-8"
               />
+            </div>
+
+            {/* Cookie Đăng Nhập */}
+            <div className="sm:col-span-2 pt-1 border-t border-slate-200/80">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-semibold text-slate-700 flex items-center gap-1.5">
+                  <span>🍪 Cookie Đăng Nhập (Tùy chọn)</span>
+                  {cookies.trim() ? (
+                    <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-semibold">
+                      Đã có Cookie ({cookies.length} ký tự)
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                      Chưa có Cookie
+                    </span>
+                  )}
+                </label>
+                {cookies.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => setCookies('')}
+                    className="text-[11px] text-rose-500 hover:text-rose-700 font-medium hover:underline"
+                  >
+                    Xóa Cookie
+                  </button>
+                )}
+              </div>
+              <textarea
+                rows={2}
+                value={cookies}
+                onChange={(e) => setCookies(e.target.value)}
+                placeholder="Dán Cookie vào đây (hỗ trợ sessionid=...; JSON hoặc Base64) để tự động đăng nhập không cần mật khẩu/captcha..."
+                className="w-full p-2 font-mono text-[11px] rounded-lg border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 transition-colors"
+              />
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                * Khi nạp Cookie hợp lệ (có chứa <code>sessionid</code>), trình duyệt sẽ vào thẳng trang quản lý TikTok Studio mà không cần nhập mật khẩu hay giải captcha đăng nhập.
+              </p>
             </div>
           </div>
         </div>

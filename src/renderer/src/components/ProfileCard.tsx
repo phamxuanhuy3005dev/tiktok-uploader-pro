@@ -24,6 +24,7 @@ interface ProfileCardProps {
   onOpenBrowser: () => void;
   onRunUpload: () => void;
   onViewLogs: () => void;
+  onQuickSelectFolder?: () => void;
   isRunning: boolean;
 }
 
@@ -36,6 +37,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   onOpenBrowser,
   onRunUpload,
   onViewLogs,
+  onQuickSelectFolder,
   isRunning
 }) => {
   const hasCookies = Boolean(profile.cookies);
@@ -150,17 +152,26 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 
         {/* Row 3: Folder & Proxy specs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 py-2 border-y border-slate-100/90 text-xs text-slate-600 mb-2">
-          <div className="flex items-center gap-1.5 overflow-hidden">
-            <Folder className={`h-3.5 w-3.5 shrink-0 ${profile.video_folder ? 'text-sky-500' : 'text-amber-500'}`} />
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              onQuickSelectFolder?.();
+            }}
+            className="flex items-center gap-1.5 overflow-hidden cursor-pointer hover:bg-sky-50/80 p-0.5 rounded transition-all group/folder"
+            title="Bấm để chọn nhanh thư mục video cho kênh này"
+          >
+            <Folder className={`h-3.5 w-3.5 shrink-0 ${profile.video_folder ? 'text-sky-500' : 'text-amber-500 group-hover/folder:scale-110'} transition-transform`} />
             <span
               className={`truncate font-mono text-[11px] ${
-                profile.video_folder ? 'text-slate-700 font-medium' : 'text-amber-600 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200'
+                profile.video_folder
+                  ? 'text-slate-700 font-medium group-hover/folder:text-sky-600'
+                  : 'text-amber-600 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 group-hover/folder:border-amber-300'
               }`}
-              title={profile.video_folder || 'Chưa gán thư mục video!'}
+              title={profile.video_folder || 'Bấm để gán thư mục video!'}
             >
               {profile.video_folder
                 ? profile.video_folder.split(/[/\\]/).filter(Boolean).pop() || profile.video_folder
-                : '⚠️ Chưa chọn folder'}
+                : '⚠️ Chọn folder...'}
             </span>
           </div>
 

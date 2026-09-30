@@ -9,6 +9,7 @@ import { LogsScreen } from './components/LogsScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { DistributeVideosModal } from './components/DistributeVideosModal';
 import { ManageGroupsModal } from './components/ManageGroupsModal';
+import { BulkImportModal } from './components/BulkImportModal';
 import { 
   Sparkles, 
   Search, 
@@ -16,11 +17,15 @@ import {
   CheckSquare, 
   Square, 
   Play, 
-  Upload, 
+  Plus, 
   Users, 
   Folder, 
   X,
-  Shuffle
+  Shuffle,
+  Copy,
+  Trash2,
+  FolderInput,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
@@ -35,6 +40,7 @@ export const App: React.FC = () => {
   const [batchMaxVideos, setBatchMaxVideos] = useState<number>(50);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [isDistributeModalOpen, setIsDistributeModalOpen] = useState(false);
   const [isManageGroupsOpen, setIsManageGroupsOpen] = useState(false);
   const [dbGroups, setDbGroups] = useState<string[]>([]);
@@ -95,7 +101,9 @@ export const App: React.FC = () => {
     try {
       const list = await window.api.getGroups();
       if (Array.isArray(list)) {
-        setDbGroups(list.map((g: any) => g.name));
+        setDbGroups(
+          list.map((g: any) => (typeof g === 'string' ? g : g?.name)).filter(Boolean)
+        );
       }
     } catch (_) {}
   };
@@ -243,45 +251,91 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleExportJson = async () => {
+  const handleBulkChangeGroup = async (targetGroup: string) => {
+    if (!targetGroup || selectedProfileIds.size === 0) return;
     try {
-      const res = await window.api.exportJson();
-      if (res.success) {
-        toast.success(`Đã xuất danh sách profiles ra file JSON thành công!`);
-      }
+      const ids = Array.from(selectedProfileIds);
+      await window.api.bulkUpdateGroup(ids, targetGroup);
+      toast.success(`Đã chuyển ${ids.length} kênh sang nhóm [${targetGroup}]`);
+      await loadProfiles();
     } catch (err: any) {
-      toast.error(`Lỗi xuất JSON: ${err.message}`);
+      toast.error(`Lỗi chuyển nhóm: ${err.message}`);
     }
   };
 
-  const handleImportJson = async () => {
+  const handleBulkDelete = async () => {
+    if (selectedProfileIds.size === 0) return;
+    if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedProfileIds.size} profile đã chọn không?`)) return;
     try {
-      const res = await window.api.importJson();
-      if (res.success) {
-        toast.success(`Đã nhập thành công ${res.count} profile từ file JSON!`);
-        if (res.profiles) setProfiles(res.profiles);
-      }
+      const ids = Array.from(selectedProfileIds);
+      await window.api.bulkDeleteProfiles(ids);
+      setSelectedProfileIds(new Set());
+      toast.success(`Đã xóa ${ids.length} profiles thành công!`);
+      await loadProfiles();
     } catch (err: any) {
-      toast.error(`Lỗi nhập JSON: ${err.message}`);
+      toast.error(`Lỗi khi xóa profiles: ${err.message}`);
     }
   };
 
-  const handleDeleteAll = async () => {
-    if (confirm(`CẢNH BÁO: Bạn có chắc chắn muốn xóa TOÀN BỘ ${profiles.length} profiles để làm sạch dữ liệu không?`)) {
-      try {
-        await window.api.deleteAllProfiles();
-        setSelectedProfileIds(new Set());
-        toast.success('Đã xóa sạch toàn bộ profiles thành công!');
+  const handleExportSelectedTxt = async () => {
+    if (selectedProfileIds.size === 0) return;
+    const selected = profiles.filter((p) => selectedProfileIds.has(p.id));
+    const lines = selected.map((p) => {
+      const items = [
+        p.account_id || p.name || '',
+        p.pass || '',
+        p.email || '',
+        p.pass_email || '',
+        p.mail_ao || '',
+        p.proxy || '',
+        p.cookies || '',
+        p.group_name || 'Mặc định'
+      ];
+      return items.join('|');
+    });
+
+    const header = '# Username|Password|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
+    const clipboardContent = [header, ...lines].join('\n');
+    await navigator.clipboard.writeText(clipboardContent).catch(() => {});
+
+    try {
+      const res = await window.api.exportAccounts(selected);
+      if (res.success && res.filePath) {
+        const fileName = res.filePath.split(/[/\\]/).pop();
+        const typeLabel = res.format === 'csv' ? 'Excel CSV' : 'TXT';
+        toast.success(`Đã xuất ${selected.length} tài khoản ra file [${fileName}] (${typeLabel}) & copy vào clipboard!`);
+      } else if (!res.canceled) {
+        toast.success(`Đã copy ${selected.length} tài khoản vào clipboard!`);
+      }
+    } catch (_) {
+      toast.success(`Đã copy ${selected.length} tài khoản vào clipboard!`);
+    }
+  };
+
+  const handleQuickSelectFolder = async (profile: any) => {
+    try {
+      const folder = await window.api.selectFolder();
+      if (folder) {
+        await window.api.updateProfile({ ...profile, video_folder: folder });
+        toast.success(`Đã gán folder video cho kênh [${profile.name}]`);
         await loadProfiles();
-      } catch (err: any) {
-        toast.error(`Lỗi khi xóa toàn bộ: ${err.message}`);
       }
+    } catch (err: any) {
+      toast.error(`Lỗi chọn folder: ${err.message}`);
     }
   };
 
-  // Trích xuất danh sách các nhóm duy nhất
+  // Trích xuất danh sách các nhóm duy nhất (luôn đảm bảo là mảng chuỗi)
   const groups = useMemo(() => {
-    return Array.from(new Set(['Mặc định', ...dbGroups, ...profiles.map((p) => p.group_name || 'Mặc định')])).filter(Boolean);
+    const rawList: any[] = [
+      'Mặc định',
+      ...dbGroups,
+      ...profiles.map((p) => p.group_name || 'Mặc định')
+    ];
+    const stringNames = rawList
+      .map((g) => (typeof g === 'object' && g !== null ? g.name : g))
+      .filter((g): g is string => typeof g === 'string' && g.trim().length > 0);
+    return Array.from(new Set(stringNames));
   }, [dbGroups, profiles]);
 
   // Tự động đồng bộ selectedGroup nếu nhóm bị xóa hoặc không còn tồn tại
@@ -365,6 +419,7 @@ export const App: React.FC = () => {
           setEditingProfile(null);
           setIsModalOpen(true);
         }}
+        onBulkImport={() => setIsBulkImportOpen(true)}
         totalProfiles={profiles.length}
         runningCount={runningCount}
       />
@@ -477,30 +532,75 @@ export const App: React.FC = () => {
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {/* Ô chỉnh giới hạn upload tối đa */}
-                  <div
-                    className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200/90 px-2 py-1 rounded-lg"
-                    title="Số video tối đa upload mỗi kênh trong đợt chạy này. Nhập 0 nếu muốn upload toàn bộ video có trong folder."
-                  >
-                    <span className="font-medium text-[11px] text-slate-500">Tối đa:</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={999}
-                      value={batchMaxVideos}
-                      onChange={(e) => setBatchMaxVideos(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-11 h-6 text-center text-xs font-bold text-sky-700 bg-white border border-slate-200 rounded focus:outline-none focus:border-sky-500"
-                    />
-                    <span className="text-[11px] text-slate-400">vid/kênh</span>
-                  </div>
-
-                  {/* Nếu đã chọn >= 1 profile: Nút Chạy các profile đã chọn */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Nếu đã chọn >= 1 profile: Các thao tác hàng loạt MMO */}
                   {selectedProfileIds.size > 0 ? (
                     <>
+                      {/* Chuyển nhóm hàng loạt */}
+                      <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 h-8 text-xs">
+                        <FolderInput className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="text-slate-500 font-medium hidden sm:inline">Chuyển sang:</span>
+                        <select
+                          defaultValue=""
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleBulkChangeGroup(e.target.value);
+                              e.target.value = '';
+                            }
+                          }}
+                          className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer text-xs"
+                        >
+                          <option value="" disabled>Nhóm...</option>
+                          {groups.map((g) => (
+                            <option key={g} value={g}>{g}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Xuất File Excel CSV / TXT để giao khách hoặc lưu trữ */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExportSelectedTxt}
+                        title="Xuất file Excel CSV hoặc TXT (có tên cột rõ ràng) kèm nhóm & cookie để giao khách hoặc lưu trữ"
+                        className="h-8 text-xs border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80 px-2.5"
+                      >
+                        <FileSpreadsheet className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Xuất File (Excel / TXT)
+                      </Button>
+
+                      {/* Xóa hàng loạt */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleBulkDelete}
+                        title="Xóa các profile đang chọn"
+                        className="h-8 text-xs border-rose-300 text-rose-700 bg-rose-50/60 hover:bg-rose-100/80 px-2.5"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1 text-rose-600" /> Xóa
+                      </Button>
+
+                      <div className="h-4 w-[1px] bg-slate-200 mx-1" />
+
+                      {/* Ô chỉnh giới hạn upload tối đa */}
+                      <div
+                        className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200/90 px-2 py-1 rounded-lg"
+                        title="Số video tối đa upload mỗi kênh trong đợt chạy này. Nhập 0 nếu muốn upload toàn bộ video có trong folder."
+                      >
+                        <span className="font-medium text-[11px] text-slate-500">Tối đa:</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={999}
+                          value={batchMaxVideos}
+                          onChange={(e) => setBatchMaxVideos(Math.max(0, parseInt(e.target.value) || 0))}
+                          className="w-10 h-6 text-center text-xs font-bold text-sky-700 bg-white border border-slate-200 rounded focus:outline-none focus:border-sky-500"
+                        />
+                        <span className="text-[11px] text-slate-400">vid/kênh</span>
+                      </div>
+
                       <button
                         onClick={handleClearSelection}
-                        className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
+                        className="text-xs text-slate-500 hover:text-slate-700 px-1.5 py-1"
                       >
                         Hủy chọn
                       </button>
@@ -512,21 +612,39 @@ export const App: React.FC = () => {
                         className="h-8 text-xs shadow-sm shadow-sky-500/30"
                       >
                         <Play className="h-3.5 w-3.5 mr-1 fill-current" />
-                        Chạy {selectedProfileIds.size} Profile Đã Chọn
+                        Chạy {selectedProfileIds.size} Kênh
                       </Button>
                     </>
                   ) : (
                     /* Nếu chưa chọn profile nào: Nút chạy toàn bộ nhóm */
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleRunBatch}
-                      disabled={filteredProfiles.length === 0 || runningCount > 0}
-                      className="h-8 text-xs border-sky-300 text-sky-700 hover:bg-sky-50 font-medium"
-                    >
-                      <Play className="h-3.5 w-3.5 mr-1 fill-current text-sky-500" />
-                      Chạy Toàn Bộ {selectedGroup === 'all' ? 'Tất Cả Kênh' : `Nhóm [${selectedGroup}]`}
-                    </Button>
+                    <>
+                      <div
+                        className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200/90 px-2 py-1 rounded-lg"
+                        title="Số video tối đa upload mỗi kênh trong đợt chạy này. Nhập 0 nếu muốn upload toàn bộ video có trong folder."
+                      >
+                        <span className="font-medium text-[11px] text-slate-500">Tối đa:</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={999}
+                          value={batchMaxVideos}
+                          onChange={(e) => setBatchMaxVideos(Math.max(0, parseInt(e.target.value) || 0))}
+                          className="w-10 h-6 text-center text-xs font-bold text-sky-700 bg-white border border-slate-200 rounded focus:outline-none focus:border-sky-500"
+                        />
+                        <span className="text-[11px] text-slate-400">vid/kênh</span>
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRunBatch}
+                        disabled={filteredProfiles.length === 0 || runningCount > 0}
+                        className="h-8 text-xs border-sky-300 text-sky-700 hover:bg-sky-50 font-medium"
+                      >
+                        <Play className="h-3.5 w-3.5 mr-1 fill-current text-sky-500" />
+                        Chạy Toàn Bộ {selectedGroup === 'all' ? 'Tất Cả Kênh' : `Nhóm [${selectedGroup}]`}
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
@@ -540,16 +658,16 @@ export const App: React.FC = () => {
                 </div>
                 <h3 className="text-base font-bold text-slate-800">Chưa có Profile TikTok nào</h3>
                 <p className="text-xs text-slate-500 max-w-md mt-1 mb-5">
-                  Bắt đầu ngay bằng cách tạo profile kênh TikTok đầu tiên hoặc phục hồi từ file backup JSON.
+                  Bắt đầu ngay bằng cách nhập danh sách tài khoản hàng loạt từ file TXT hoặc tạo từng profile.
                 </p>
                 <div className="flex gap-3">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleImportJson}
-                    className="border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs"
+                    onClick={() => setIsBulkImportOpen(true)}
+                    className="border-sky-300 bg-sky-50/60 hover:bg-sky-100 text-sky-700 text-xs font-semibold"
                   >
-                    <Upload className="h-3.5 w-3.5 mr-1 text-slate-500" /> Phục Hồi File JSON
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Nhập Hàng Loạt (TXT)
                   </Button>
                   <Button
                     variant="default"
@@ -584,6 +702,7 @@ export const App: React.FC = () => {
                     onOpenBrowser={() => handleOpenBrowser(profile)}
                     onRunUpload={() => handleRunSingle(profile)}
                     onViewLogs={() => setViewingLogsProfile(profile)}
+                    onQuickSelectFolder={() => handleQuickSelectFolder(profile)}
                     isRunning={queueStats.runningProfiles?.includes(profile.id)}
                   />
                 ))}
@@ -618,10 +737,6 @@ export const App: React.FC = () => {
           <SettingsScreen
             concurrency={concurrency}
             onUpdateConcurrency={handleUpdateConcurrency}
-            onExportJson={handleExportJson}
-            onImportJson={handleImportJson}
-            onDeleteAll={handleDeleteAll}
-            totalProfiles={profiles.length}
           />
         )}
       </main>
@@ -662,12 +777,39 @@ export const App: React.FC = () => {
       <ManageGroupsModal
         isOpen={isManageGroupsOpen}
         onClose={() => setIsManageGroupsOpen(false)}
-        onGroupsUpdated={(renamedFrom, renamedTo) => {
-          loadProfiles();
-          loadGroupsList();
-          if (renamedFrom && selectedGroup === renamedFrom) {
-            setSelectedGroup(renamedTo || 'all');
+        onGroupsUpdated={(info) => {
+          if (info?.updatedProfiles && Array.isArray(info.updatedProfiles)) {
+            setProfiles(info.updatedProfiles);
+          } else {
+            loadProfiles();
           }
+          if (info?.updatedGroups && Array.isArray(info.updatedGroups)) {
+            setDbGroups(
+              info.updatedGroups
+                .map((g: any) => (typeof g === 'string' ? g : g?.name))
+                .filter(Boolean)
+            );
+          } else {
+            loadGroupsList();
+          }
+          if (info?.renamedFrom && selectedGroup === info.renamedFrom) {
+            setSelectedGroup(info.renamedTo || 'all');
+          }
+        }}
+      />
+
+      {/* Bulk Import Modal từ file TXT */}
+      <BulkImportModal
+        isOpen={isBulkImportOpen}
+        onClose={() => setIsBulkImportOpen(false)}
+        availableGroups={groups}
+        onSuccess={(updatedProfiles) => {
+          if (updatedProfiles) {
+            setProfiles(updatedProfiles);
+          } else {
+            loadProfiles();
+          }
+          loadGroupsList();
         }}
       />
     </div>

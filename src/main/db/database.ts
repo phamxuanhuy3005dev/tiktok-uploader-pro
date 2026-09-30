@@ -272,6 +272,84 @@ export const profileRepo = {
     db.prepare('DELETE FROM profiles WHERE id = ?').run(id);
   },
 
+  bulkCreate: (profiles: any[]): number => {
+    const insertStmt = db.prepare(`
+      INSERT OR IGNORE INTO profiles (
+        id, name, group_name, status, video_folder, enable_music, music_mode, favorite_index,
+        music_volume, schedule_mode, schedule_interval, golden_hours,
+        caption_mode, proxy, cookies, max_videos, account_id, pass, email, pass_email, mail_ao, last_run
+      ) VALUES (
+        @id, @name, @group_name, @status, @video_folder, @enable_music, @music_mode, @favorite_index,
+        @music_volume, @schedule_mode, @schedule_interval, @golden_hours,
+        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @email, @pass_email, @mail_ao, @last_run
+      )
+    `);
+
+    const tx = db.transaction((items: any[]) => {
+      let added = 0;
+      for (const p of items) {
+        if (!p.name || !p.name.trim()) continue;
+        const normalized = {
+          id: p.id || `profile_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          name: p.name.trim(),
+          group_name: p.group_name || p.group || 'Mặc định',
+          status: p.status || 'idle',
+          video_folder: p.video_folder || '',
+          enable_music: p.enable_music !== undefined ? Number(p.enable_music) : 1,
+          music_mode: p.music_mode || 'favorite_rotate',
+          favorite_index: p.favorite_index !== undefined ? Number(p.favorite_index) : 0,
+          music_volume: p.music_volume !== undefined ? Number(p.music_volume) : -50,
+          schedule_mode: p.schedule_mode || 'auto_increment',
+          schedule_interval: p.schedule_interval !== undefined ? Number(p.schedule_interval) : 10,
+          golden_hours: p.golden_hours || '11:30,17:30,20:00',
+          caption_mode: p.caption_mode || 'remove_title',
+          proxy: p.proxy || null,
+          cookies: p.cookies ? (typeof p.cookies === 'string' ? p.cookies : JSON.stringify(p.cookies)) : null,
+          max_videos: p.max_videos !== undefined ? Number(p.max_videos) : 50,
+          account_id: p.account_id || null,
+          pass: p.pass || null,
+          email: p.email || null,
+          pass_email: p.pass_email || null,
+          mail_ao: p.mail_ao || null,
+          last_run: p.last_run || null
+        };
+        const info = insertStmt.run(normalized);
+        if (info.changes > 0) {
+          added++;
+          if (normalized.group_name && normalized.group_name !== 'Mặc định') {
+            db.prepare("INSERT OR IGNORE INTO groups (id, name) VALUES (?, ?)").run(
+              `group_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              normalized.group_name
+            );
+          }
+        }
+      }
+      return added;
+    });
+
+    return tx(profiles);
+  },
+
+  bulkUpdateGroup: (ids: string[], newGroupName: string): void => {
+    const updateStmt = db.prepare('UPDATE profiles SET group_name = ? WHERE id = ?');
+    const tx = db.transaction(() => {
+      for (const id of ids) {
+        updateStmt.run(newGroupName, id);
+      }
+    });
+    tx();
+  },
+
+  bulkDelete: (ids: string[]): void => {
+    const deleteStmt = db.prepare('DELETE FROM profiles WHERE id = ?');
+    const tx = db.transaction(() => {
+      for (const id of ids) {
+        deleteStmt.run(id);
+      }
+    });
+    tx();
+  },
+
   deleteAll: (): void => {
     db.prepare('DELETE FROM profiles').run();
   }
@@ -370,6 +448,7 @@ export const groupRepo = {
     }
 
     const deleteTx = db.transaction(() => {
+      db.prepare("INSERT OR IGNORE INTO groups (id, name) VALUES ('default', 'Mặc định')").run();
       db.prepare("UPDATE profiles SET group_name = 'Mặc định' WHERE group_name = ?").run(current.name);
       db.prepare('DELETE FROM groups WHERE id = ?').run(id);
     });

@@ -298,6 +298,129 @@ export async function testProxyConnection(rawProxy?: string | null): Promise<Pro
   }
 }
 
+export interface TikTokCookieObject {
+  name: string;
+  value: string;
+  domain?: string;
+  path?: string;
+  expires?: number;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: 'Strict' | 'Lax' | 'None';
+}
+
+/**
+ * Universal Cookie Parser cho TikTok & MMO:
+ * Hỗ trợ mọi định dạng cookie phổ biến trên thị trường MMO:
+ * 1. Chuỗi header: "sessionid=xxxx; sid_tt=yyyy; tt_chain_token=zzzz; ..."
+ * 2. JSON Array từ extensions (EditThisCookie, J2TEAM, Cookie-Editor)
+ * 3. Base64 encoded JSON hoặc chuỗi cookie
+ * 4. Netscape format (tab-separated)
+ */
+export function normalizeTikTokCookies(rawCookies?: string | any[] | null): TikTokCookieObject[] {
+  if (!rawCookies) return [];
+
+  let data: any = rawCookies;
+
+  if (typeof data === 'string') {
+    let str = data.trim();
+    if (!str) return [];
+
+    // 1. Thử giải mã nếu là chuỗi Base64
+    if (!str.startsWith('[') && !str.startsWith('{') && !str.includes(';') && str.length > 30) {
+      try {
+        const decoded = Buffer.from(str, 'base64').toString('utf-8');
+        if (decoded.startsWith('[') || decoded.startsWith('{') || decoded.includes('=')) {
+          str = decoded.trim();
+        }
+      } catch (_) {}
+    }
+
+    // 2. Thử parse nếu là JSON
+    if (str.startsWith('[') || str.startsWith('{')) {
+      try {
+        data = JSON.parse(str);
+      } catch (_) {
+        // Fallback sang xử lý text
+      }
+    }
+
+    // 3. Nếu vẫn là chuỗi: parse dạng "name=val; name2=val2" hoặc Netscape
+    if (typeof data === 'string') {
+      const results: TikTokCookieObject[] = [];
+
+      // Netscape tab-separated format
+      if (str.includes('\t')) {
+        const lines = str.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) continue;
+          const cols = trimmed.split('\t');
+          if (cols.length >= 7) {
+            results.push({
+              domain: cols[0].startsWith('.') ? cols[0] : `.${cols[0]}`,
+              path: cols[2] || '/',
+              secure: cols[3].toUpperCase() === 'TRUE',
+              expires: parseInt(cols[4], 10) || undefined,
+              name: cols[5].trim(),
+              value: cols[6].trim()
+            });
+          }
+        }
+        if (results.length > 0) return results;
+      }
+
+      // Chuẩn HTTP Cookie string: name=value; name2=value2
+      const pairs = str.split(';');
+      for (const pair of pairs) {
+        const trimmed = pair.trim();
+        if (!trimmed) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx > 0) {
+          const name = trimmed.substring(0, eqIdx).trim();
+          let value = trimmed.substring(eqIdx + 1).trim();
+          if (value.startsWith('"') && value.endsWith('"')) {
+            value = value.slice(1, -1);
+          }
+          if (name && value) {
+            results.push({
+              name,
+              value,
+              domain: '.tiktok.com',
+              path: '/'
+            });
+          }
+        }
+      }
+      return results;
+    }
+  }
+
+  // 4. Nếu là Array (từ JSON parse hoặc object array)
+  if (Array.isArray(data)) {
+    return data
+      .map((item: any) => {
+        if (!item || !item.name || item.value === undefined) return null;
+        let domain = item.domain || '.tiktok.com';
+        if (!domain.includes('tiktok.com')) {
+          domain = '.tiktok.com';
+        }
+        return {
+          name: String(item.name).trim(),
+          value: String(item.value).trim(),
+          domain,
+          path: item.path || '/',
+          expires: item.expires || item.expirationDate || undefined,
+          httpOnly: item.httpOnly !== undefined ? Boolean(item.httpOnly) : undefined,
+          secure: item.secure !== undefined ? Boolean(item.secure) : true
+        } as TikTokCookieObject;
+      })
+      .filter((c): c is TikTokCookieObject => c !== null && Boolean(c.name));
+  }
+
+  return [];
+}
+
 /**
  * Khởi chạy Browser Context cho một profile
  */
@@ -348,14 +471,22 @@ export async function launchProfileContext(
 
   const context = await chromium.launchPersistentContext(userDataDir, launchOptions);
 
-  // Nạp cookies nếu có
+  // Nạp cookies thông minh nếu có (hỗ trợ JSON, Base64, string header sessionid=...)
   if (profile.cookies) {
     try {
-      const parsedCookies = JSON.parse(profile.cookies);
-      if (Array.isArray(parsedCookies) && parsedCookies.length > 0) {
-        await context.addCookies(parsedCookies);
+      const parsedCookies = normalizeTikTokCookies(profile.cookies);
+      if (parsedCookies.length > 0) {
+        await context.addCookies(parsedCookies as any);
+        const hasSession = parsedCookies.some((c) => c.name === 'sessionid' || c.name === 'sessionid_ss');
+        console.log(
+          `[${profile.name}] 🍪 Đã nạp thành công ${parsedCookies.length} cookies vào trình duyệt ${
+            hasSession ? '(Có sessionid login)' : ''
+          }.`
+        );
       }
-    } catch (_) {}
+    } catch (e: any) {
+      console.warn(`[${profile.name}] Cảnh báo khi nạp cookies:`, e.message);
+    }
   }
 
   activeContexts.set(profile.id, context);

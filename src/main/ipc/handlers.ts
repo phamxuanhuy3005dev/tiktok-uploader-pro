@@ -59,6 +59,39 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return profileRepo.getAll();
   });
 
+  ipcMain.handle('profiles:bulkCreate', async (_, profiles: any[]) => {
+    const count = profileRepo.bulkCreate(profiles);
+    const updated = profileRepo.getAll();
+    const activeWin = getValidWindow();
+    if (activeWin && !activeWin.isDestroyed()) {
+      activeWin.webContents.send('profiles:updated', updated);
+    }
+    return { count, profiles: updated };
+  });
+
+  ipcMain.handle('profiles:bulkUpdateGroup', async (_, { profileIds, groupName }: { profileIds: string[]; groupName: string }) => {
+    profileRepo.bulkUpdateGroup(profileIds, groupName);
+    const updated = profileRepo.getAll();
+    const activeWin = getValidWindow();
+    if (activeWin && !activeWin.isDestroyed()) {
+      activeWin.webContents.send('profiles:updated', updated);
+    }
+    return updated;
+  });
+
+  ipcMain.handle('profiles:bulkDelete', async (_, profileIds: string[]) => {
+    for (const id of profileIds) {
+      await closeProfileContext(id).catch(() => {});
+    }
+    profileRepo.bulkDelete(profileIds);
+    const updated = profileRepo.getAll();
+    const activeWin = getValidWindow();
+    if (activeWin && !activeWin.isDestroyed()) {
+      activeWin.webContents.send('profiles:updated', updated);
+    }
+    return updated;
+  });
+
   ipcMain.handle('profiles:deleteAll', async () => {
     const all = profileRepo.getAll();
     for (const p of all) {
@@ -101,6 +134,169 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return { success: false };
   };
   ipcMain.handle('profiles:exportJson', handleExport);
+
+  // Hàm hỗ trợ escape chuỗi sang định dạng ô CSV (Excel tương thích)
+  const escapeCsvCell = (val: any): string => {
+    if (val === null || val === undefined) return '';
+    const str = String(val);
+    if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  // Export danh sách tài khoản ra file CSV / TXT với đầy đủ tên cột và nhóm
+  ipcMain.handle('profiles:exportAccounts', async (_, accounts: any[]) => {
+    const activeWin = getValidWindow();
+    const today = new Date().toISOString().slice(0, 10);
+    const options = {
+      title: 'Xuất Danh Sách Tài Khoản (Excel CSV / TXT)',
+      defaultPath: `tiktok_accounts_${today}.csv`,
+      filters: [
+        { name: 'Excel Spreadsheet (*.csv)', extensions: ['csv'] },
+        { name: 'Text Document (*.txt)', extensions: ['txt'] },
+        { name: 'All Files (*.*)', extensions: ['*'] }
+      ]
+    };
+    const res = activeWin 
+      ? await dialog.showSaveDialog(activeWin, options)
+      : await dialog.showSaveDialog(options);
+
+    if (!res.canceled && res.filePath) {
+      const filePath = res.filePath;
+      const isCsv = filePath.toLowerCase().endsWith('.csv');
+
+      if (isCsv) {
+        const header = ['Username', 'Password', 'Email', 'Pass_Email', 'Mail_Ao', 'Proxy', 'Cookie', 'Nhom'];
+        const rows = (accounts || []).map((p) => [
+          escapeCsvCell(p.account_id || p.name || ''),
+          escapeCsvCell(p.pass || ''),
+          escapeCsvCell(p.email || ''),
+          escapeCsvCell(p.pass_email || ''),
+          escapeCsvCell(p.mail_ao || ''),
+          escapeCsvCell(p.proxy || ''),
+          escapeCsvCell(p.cookies || ''),
+          escapeCsvCell(p.group_name || 'Mặc định')
+        ].join(','));
+
+        // UTF-8 BOM (\uFEFF) cho phép Excel hiển thị tiếng Việt có dấu chuẩn 100% không bị vỡ font
+        const csvContent = '\uFEFF' + [header.join(','), ...rows].join('\r\n');
+        fs.writeFileSync(filePath, csvContent, 'utf-8');
+      } else {
+        const header = '# Username|Password|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
+        const rows = (accounts || []).map((p) => [
+          p.account_id || p.name || '',
+          p.pass || '',
+          p.email || '',
+          p.pass_email || '',
+          p.mail_ao || '',
+          p.proxy || '',
+          p.cookies || '',
+          p.group_name || 'Mặc định'
+        ].join('|'));
+
+        const txtContent = [header, ...rows].join('\r\n');
+        fs.writeFileSync(filePath, txtContent, 'utf-8');
+      }
+      return { success: true, filePath, format: isCsv ? 'csv' : 'txt' };
+    }
+    return { success: false, canceled: true };
+  });
+
+  // Tải file mẫu danh sách tài khoản (CSV Excel hoặc TXT)
+  ipcMain.handle('profiles:downloadTemplate', async () => {
+    const activeWin = getValidWindow();
+    const options = {
+      title: 'Tải File Mẫu Danh Sách Tài Khoản',
+      defaultPath: 'tiktok_accounts_template.csv',
+      filters: [
+        { name: 'Excel Spreadsheet (*.csv)', extensions: ['csv'] },
+        { name: 'Text Document (*.txt)', extensions: ['txt'] },
+        { name: 'All Files (*.*)', extensions: ['*'] }
+      ]
+    };
+    const res = activeWin 
+      ? await dialog.showSaveDialog(activeWin, options)
+      : await dialog.showSaveDialog(options);
+
+    if (!res.canceled && res.filePath) {
+      const filePath = res.filePath;
+      const isCsv = filePath.toLowerCase().endsWith('.csv');
+
+      if (isCsv) {
+        const header = ['Username', 'Password', 'Email', 'Pass_Email', 'Mail_Ao', 'Proxy', 'Cookie', 'Nhom'];
+        const sampleRows = [
+          ['tiktok_user_demo1', 'Pass123456', 'user01@outlook.com', 'PassMail123', 'mailao01@gmail.com', 'http://user:pass@127.0.0.1:8080', 'sessionid=9f8e7d6c5b4a3...', 'Nhóm Nuôi US'],
+          ['tiktok_user_demo2', 'Pass654321', 'user02@gmail.com', 'PassMail456', '', 'socks5://192.168.1.100:1080', '', 'Nhóm Reup Phim'],
+          ['tiktok_user_demo3', 'Pass789xyz', '', '', '', '', '', 'Mặc định']
+        ].map((row) => row.map(escapeCsvCell).join(','));
+
+        const csvContent = '\uFEFF' + [header.join(','), ...sampleRows].join('\r\n');
+        fs.writeFileSync(filePath, csvContent, 'utf-8');
+      } else {
+        const header = '# CẤU TRÚC: Username|Password|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
+        const sampleRows = [
+          'tiktok_user_demo1|Pass123456|user01@outlook.com|PassMail123|mailao01@gmail.com|http://user:pass@127.0.0.1:8080|sessionid=9f8e7d6c5b4a3...|Nhóm Nuôi US',
+          'tiktok_user_demo2|Pass654321|user02@gmail.com|PassMail456||socks5://192.168.1.100:1080||Nhóm Reup Phim',
+          'tiktok_user_demo3|Pass789xyz||||||Mặc định'
+        ];
+        const txtContent = [header, ...sampleRows].join('\r\n');
+        fs.writeFileSync(filePath, txtContent, 'utf-8');
+      }
+      return { success: true, filePath, format: isCsv ? 'csv' : 'txt' };
+    }
+    return { success: false, canceled: true };
+  });
+
+  // Export danh sách tài khoản ra file TXT (Legacy)
+  ipcMain.handle('profiles:exportTxt', async (_, content: string) => {
+    const activeWin = getValidWindow();
+    const today = new Date().toISOString().slice(0, 10);
+    const options = {
+      title: 'Lưu Danh Sách Tài Khoản Ra File TXT',
+      defaultPath: `tiktok_accounts_${today}.txt`,
+      filters: [
+        { name: 'Text Document (*.txt)', extensions: ['txt'] },
+        { name: 'CSV File (*.csv)', extensions: ['csv'] },
+        { name: 'All Files (*.*)', extensions: ['*'] }
+      ]
+    };
+    const res = activeWin 
+      ? await dialog.showSaveDialog(activeWin, options)
+      : await dialog.showSaveDialog(options);
+
+    if (!res.canceled && res.filePath) {
+      fs.writeFileSync(res.filePath, content, 'utf-8');
+      return { success: true, filePath: res.filePath };
+    }
+    return { success: false, canceled: true };
+  });
+
+  // Chọn và đọc file TXT / CSV từ máy tính
+  ipcMain.handle('profiles:readTxtFile', async () => {
+    const activeWin = getValidWindow();
+    const options = {
+      title: 'Chọn File Danh Sách Tài Khoản (CSV hoặc TXT)',
+      filters: [
+        { name: 'Excel CSV & TXT Files (*.csv, *.txt)', extensions: ['csv', 'txt'] },
+        { name: 'Excel Spreadsheet (*.csv)', extensions: ['csv'] },
+        { name: 'Text Document (*.txt)', extensions: ['txt'] },
+        { name: 'All Files (*.*)', extensions: ['*'] }
+      ],
+      properties: ['openFile'] as ('openFile')[]
+    };
+    const res = activeWin
+      ? await dialog.showOpenDialog(activeWin, options)
+      : await dialog.showOpenDialog(options);
+
+    if (!res.canceled && res.filePaths.length > 0) {
+      const filePath = res.filePaths[0];
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const fileName = path.basename(filePath);
+      return { success: true, content, fileName, filePath };
+    }
+    return { success: false, canceled: true };
+  });
 
   // Import profiles từ file JSON
   const handleImport = async () => {
@@ -353,19 +549,23 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('groups:rename', async (_, { id, newName }: { id: string; newName: string }) => {
     const res = groupRepo.rename(id, newName);
+    const updatedProfiles = profileRepo.getAll();
+    const updatedGroups = groupRepo.getAll();
     const activeWin = getValidWindow();
     if (activeWin && !activeWin.isDestroyed()) {
-      activeWin.webContents.send('profiles:updated', profileRepo.getAll());
+      activeWin.webContents.send('profiles:updated', updatedProfiles);
     }
-    return res;
+    return { ...res, updatedProfiles, updatedGroups };
   });
 
   ipcMain.handle('groups:delete', async (_, id: string) => {
     const res = groupRepo.delete(id);
+    const updatedProfiles = profileRepo.getAll();
+    const updatedGroups = groupRepo.getAll();
     const activeWin = getValidWindow();
     if (activeWin && !activeWin.isDestroyed()) {
-      activeWin.webContents.send('profiles:updated', profileRepo.getAll());
+      activeWin.webContents.send('profiles:updated', updatedProfiles);
     }
-    return res;
+    return { success: res, updatedProfiles, updatedGroups };
   });
 }
