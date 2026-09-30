@@ -53,7 +53,7 @@ export const DistributeVideosModal: React.FC<DistributeVideosModalProps> = ({
       if (folder) {
         setSourceFolder(folder);
         const scan = await window.api.scanVideoFolder(folder);
-        const count = scan.totalCount || 0;
+        const count = scan.totalCount ?? scan.count ?? (scan.videoFiles || scan.files || []).length;
         setVideoCount(count);
         if (count === 0) {
           toast.warning('Thư mục được chọn không có video (.mp4, .mov, .webm, .mkv) nào!');
@@ -106,8 +106,9 @@ export const DistributeVideosModal: React.FC<DistributeVideosModalProps> = ({
         mode
       });
 
+      const assignedCount = res.totalAssigned ?? res.totalVideos ?? 0;
       toast.success(
-        `Đã chia đều thành công ${res.totalAssigned || 0} video cho ${targetProfiles.length} kênh!`
+        `Đã chia đều thành công ${assignedCount} video cho ${targetProfiles.length} kênh!`
       );
       const updated = await window.api.getProfiles();
       onSuccess(updated);

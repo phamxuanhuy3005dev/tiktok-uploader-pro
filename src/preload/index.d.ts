@@ -11,12 +11,26 @@ export interface IElectronAPI {
   exportJson: () => Promise<{ success: boolean; filePath?: string }>;
   importJson: () => Promise<{ success: boolean; count?: number; profiles?: any[] }>;
   selectFolder: () => Promise<string | null>;
-  scanVideoFolder: (folderPath: string) => Promise<{ videoFiles: string[]; totalCount: number }>;
+  scanVideoFolder: (folderPath: string) => Promise<{
+    exists: boolean;
+    count: number;
+    totalCount: number;
+    files: string[];
+    videoFiles: string[];
+  }>;
   distributeVideos: (params: {
     sourceFolder: string;
     targetProfileIds: string[];
     mode?: 'move' | 'copy';
-  }) => Promise<{ success: boolean; totalAssigned: number; details: Record<string, number> }>;
+  }) => Promise<{
+    success: boolean;
+    totalAssigned: number;
+    totalVideos: number;
+    profilesCount: number;
+    results: any[];
+    updatedProfiles: any[];
+    details?: Record<string, number>;
+  }>;
   startQueue: (profileIds: string[]) => Promise<any>;
   getQueueStats: () => Promise<any>;
   setConcurrency: (concurrency: number) => Promise<number>;

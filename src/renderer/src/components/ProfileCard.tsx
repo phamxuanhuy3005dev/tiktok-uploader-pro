@@ -166,7 +166,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               title={profile.video_folder || 'Chưa gán thư mục video!'}
             >
               {profile.video_folder
-                ? profile.video_folder.split('/').pop() || profile.video_folder
+                ? profile.video_folder.split(/[/\\]/).filter(Boolean).pop() || profile.video_folder
                 : '⚠️ Chưa chọn folder'}
             </span>
           </div>

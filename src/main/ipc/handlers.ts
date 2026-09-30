@@ -165,21 +165,30 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Quét thư mục video
   ipcMain.handle('videos:scanFolder', async (_, folderPath: string) => {
     if (!folderPath || !fs.existsSync(folderPath)) {
-      return { exists: false, count: 0, files: [] };
+      return { exists: false, count: 0, totalCount: 0, files: [], videoFiles: [] };
     }
-    const validExts = ['.mp4', '.mov', '.webm', '.mkv'];
-    const files = fs
-      .readdirSync(folderPath)
-      .filter((f) => {
-        if (f.startsWith('.')) return false;
-        const ext = path.extname(f).toLowerCase();
-        return validExts.includes(ext);
-      });
-    return {
-      exists: true,
-      count: files.length,
-      files
-    };
+    const validExts = new Set(['.mp4', '.mov', '.webm', '.mkv']);
+    try {
+      const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+      const files = entries
+        .filter((entry) => {
+          if (!entry.isFile()) return false;
+          if (entry.name.startsWith('.')) return false;
+          const ext = path.extname(entry.name).toLowerCase();
+          return validExts.has(ext);
+        })
+        .map((entry) => entry.name);
+
+      return {
+        exists: true,
+        count: files.length,
+        totalCount: files.length,
+        files,
+        videoFiles: files
+      };
+    } catch {
+      return { exists: false, count: 0, totalCount: 0, files: [], videoFiles: [] };
+    }
   });
 
   // Chia đều video từ 1 folder cho các kênh (hoặc theo nhóm)
@@ -205,15 +214,22 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         throw new Error('Vui lòng chọn ít nhất 1 profile để chia đều video!');
       }
 
-      const validExts = ['.mp4', '.mov', '.webm', '.mkv'];
-      const allFiles = fs
-        .readdirSync(sourceFolder)
-        .filter((f) => {
-          if (f.startsWith('.')) return false;
-          const ext = path.extname(f).toLowerCase();
-          return validExts.includes(ext);
-        })
-        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+      const validExts = new Set(['.mp4', '.mov', '.webm', '.mkv']);
+      let allFiles: string[] = [];
+      try {
+        const entries = fs.readdirSync(sourceFolder, { withFileTypes: true });
+        allFiles = entries
+          .filter((entry) => {
+            if (!entry.isFile()) return false;
+            if (entry.name.startsWith('.')) return false;
+            const ext = path.extname(entry.name).toLowerCase();
+            return validExts.has(ext);
+          })
+          .map((entry) => entry.name)
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+      } catch (err: any) {
+        throw new Error(`Không thể đọc thư mục nguồn: ${err.message}`);
+      }
 
       if (allFiles.length === 0) {
         throw new Error('Không tìm thấy video hợp lệ nào (.mp4, .mov, .webm, .mkv) trong thư mục nguồn!');
@@ -239,8 +255,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         // Phân bổ xoay vòng đều (Round-Robin)
         const assigned = allFiles.filter((_, idx) => idx % profiles.length === i);
         
-        // Tạo thư mục riêng cho kênh ngay bên trong thư mục nguồn
-        const pFolder = path.join(sourceFolder, p.name);
+        // Chuẩn hóa tên thư mục an toàn trên Windows và macOS (loại bỏ ký tự cấm: < > : " / \ | ? *)
+        const safeFolderName = p.name.replace(/[<>:"/\\|?*]/g, '_').trim() || `profile_${p.id}`;
+        const pFolder = path.join(sourceFolder, safeFolderName);
         if (!fs.existsSync(pFolder)) {
           fs.mkdirSync(pFolder, { recursive: true });
         }
@@ -249,7 +266,13 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
           const srcPath = path.join(sourceFolder, file);
           const dstPath = path.join(pFolder, file);
           if (mode === 'move') {
-            fs.renameSync(srcPath, dstPath);
+            try {
+              fs.renameSync(srcPath, dstPath);
+            } catch {
+              // Dự phòng khi move trên Windows gặp locked file hoặc khác volume
+              fs.copyFileSync(srcPath, dstPath);
+              fs.unlinkSync(srcPath);
+            }
           } else {
             fs.copyFileSync(srcPath, dstPath);
           }
@@ -270,6 +293,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       }
 
       return {
+        success: true,
+        totalAssigned: allFiles.length,
         totalVideos: allFiles.length,
         profilesCount: profiles.length,
         results,
