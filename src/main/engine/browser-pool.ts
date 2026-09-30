@@ -134,6 +134,24 @@ export function cleanProfileGpuCache(userDataDir: string): void {
   }
 }
 
+/**
+ * Xóa sạch dữ liệu profile trên đĩa (thư mục userDataDir trong profiles/)
+ * Dọn dẹp triệt để lock, processes, và toàn bộ thư mục dữ liệu browser
+ */
+export async function deleteProfileDiskData(profileName: string): Promise<void> {
+  if (!profileName) return;
+  const userDataDir = path.join(PROFILES_DIR, profileName);
+  try {
+    await releaseProfileLocks(userDataDir, profileName).catch(() => {});
+    if (fs.existsSync(userDataDir)) {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+      console.log(`[deleteProfileDiskData] Đã xóa vĩnh viễn dữ liệu trình duyệt: ${userDataDir}`);
+    }
+  } catch (err: any) {
+    console.warn(`[deleteProfileDiskData] Lỗi khi xóa thư mục ${userDataDir}:`, err.message);
+  }
+}
+
 export interface ParsedProxy {
   server: string;
   username?: string;
@@ -159,32 +177,56 @@ export function parseProxy(rawProxy?: string | null): ParsedProxy | undefined {
   if (!rawProxy || !rawProxy.trim()) return undefined;
   let str = rawProxy.trim();
 
-  // 1. Format: host:port:username:password
+  // 1. Guard triệt để: Nếu dính cookie hoặc chuỗi lỗi, TUYỆT ĐỐI không parse thành proxy
+  if (
+    str.includes(';') ||
+    str.includes('sessionid') ||
+    str.includes('msToken') ||
+    str.includes('sid_tt') ||
+    str.includes('ttwid') ||
+    str.startsWith('[') ||
+    str.startsWith('{') ||
+    str.length > 250
+  ) {
+    console.warn(`[parseProxy] Bỏ qua proxy không hợp lệ (chuỗi cookie hoặc dữ liệu lỗi):`, str.slice(0, 40));
+    return undefined;
+  }
+
+  // 2. Format: host:port:username:password
   const colonParts = str.split(':');
   if (!str.includes('://') && !str.includes('@') && colonParts.length === 4) {
-    return {
-      server: `http://${colonParts[0]}:${colonParts[1]}`,
-      username: colonParts[2],
-      password: colonParts[3]
-    };
+    const port = Number(colonParts[1]);
+    if (!isNaN(port) && port > 0 && port <= 65535) {
+      return {
+        server: `http://${colonParts[0]}:${colonParts[1]}`,
+        username: colonParts[2],
+        password: colonParts[3]
+      };
+    }
   }
 
-  // 2. Format: host:port
+  // 3. Format: host:port
   if (!str.includes('://') && !str.includes('@') && colonParts.length === 2) {
-    return {
-      server: `http://${colonParts[0]}:${colonParts[1]}`
-    };
+    const port = Number(colonParts[1]);
+    if (!isNaN(port) && port > 0 && port <= 65535) {
+      return {
+        server: `http://${colonParts[0]}:${colonParts[1]}`
+      };
+    }
   }
 
-  // 3. Nếu thiếu protocol (ví dụ user:pass@host:port), thêm http://
+  // 4. Nếu thiếu protocol (ví dụ user:pass@host:port), thêm http://
   if (!str.includes('://')) {
     str = `http://${str}`;
   }
 
   try {
     const parsed = new URL(str);
+    if (!parsed.hostname || !parsed.port) {
+      return undefined;
+    }
     const protocol = parsed.protocol || 'http:';
-    const server = `${protocol}//${parsed.hostname}${parsed.port ? `:${parsed.port}` : ''}`;
+    const server = `${protocol}//${parsed.hostname}:${parsed.port}`;
     const result: ParsedProxy = { server };
 
     if (parsed.username) {
@@ -196,7 +238,7 @@ export function parseProxy(rawProxy?: string | null): ParsedProxy | undefined {
 
     return result;
   } catch {
-    return { server: str };
+    return undefined;
   }
 }
 
@@ -432,20 +474,17 @@ export function normalizeTikTokCookies(rawCookies?: string | any[] | null): TikT
  */
 export function isTikTokLoggedIn(rawCookies?: string | any[] | null): boolean {
   if (!rawCookies) return false;
-  if (typeof rawCookies === 'string') {
-    if (!rawCookies.trim()) return false;
-    return /sessionid|sessionid_ss|sid_tt/i.test(rawCookies);
-  }
-  if (Array.isArray(rawCookies)) {
-    return rawCookies.some(
+  try {
+    const list = normalizeTikTokCookies(rawCookies);
+    return list.some(
       (c) =>
-        c &&
         (c.name === 'sessionid' || c.name === 'sessionid_ss' || c.name === 'sid_tt') &&
         c.value &&
         String(c.value).trim().length > 5
     );
+  } catch {
+    return false;
   }
-  return false;
 }
 
 /**
@@ -678,12 +717,27 @@ export async function openManualBrowser(
         });
         console.log(`[${profile.name}] ✅ Đã xác nhận đăng nhập TikTok thành công (Có sessionid)!`);
       } else {
-        profileRepo.update({
-          id: profile.id,
-          cookies: null,
-          status: 'idle'
-        });
-        console.log(`[${profile.name}] ⚠️ Đóng trình duyệt: Chưa đăng nhập hoặc login thất bại (Không có sessionid).`);
+        const wasPreviouslyLoggedIn = isTikTokLoggedIn(profile.cookies);
+        if (cookies.length > 0) {
+          // Trình duyệt có cookie nhưng không có session -> người dùng đã bấm Đăng Xuất trên TikTok
+          profileRepo.update({
+            id: profile.id,
+            cookies: null,
+            status: 'idle'
+          });
+          console.log(`[${profile.name}] ⚠️ Đóng trình duyệt: Đã đăng xuất khỏi TikTok.`);
+        } else if (!wasPreviouslyLoggedIn) {
+          profileRepo.update({
+            id: profile.id,
+            cookies: null,
+            status: 'idle'
+          });
+          console.log(`[${profile.name}] ℹ️ Đóng trình duyệt: Chưa đăng nhập.`);
+        } else {
+          // cookies.length === 0 nhưng trước đó đã login -> Giữ nguyên session cũ, không xóa!
+          profileRepo.updateStatus(profile.id, 'idle');
+          console.log(`[${profile.name}] 🛡️ Giữ nguyên phiên đăng nhập cũ (trình duyệt đóng trước khi nạp cookies hoặc mất mạng).`);
+        }
       }
     } catch (_) {
       profileRepo.updateStatus(profile.id, 'idle');

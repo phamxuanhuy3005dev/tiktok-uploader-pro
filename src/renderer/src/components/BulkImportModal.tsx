@@ -80,9 +80,25 @@ function parseCsvText(text: string, delimiter: string = ','): string[][] {
 const isProxyString = (str?: string): boolean => {
   if (!str) return false;
   const s = str.trim();
+  // Nếu chứa dấu chấm phẩy, ngoặc nhọn/vuông hoặc chứa từ khóa cookie -> TUYỆT ĐỐI KHÔNG PHẢI PROXY
+  if (
+    s.includes(';') ||
+    s.includes('sessionid') ||
+    s.includes('msToken') ||
+    s.includes('sid_tt') ||
+    s.includes('ttwid') ||
+    s.startsWith('{') ||
+    s.startsWith('[')
+  ) {
+    return false;
+  }
   if (/^(https?|socks[45]):\/\//i.test(s)) return true;
   const parts = s.split(':');
-  return parts.length >= 2 && !isNaN(Number(parts[1]));
+  if (parts.length >= 2) {
+    const port = Number(parts[1]);
+    return !isNaN(port) && port > 0 && port <= 65535;
+  }
+  return false;
 };
 
 const isCookieString = (str?: string): boolean => {
@@ -91,10 +107,13 @@ const isCookieString = (str?: string): boolean => {
   return (
     s.includes('sessionid') ||
     s.includes('sid_tt') ||
+    s.includes('mstoken') ||
+    s.includes('ttwid') ||
+    s.includes('odin_tt') ||
     s.includes('tt_chain_token') ||
     s.startsWith('[{"') ||
     s.startsWith('{"') ||
-    (s.length > 40 && s.includes('='))
+    (s.length > 30 && s.includes('='))
   );
 };
 
@@ -116,6 +135,90 @@ const isHeaderRow = (parts: string[]): boolean => {
   ]);
 
   return EXACT_HEADERS.has(p0) && (parts.length === 1 || EXACT_P1_HEADERS.has(p1));
+};
+
+interface HeaderColumnMap {
+  name: number;
+  pass?: number;
+  two_factor?: number;
+  email?: number;
+  pass_email?: number;
+  mail_ao?: number;
+  proxy?: number;
+  cookies?: number;
+  group_name?: number;
+}
+
+const parseHeaderMap = (parts: string[]): HeaderColumnMap | null => {
+  if (parts.length === 0) return null;
+  const map: Partial<HeaderColumnMap> = {};
+  let matchCount = 0;
+
+  for (let i = 0; i < parts.length; i++) {
+    const raw = parts[i].toLowerCase().replace(/^[#\s/]+/, '').trim();
+    if (!raw) continue;
+
+    if (
+      map.name === undefined &&
+      (raw === 'username' || raw === 'user' || raw === 'uid' || raw === 'account' || raw === 'acc' || raw === 'taikhoan' || raw === 'tài khoản' || raw === 'tai khoan' || raw === 'name' || raw === 'tên kênh')
+    ) {
+      map.name = i;
+      matchCount++;
+    } else if (
+      map.pass === undefined &&
+      (raw === 'password' || raw === 'pass' || raw === 'pwd' || raw === 'matkhau' || raw === 'mật khẩu' || raw === 'mat khau')
+    ) {
+      map.pass = i;
+      matchCount++;
+    } else if (
+      map.two_factor === undefined &&
+      (raw === '2fa' || raw === 'two_factor' || raw === 'twofa' || raw === 'two_fa' || raw === 'fa2' || raw === 'ma2fa' || raw === 'mã 2fa')
+    ) {
+      map.two_factor = i;
+      matchCount++;
+    } else if (
+      map.pass_email === undefined &&
+      (raw === 'pass_email' || raw === 'email_pass' || raw === 'passemail' || raw === 'matkhaumail' || raw === 'mật khẩu mail' || raw === 'passmail')
+    ) {
+      map.pass_email = i;
+      matchCount++;
+    } else if (
+      map.mail_ao === undefined &&
+      (raw === 'mail_ao' || raw === 'mail_kp' || raw === 'mailkp' || raw === 'mailao' || raw === 'recovery_email' || raw === 'email_khoi_phuc' || raw === 'mail khôi phục')
+    ) {
+      map.mail_ao = i;
+      matchCount++;
+    } else if (
+      map.email === undefined &&
+      (raw === 'email' || raw === 'mail' || raw === 'mail_chinh' || raw === 'email_chinh' || raw === 'homthu')
+    ) {
+      map.email = i;
+      matchCount++;
+    } else if (
+      map.proxy === undefined &&
+      (raw === 'proxy' || raw === 'ip' || raw === 'ip_proxy' || raw === 'http_proxy' || raw === 'sock_proxy' || raw === 'socks5')
+    ) {
+      map.proxy = i;
+      matchCount++;
+    } else if (
+      map.cookies === undefined &&
+      (raw === 'cookie' || raw === 'cookies' || raw === 'session' || raw === 'cookie_string')
+    ) {
+      map.cookies = i;
+      matchCount++;
+    } else if (
+      map.group_name === undefined &&
+      (raw === 'nhom' || raw === 'nhóm' || raw === 'group' || raw === 'group_name' || raw === 'nhom_kenh')
+    ) {
+      map.group_name = i;
+      matchCount++;
+    }
+  }
+
+  if (matchCount >= 2 && map.name !== undefined) {
+    return map as HeaderColumnMap;
+  }
+  return null;
 };
 
 export const BulkImportModal: React.FC<BulkImportModalProps> = ({
@@ -262,22 +365,50 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
     }
 
     const list: ParsedAccount[] = [];
+    let headerMap: HeaderColumnMap | null = null;
 
-    for (let i = 0; i < rawRows.length; i++) {
+    if (rawRows.length > 0) {
+      headerMap = parseHeaderMap(rawRows[0]);
+    }
+
+    const startIndex = headerMap ? 1 : (rawRows.length > 0 && isHeaderRow(rawRows[0]) ? 1 : 0);
+
+    for (let i = startIndex; i < rawRows.length; i++) {
       const parts = rawRows[i].map((p) => p.trim());
       if (parts.length === 0 || !parts[0]) continue;
-
-      // Bỏ qua dòng tiêu đề nếu là dòng đầu tiên
-      if (i === 0 && isHeaderRow(parts)) {
-        continue;
-      }
 
       const acc: ParsedAccount = {
         name: parts[0],
         account_id: parts[0]
       };
 
-      if (parts.length >= 9) {
+      if (headerMap && parts.length >= 8) {
+        if (headerMap.name !== undefined && parts[headerMap.name]) {
+          acc.name = parts[headerMap.name];
+          acc.account_id = acc.name;
+        }
+        if (headerMap.pass !== undefined) acc.pass = parts[headerMap.pass] || undefined;
+        if (headerMap.two_factor !== undefined) acc.two_factor = parts[headerMap.two_factor] || undefined;
+        if (headerMap.email !== undefined) acc.email = parts[headerMap.email] || undefined;
+        if (headerMap.pass_email !== undefined) acc.pass_email = parts[headerMap.pass_email] || undefined;
+        if (headerMap.mail_ao !== undefined) acc.mail_ao = parts[headerMap.mail_ao] || undefined;
+
+        let rawProxy = headerMap.proxy !== undefined ? parts[headerMap.proxy] : undefined;
+        let rawCookie = headerMap.cookies !== undefined ? parts[headerMap.cookies] : undefined;
+        if (headerMap.group_name !== undefined) acc.group_name = parts[headerMap.group_name] || undefined;
+
+        if (rawProxy && isCookieString(rawProxy)) {
+          if (!rawCookie) rawCookie = rawProxy;
+          rawProxy = undefined;
+        }
+        if (rawCookie && isProxyString(rawCookie)) {
+          if (!rawProxy) rawProxy = rawCookie;
+          rawCookie = undefined;
+        }
+
+        acc.proxy = rawProxy || undefined;
+        acc.cookies = rawCookie || undefined;
+      } else if (parts.length >= 9) {
         // Cấu trúc chuẩn 9 cột MMO: UID | Pass | 2FA | Email | PassMail | MailKP | Proxy | Cookie | Nhóm
         acc.pass = parts[1] || undefined;
         acc.two_factor = parts[2] || undefined;
@@ -288,45 +419,78 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
         acc.cookies = parts[7] || undefined;
         acc.group_name = parts[8] || undefined;
       } else if (parts.length === 8) {
-        if (isProxyString(parts[5])) {
-          acc.pass = parts[1] || undefined;
-          acc.two_factor = parts[2] || undefined;
-          acc.email = parts[3] || undefined;
-          acc.pass_email = parts[4] || undefined;
-          acc.proxy = parts[5] || undefined;
-          acc.cookies = parts[6] || undefined;
-          acc.group_name = parts[7] || undefined;
+        // 8 cột MMO:
+        // TH1 (Có Nhóm, không MailKP): UID | Pass | 2FA | Email | PassMail | Proxy | Cookie | Nhóm
+        // TH2 (Có MailKP, không Nhóm): UID | Pass | 2FA | Email | PassMail | MailKP | Proxy | Cookie
+        acc.pass = parts[1] || undefined;
+        acc.two_factor = parts[2] || undefined;
+        acc.email = parts[3] || undefined;
+        acc.pass_email = parts[4] || undefined;
+
+        const col5 = parts[5] || '';
+        const col6 = parts[6] || '';
+        const col7 = parts[7] || '';
+
+        if (isCookieString(col6)) {
+          // col6 là Cookie -> col7 là Nhóm, col5 là Proxy
+          acc.proxy = col5 || undefined;
+          acc.cookies = col6;
+          acc.group_name = col7 || undefined;
+        } else if (isCookieString(col7)) {
+          // col7 là Cookie -> col6 là Proxy, col5 là MailKP
+          acc.mail_ao = col5 || undefined;
+          acc.proxy = col6 || undefined;
+          acc.cookies = col7;
+        } else if (isProxyString(col5)) {
+          acc.proxy = col5;
+          acc.cookies = col6 || undefined;
+          acc.group_name = col7 || undefined;
         } else {
-          acc.pass = parts[1] || undefined;
-          acc.two_factor = parts[2] || undefined;
-          acc.email = parts[3] || undefined;
-          acc.pass_email = parts[4] || undefined;
-          acc.mail_ao = parts[5] || undefined;
-          acc.proxy = parts[6] || undefined;
-          acc.cookies = parts[7] || undefined;
+          acc.mail_ao = col5 || undefined;
+          acc.proxy = col6 || undefined;
+          acc.cookies = col7 || undefined;
         }
       } else if (parts.length === 7) {
-        if (isProxyString(parts[5])) {
-          acc.pass = parts[1] || undefined;
-          acc.two_factor = parts[2] || undefined;
-          acc.email = parts[3] || undefined;
-          acc.pass_email = parts[4] || undefined;
-          acc.proxy = parts[5] || undefined;
-          acc.cookies = parts[6] || undefined;
+        // 7 cột MMO:
+        // TH1: UID | Pass | 2FA | Email | PassMail | Proxy | Cookie
+        // TH2: UID | Pass | 2FA | Email | PassMail | Cookie | Nhóm
+        // TH3: UID | Pass | 2FA | Email | PassMail | MailKP | Proxy
+        acc.pass = parts[1] || undefined;
+        acc.two_factor = parts[2] || undefined;
+        acc.email = parts[3] || undefined;
+        acc.pass_email = parts[4] || undefined;
+
+        const col5 = parts[5] || '';
+        const col6 = parts[6] || '';
+
+        if (isCookieString(col6)) {
+          acc.proxy = col5 || undefined;
+          acc.cookies = col6;
+        } else if (isCookieString(col5)) {
+          acc.cookies = col5;
+          acc.group_name = col6 || undefined;
+        } else if (isProxyString(col5)) {
+          acc.proxy = col5;
+          acc.cookies = col6 || undefined;
+        } else if (isProxyString(col6)) {
+          acc.mail_ao = col5 || undefined;
+          acc.proxy = col6;
         } else {
-          acc.pass = parts[1] || undefined;
-          acc.two_factor = parts[2] || undefined;
-          acc.email = parts[3] || undefined;
-          acc.pass_email = parts[4] || undefined;
-          acc.mail_ao = parts[5] || undefined;
-          acc.proxy = parts[6] || undefined;
+          acc.proxy = col5 || undefined;
+          acc.cookies = col6 || undefined;
         }
       } else if (parts.length === 6) {
         acc.pass = parts[1] || undefined;
         acc.two_factor = parts[2] || undefined;
         acc.email = parts[3] || undefined;
         acc.pass_email = parts[4] || undefined;
-        acc.mail_ao = parts[5] || undefined;
+        if (isCookieString(parts[5])) {
+          acc.cookies = parts[5];
+        } else if (isProxyString(parts[5])) {
+          acc.proxy = parts[5];
+        } else {
+          acc.mail_ao = parts[5] || undefined;
+        }
       } else if (parts.length === 5) {
         acc.pass = parts[1] || undefined;
         acc.two_factor = parts[2] || undefined;
@@ -335,7 +499,13 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
       } else if (parts.length === 4) {
         acc.pass = parts[1] || undefined;
         acc.two_factor = parts[2] || undefined;
-        acc.email = parts[3] || undefined;
+        if (isCookieString(parts[3])) {
+          acc.cookies = parts[3];
+        } else if (isProxyString(parts[3])) {
+          acc.proxy = parts[3];
+        } else {
+          acc.email = parts[3] || undefined;
+        }
       } else if (parts.length === 3) {
         acc.pass = parts[1] || undefined;
         if (isProxyString(parts[2])) {
@@ -346,7 +516,22 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           acc.two_factor = parts[2] || undefined;
         }
       } else if (parts.length === 2) {
-        acc.pass = parts[1] || undefined;
+        if (isCookieString(parts[1])) {
+          acc.cookies = parts[1];
+        } else {
+          acc.pass = parts[1] || undefined;
+        }
+      }
+
+      // Universal Sanity Check: Tránh hoàn toàn lỗi gán nhầm Cookie vào Proxy
+      if (acc.proxy && isCookieString(acc.proxy)) {
+        if (!acc.cookies) {
+          acc.cookies = acc.proxy;
+        }
+        acc.proxy = undefined;
+      }
+      if (acc.proxy && !isProxyString(acc.proxy)) {
+        acc.proxy = undefined;
       }
 
       list.push(acc);

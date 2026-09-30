@@ -1,13 +1,14 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import fs from 'fs';
 import path from 'path';
-import { profileRepo, logRepo, configRepo, groupRepo, ProfileRecord } from '../db/database';
+import { profileRepo, logRepo, configRepo, groupRepo, ProfileRecord, PROFILES_DIR } from '../db/database';
 import {
   openManualBrowser,
   closeProfileContext,
   testProxyConnection,
   isProfileActive,
-  focusProfileBrowser
+  focusProfileBrowser,
+  deleteProfileDiskData
 } from '../engine/browser-pool';
 import { uploadQueue } from '../queue/task-queue';
 import { importFromOldTool, exportProfilesToJson, importProfilesFromJson } from '../db/migration';
@@ -51,6 +52,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle('profiles:create', async (_, profile: Omit<ProfileRecord, 'created_at'>) => {
+    // Nếu có thư mục zombie cũ còn sót trên đĩa từ profile bị xóa trước đó, dọn sạch để đảm bảo profile mới hoàn toàn sạch sẽ
+    await deleteProfileDiskData(profile.name);
     profileRepo.create(profile);
     return profileRepo.getAll();
   });
@@ -61,8 +64,13 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle('profiles:delete', async (_, id: string) => {
-    if (isProfileActive(id)) {
-      await closeProfileContext(id).catch(() => {});
+    const profile = profileRepo.getById(id);
+    if (profile) {
+      if (isProfileActive(id)) {
+        await closeProfileContext(id).catch(() => {});
+      }
+      // Xóa triệt để thư mục dữ liệu trình duyệt trên đĩa cứng
+      await deleteProfileDiskData(profile.name);
     }
     profileRepo.delete(id);
     const updated = profileRepo.getAll();
@@ -94,9 +102,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle('profiles:bulkDelete', async (_, profileIds: string[]) => {
-    const activeIds = profileIds.filter((id) => isProfileActive(id));
-    if (activeIds.length > 0) {
-      await Promise.allSettled(activeIds.map((id) => closeProfileContext(id)));
+    for (const id of profileIds) {
+      const profile = profileRepo.getById(id);
+      if (profile) {
+        if (isProfileActive(id)) {
+          await closeProfileContext(id).catch(() => {});
+        }
+        await deleteProfileDiskData(profile.name);
+      }
     }
     profileRepo.bulkDelete(profileIds);
     const updated = profileRepo.getAll();
@@ -111,7 +124,18 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const all = profileRepo.getAll();
     for (const p of all) {
       await closeProfileContext(p.id).catch(() => {});
+      await deleteProfileDiskData(p.name);
     }
+    // Dọn sạch thư mục profiles rác còn sót lại trên đĩa
+    try {
+      if (fs.existsSync(PROFILES_DIR)) {
+        const entries = fs.readdirSync(PROFILES_DIR);
+        for (const entry of entries) {
+          const entryPath = path.join(PROFILES_DIR, entry);
+          fs.rmSync(entryPath, { recursive: true, force: true });
+        }
+      }
+    } catch (_) {}
     profileRepo.deleteAll();
     return profileRepo.getAll();
   });

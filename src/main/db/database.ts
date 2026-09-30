@@ -149,7 +149,15 @@ try {
     SET cookies = NULL 
     WHERE cookies IS NOT NULL 
       AND cookies NOT LIKE '%sessionid%' 
-      AND cookies NOT LIKE '%sid_tt%'
+      AND cookies NOT LIKE '%sid_tt%';
+  `);
+
+  // Phục hồi cookie và xóa proxy nếu bị gán nhầm chuỗi cookie vào proxy
+  db.exec(`
+    UPDATE profiles 
+    SET cookies = COALESCE(cookies, proxy), proxy = NULL 
+    WHERE proxy IS NOT NULL 
+      AND (proxy LIKE '%sessionid%' OR proxy LIKE '%msToken%' OR proxy LIKE '%;%');
   `);
 } catch (_) {}
 
