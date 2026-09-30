@@ -145,7 +145,7 @@ export async function dismissPopups(page: Page, log?: (msg: string) => void): Pr
 
     // 5. Dọn dẹp overlay mờ nếu bị kẹt sau khi modal đã đóng (tránh chặn click)
     await page.evaluate(() => {
-      const overlays = document.querySelectorAll('.TUXModal-overlay, [data-floating-ui-portal]');
+      const overlays = document.querySelectorAll('.TUXModal-overlay');
       overlays.forEach((o) => {
         const text = (o as HTMLElement).innerText || '';
         // Chỉ gỡ nếu không chứa Captcha/Verification và không còn dialog con

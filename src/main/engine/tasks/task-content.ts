@@ -67,8 +67,8 @@ export async function checkExistingScheduledTime(
         const currentYear = new Date().getFullYear();
         const detected: number[] = [];
 
-        // Bắt chuỗi ngày giờ tiếng Anh dạng: "Sep 30, 3:25 AM" hoặc "Sep 30, 2026, 3:25 AM"
-        const regex = /([A-Za-z]{3}\s+\d{1,2}(?:,\s+\d{4})?,\s+\d{1,2}:\d{2}\s+[AP]M)/gi;
+        // Bắt chuỗi ngày giờ tiếng Anh dạng: "Sep 30, 2:10PM", "Sep 30, 2:10 PM", "Sep 30, 2:10 PM"
+        const regex = /([A-Za-z]{3,9}\s+\d{1,2}(?:,\s*\d{4})?,\s*\d{1,2}:\d{2}[\s\u202f\u00a0]*(?:[AP]M)?)/gi;
 
         // Quét các dòng hoặc thẻ chứa bài đăng
         const rows = Array.from(
@@ -84,13 +84,18 @@ export async function checkExistingScheduledTime(
           const matches = text.match(regex);
           if (matches) {
             for (const m of matches) {
-              let clean = m.trim();
+              let clean = m.trim().replace(/[\u202f\u00a0]/g, ' ');
+              // Đảm bảo có dấu cách trước AM/PM: 2:10PM -> 2:10 PM để JavaScript Date parse được
+              clean = clean.replace(/(\d{1,2}:\d{2})\s*([AP]M)/i, '$1 $2');
               if (!clean.includes(String(currentYear))) {
-                clean = `${clean}, ${currentYear}`;
+                const parts = clean.split(',');
+                if (parts.length >= 2) {
+                  clean = `${parts[0].trim()}, ${currentYear}, ${parts.slice(1).join(',').trim()}`;
+                }
               }
               const d = new Date(clean);
-              // Nếu thời gian này lớn hơn hiện tại + 2 phút -> Đích thị là video đang hẹn giờ!
-              if (!isNaN(d.getTime()) && d.getTime() > nowMs + 2 * 60 * 1000) {
+              // Nếu thời gian này lớn hơn hiện tại + 60 giây -> Đích thị là video đang hẹn giờ!
+              if (!isNaN(d.getTime()) && d.getTime() > nowMs + 60 * 1000) {
                 detected.push(d.getTime());
               }
             }
