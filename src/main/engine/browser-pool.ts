@@ -3,6 +3,7 @@ import fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { chromium, BrowserContext, Page } from 'playwright';
+import Database from 'better-sqlite3';
 import { ProfileRecord, PROFILES_DIR, profileRepo } from '../db/database';
 
 const execAsync = promisify(exec);
@@ -562,9 +563,54 @@ export async function focusProfileBrowser(profileId: string): Promise<boolean> {
 }
 
 /**
+ * Kiểm tra nhanh trực tiếp file SQLite Cookies trên đĩa cứng xem có chứa sessionid hay không (< 1ms)
+ */
+export function hasSessionInCookieDb(userDataDir: string): boolean {
+  if (!userDataDir || !fs.existsSync(userDataDir)) return false;
+  const cookieDb = path.join(userDataDir, 'Default', 'Cookies');
+  if (!fs.existsSync(cookieDb)) return false;
+  try {
+    const tempDb = new Database(cookieDb, { readonly: true, fileMustExist: true });
+    const row = tempDb
+      .prepare(
+        "SELECT 1 FROM cookies WHERE (name = 'sessionid' OR name = 'sessionid_ss' OR name = 'sid_tt') LIMIT 1"
+      )
+      .get();
+    tempDb.close();
+    return Boolean(row);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Trích xuất an toàn mảng cookies đầy đủ từ thư mục userDataDir bằng Chromium headless (< 150ms)
+ */
+export async function extractProfileCookies(userDataDir: string): Promise<any[]> {
+  if (!userDataDir || !fs.existsSync(userDataDir)) return [];
+  try {
+    const headlessCtx = await chromium.launchPersistentContext(userDataDir, {
+      headless: true,
+      args: [...CLEAN_CHROME_ARGS],
+      ...resolveBrowserLaunchOptions()
+    });
+    const cookies = await headlessCtx.cookies().catch(() => []);
+    await headlessCtx.close().catch(() => {});
+    return cookies;
+  } catch (e: any) {
+    console.warn(`[extractProfileCookies] Lỗi khi trích xuất cookies:`, e.message);
+    return [];
+  }
+}
+
+/**
  * Mở trình duyệt để người dùng đăng nhập thủ công, tự động lưu Cookie khi đóng
  */
-export async function openManualBrowser(profile: ProfileRecord, onClosed?: () => void): Promise<void> {
+export async function openManualBrowser(
+  profile: ProfileRecord,
+  onClosed?: () => void,
+  onUpdated?: () => void
+): Promise<void> {
   const { context, page } = await launchProfileContext(profile, false);
   profileRepo.updateStatus(profile.id, 'manual_session');
 
@@ -573,12 +619,47 @@ export async function openManualBrowser(profile: ProfileRecord, onClosed?: () =>
   const userDataDir = path.join(PROFILES_DIR, profile.name);
   let isCleanedUp = false;
 
+  // 1. Quét định kỳ mỗi 2 giây trong khi người dùng duyệt web
+  // Ngay khi vừa đăng nhập thành công là app tự đổi sang "Đã đăng nhập" trong realtime!
+  let isSynced = isTikTokLoggedIn(profile.cookies);
+  const syncInterval = setInterval(async () => {
+    if (isCleanedUp) {
+      clearInterval(syncInterval);
+      return;
+    }
+    try {
+      const cookies = await context.cookies().catch(() => []);
+      if (isTikTokLoggedIn(cookies)) {
+        if (!isSynced) {
+          isSynced = true;
+          profileRepo.update({
+            id: profile.id,
+            cookies: JSON.stringify(cookies)
+          });
+          console.log(`[${profile.name}] 🟢 Phát hiện đăng nhập TikTok thành công trong lúc duyệt web!`);
+          if (onUpdated) onUpdated();
+        }
+      }
+    } catch (_) {}
+  }, 2000);
+
   const handleClose = async () => {
     if (isCleanedUp) return;
     isCleanedUp = true;
+    clearInterval(syncInterval);
 
     try {
-      const cookies = await context.cookies().catch(() => []);
+      let cookies: any[] = [];
+      try {
+        cookies = await context.cookies().catch(() => []);
+      } catch (_) {}
+
+      // Nếu context đã đóng trước đó -> trích xuất trực tiếp từ userDataDir trên đĩa
+      if (cookies.length === 0 && hasSessionInCookieDb(userDataDir)) {
+        console.log(`[${profile.name}] 🔍 Tìm thấy sessionid trên disk, đang đồng bộ cookies...`);
+        cookies = await extractProfileCookies(userDataDir);
+      }
+
       const loggedIn = isTikTokLoggedIn(cookies);
       if (loggedIn) {
         profileRepo.update({
@@ -588,7 +669,6 @@ export async function openManualBrowser(profile: ProfileRecord, onClosed?: () =>
         });
         console.log(`[${profile.name}] ✅ Đã xác nhận đăng nhập TikTok thành công (Có sessionid)!`);
       } else {
-        // Nếu không có sessionid -> Chưa đăng nhập hoặc login thất bại
         profileRepo.update({
           id: profile.id,
           cookies: null,

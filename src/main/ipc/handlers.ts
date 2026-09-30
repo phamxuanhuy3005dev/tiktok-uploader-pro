@@ -357,12 +357,18 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       }
     }
 
-    await openManualBrowser(profile, () => {
+    const notifyUpdated = () => {
       const activeWin = getValidWindow();
       if (activeWin && !activeWin.isDestroyed()) {
         activeWin.webContents.send('profiles:updated', profileRepo.getAll());
       }
-    });
+    };
+
+    await openManualBrowser(
+      profile,
+      () => notifyUpdated(),
+      () => notifyUpdated()
+    );
     return { success: true, alreadyOpen: false };
   });
 
