@@ -94,10 +94,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={onBulkImport}
-                title="Nhập nhanh danh sách tài khoản theo định dạng dòng TXT"
+                title="Nhập danh sách tài khoản từ file TXT, CSV hoặc JSON"
                 className="text-xs border-slate-200 text-slate-700 bg-white hover:bg-slate-50"
               >
-                <Plus className="h-3.5 w-3.5 mr-1 text-sky-500" /> Nhập Hàng Loạt (TXT)
+                <Plus className="h-3.5 w-3.5 mr-1 text-sky-500" /> Nhập Hàng Loạt
               </Button>
             )}
 

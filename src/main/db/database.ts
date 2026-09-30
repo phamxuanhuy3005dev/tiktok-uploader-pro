@@ -286,7 +286,7 @@ export const profileRepo = {
 
   bulkCreate: (profiles: any[]): number => {
     const insertStmt = db.prepare(`
-      INSERT OR IGNORE INTO profiles (
+      INSERT INTO profiles (
         id, name, group_name, status, video_folder, enable_music, music_mode, favorite_index,
         music_volume, schedule_mode, schedule_interval, golden_hours,
         caption_mode, proxy, cookies, max_videos, account_id, pass, two_factor, email, pass_email, mail_ao, last_run
@@ -295,6 +295,16 @@ export const profileRepo = {
         @music_volume, @schedule_mode, @schedule_interval, @golden_hours,
         @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run
       )
+      ON CONFLICT(name) DO UPDATE SET
+        group_name = CASE WHEN excluded.group_name != 'Mặc định' THEN excluded.group_name ELSE profiles.group_name END,
+        account_id = COALESCE(excluded.account_id, profiles.account_id),
+        pass = COALESCE(excluded.pass, profiles.pass),
+        two_factor = COALESCE(excluded.two_factor, profiles.two_factor),
+        email = COALESCE(excluded.email, profiles.email),
+        pass_email = COALESCE(excluded.pass_email, profiles.pass_email),
+        mail_ao = COALESCE(excluded.mail_ao, profiles.mail_ao),
+        proxy = COALESCE(excluded.proxy, profiles.proxy),
+        cookies = COALESCE(excluded.cookies, profiles.cookies)
     `);
 
     const tx = db.transaction((items: any[]) => {

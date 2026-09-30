@@ -34,55 +34,88 @@ interface ParsedAccount {
   group_name?: string;
 }
 
-const is2FaSecret = (t: string): boolean => {
-  if (!t) return false;
-  const clean = t.replace(/[\s=-]/g, '');
-  // Mã bí mật 2FA Base32 thường có độ dài từ 16 đến 64 ký tự (A-Z và 2-7)
-  return /^[A-Za-z2-7]{16,64}$/.test(clean);
-};
-
-function parseCsvLine(text: string, delimiter: string = ','): string[] {
-  const result: string[] = [];
-  let cur = '';
+function parseCsvText(text: string, delimiter: string = ','): string[][] {
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentCell = '';
   let inQuotes = false;
+
   for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (c === '"') {
-      if (inQuotes && text[i + 1] === '"') {
-        cur += '"';
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentCell += '"';
         i++;
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (c === delimiter && !inQuotes) {
-      result.push(cur.trim());
-      cur = '';
+    } else if (char === delimiter && !inQuotes) {
+      currentRow.push(currentCell.trim());
+      currentCell = '';
+    } else if ((char === '\r' || char === '\n') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') {
+        i++;
+      }
+      currentRow.push(currentCell.trim());
+      if (currentRow.some((c) => c.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentCell = '';
     } else {
-      cur += c;
+      currentCell += char;
     }
   }
-  result.push(cur.trim());
-  return result;
+  if (currentCell.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentCell.trim());
+    if (currentRow.some((c) => c.length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+  return rows;
 }
+
+const isProxyString = (str?: string): boolean => {
+  if (!str) return false;
+  const s = str.trim();
+  if (/^(https?|socks[45]):\/\//i.test(s)) return true;
+  const parts = s.split(':');
+  return parts.length >= 2 && !isNaN(Number(parts[1]));
+};
+
+const isCookieString = (str?: string): boolean => {
+  if (!str) return false;
+  const s = str.trim().toLowerCase();
+  return (
+    s.includes('sessionid') ||
+    s.includes('sid_tt') ||
+    s.includes('tt_chain_token') ||
+    s.startsWith('[{"') ||
+    s.startsWith('{"') ||
+    (s.length > 40 && s.includes('='))
+  );
+};
 
 const isHeaderRow = (parts: string[]): boolean => {
   if (parts.length === 0) return false;
-  const col0 = (parts[0] || '').toLowerCase().trim();
-  const col1 = (parts[1] || '').toLowerCase().trim();
-  const col2 = (parts[2] || '').toLowerCase().trim();
-  const headerKeywordsCol0 = [
-    'username', 'tài khoản', 'tai khoan', 'user', 'account', 'acc', 'name', 'tên kênh', 'ten kenh', 'id'
-  ];
-  const headerKeywordsCol1 = [
-    'password', 'mật khẩu', 'mat khau', 'pass', 'pwd', 'email', 'proxy'
-  ];
-  const headerKeywordsCol2 = [
-    '2fa', 'two_factor', 'two factor', 'otp', 'secret', 'mã 2fa'
-  ];
-  if (headerKeywordsCol0.some((k) => col0.includes(k))) return true;
-  if (headerKeywordsCol1.some((k) => col1.includes(k))) return true;
-  if (headerKeywordsCol2.some((k) => col2.includes(k))) return true;
-  return false;
+  const p0 = (parts[0] || '').toLowerCase().trim();
+  const p1 = (parts[1] || '').toLowerCase().trim();
+
+  // Dòng bắt đầu bằng comment
+  if (p0.startsWith('#') || p0.startsWith('//')) return true;
+
+  // Header thật phải khớp chính xác các từ khóa header cố định
+  const EXACT_HEADERS = new Set([
+    'username', 'user', 'uid', 'taikhoan', 'tài khoản', 'tai khoan',
+    'account', 'acc', 'name', 'tên kênh', 'ten kenh', 'stt'
+  ]);
+  const EXACT_P1_HEADERS = new Set([
+    'password', 'pass', 'pwd', 'matkhau', 'mật khẩu', 'mat khau', '2fa'
+  ]);
+
+  return EXACT_HEADERS.has(p0) && (parts.length === 1 || EXACT_P1_HEADERS.has(p1));
 };
 
 export const BulkImportModal: React.FC<BulkImportModalProps> = ({
@@ -142,232 +175,185 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
     }
   };
 
-  // Phân tích cú pháp text theo thời gian thực
+  // Phân tích cú pháp text theo thời gian thực chuẩn MMO TikTok
   const parsedAccounts = useMemo(() => {
     if (!rawText.trim()) return [];
 
     // Bỏ ký tự UTF-8 BOM nếu file Excel CSV có BOM
-    const cleanText = rawText.replace(/^\uFEFF/, '');
+    const cleanText = rawText.replace(/^\uFEFF/, '').trim();
+    if (!cleanText) return [];
 
-    const lines = cleanText
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0 && !l.startsWith('#') && !l.startsWith('//'));
+    // 1. Tự động nhận diện định dạng JSON (nếu là file backup JSON hoặc mảng JSON)
+    if (cleanText.startsWith('[') || cleanText.startsWith('{')) {
+      try {
+        let parsed = JSON.parse(cleanText);
+        if (!Array.isArray(parsed) && parsed && Array.isArray(parsed.profiles)) {
+          parsed = parsed.profiles;
+        }
+        if (Array.isArray(parsed)) {
+          return parsed.map((item) => {
+            const rawCookie = item.cookies;
+            let cookiesStr: string | undefined;
+            if (rawCookie) {
+              cookiesStr = typeof rawCookie === 'string' ? rawCookie : JSON.stringify(rawCookie);
+            }
+            return {
+              name: String(item.name || item.account_id || item.username || item.uid || '').trim(),
+              account_id: String(item.account_id || item.name || item.username || item.uid || '').trim(),
+              pass: item.pass || item.password || undefined,
+              two_factor: item.two_factor || item.two_fa || item['2fa'] || undefined,
+              email: item.email || undefined,
+              pass_email: item.pass_email || item.email_pass || undefined,
+              mail_ao: item.mail_ao || item.recovery_email || undefined,
+              proxy: item.proxy || undefined,
+              cookies: cookiesStr,
+              group_name: item.group_name || item.group || undefined
+            };
+          }).filter((acc) => acc.name.length > 0);
+        }
+      } catch (_) {
+        // Không phải JSON hợp lệ, chuyển sang phân tích dòng Delimiter
+      }
+    }
+
+    // 2. Xác định ký tự phân cách (Separator)
+    let activeDelim = separator;
+    if (separator === 'auto') {
+      if (loadedFileName?.toLowerCase().endsWith('.csv')) {
+        activeDelim = ',';
+      } else {
+        const firstLine = cleanText.split(/[\r\n]+/).find((l) => {
+          const t = l.trim();
+          return t.length > 0 && !t.startsWith('#') && !t.startsWith('//');
+        }) || '';
+
+        const pipeCount = (firstLine.match(/\|/g) || []).length;
+        const commaCount = (firstLine.match(/,/g) || []).length;
+        const tabCount = (firstLine.match(/\t/g) || []).length;
+        const semicolonCount = (firstLine.match(/;/g) || []).length;
+
+        if (pipeCount >= 1 && pipeCount >= commaCount) {
+          activeDelim = '|';
+        } else if (commaCount >= 1) {
+          activeDelim = ',';
+        } else if (tabCount >= 1) {
+          activeDelim = '\t';
+        } else if (semicolonCount >= 1) {
+          activeDelim = ';';
+        } else {
+          activeDelim = '|';
+        }
+      }
+    } else if (separator === 'tab') {
+      activeDelim = '\t';
+    }
+
+    // 3. Phân tách dòng và cột theo chuẩn RFC CSV / Delimited
+    let rawRows: string[][] = [];
+    if (activeDelim === ',' || activeDelim === ';') {
+      rawRows = parseCsvText(cleanText, activeDelim);
+    } else {
+      const lines = cleanText.split(/[\r\n]+/);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) continue;
+        rawRows.push(trimmed.split(activeDelim).map((p) => p.trim()));
+      }
+    }
 
     const list: ParsedAccount[] = [];
 
-    const isCookieToken = (t: string): boolean => {
-      if (!t) return false;
-      const lower = t.toLowerCase();
-      if (lower.includes('sessionid') || lower.includes('sid_tt') || lower.includes('tt_chain_token') || lower.includes('csrf_token')) {
-        return true;
-      }
-      if (t.startsWith('[{"') || t.startsWith('{"')) {
-        return true;
-      }
-      if (t.length > 50 && (t.includes(';') || t.includes('='))) {
-        return true;
-      }
-      return false;
-    };
+    for (let i = 0; i < rawRows.length; i++) {
+      const parts = rawRows[i].map((p) => p.trim());
+      if (parts.length === 0 || !parts[0]) continue;
 
-    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-      const line = lines[lineIndex];
-
-      let rawParts: string[] = [];
-      if (separator === 'auto') {
-        if (line.includes('|')) {
-          rawParts = line.split('|').map((p) => p.trim());
-        } else if (line.includes(',')) {
-          rawParts = parseCsvLine(line, ',');
-        } else if (line.includes(';')) {
-          rawParts = parseCsvLine(line, ';');
-        } else if (line.includes('\t')) {
-          rawParts = line.split('\t').map((p) => p.trim());
-        } else {
-          rawParts = [line.trim()];
-        }
-      } else if (separator === ',') {
-        rawParts = parseCsvLine(line, ',');
-      } else if (separator === ';') {
-        rawParts = parseCsvLine(line, ';');
-      } else {
-        const sep = separator === 'tab' ? '\t' : separator;
-        rawParts = line.split(sep).map((p) => p.trim());
-      }
-
-      if (rawParts.length === 0 || !rawParts[0]) continue;
-
-      // Tự động bỏ qua dòng tiêu đề (Header row ví dụ: Username, Password, Email...)
-      if (lineIndex === 0 && isHeaderRow(rawParts)) {
+      // Bỏ qua dòng tiêu đề nếu là dòng đầu tiên
+      if (i === 0 && isHeaderRow(parts)) {
         continue;
       }
 
       const acc: ParsedAccount = {
-        name: rawParts[0],
-        account_id: rawParts[0]
+        name: parts[0],
+        account_id: parts[0]
       };
 
-      if (rawParts.length >= 9) {
-        // Cấu trúc 9 cột chuẩn hóa: user|pass|2fa|email|pass_email|mail_ao|proxy|cookies|group
-        acc.pass = rawParts[1];
-        acc.two_factor = rawParts[2];
-        acc.email = rawParts[3];
-        acc.pass_email = rawParts[4];
-        acc.mail_ao = rawParts[5];
-        acc.proxy = rawParts[6];
-        acc.cookies = rawParts[7];
-        acc.group_name = rawParts[8];
-      } else if (rawParts.length === 8) {
-        if (is2FaSecret(rawParts[2])) {
-          // user|pass|2fa|email|pass_email|proxy|cookies|group
-          acc.pass = rawParts[1];
-          acc.two_factor = rawParts[2];
-          acc.email = rawParts[3];
-          acc.pass_email = rawParts[4];
-          acc.proxy = rawParts[5];
-          acc.cookies = rawParts[6];
-          acc.group_name = rawParts[7];
+      if (parts.length >= 9) {
+        // Cấu trúc chuẩn 9 cột MMO: UID | Pass | 2FA | Email | PassMail | MailKP | Proxy | Cookie | Nhóm
+        acc.pass = parts[1] || undefined;
+        acc.two_factor = parts[2] || undefined;
+        acc.email = parts[3] || undefined;
+        acc.pass_email = parts[4] || undefined;
+        acc.mail_ao = parts[5] || undefined;
+        acc.proxy = parts[6] || undefined;
+        acc.cookies = parts[7] || undefined;
+        acc.group_name = parts[8] || undefined;
+      } else if (parts.length === 8) {
+        if (isProxyString(parts[5])) {
+          acc.pass = parts[1] || undefined;
+          acc.two_factor = parts[2] || undefined;
+          acc.email = parts[3] || undefined;
+          acc.pass_email = parts[4] || undefined;
+          acc.proxy = parts[5] || undefined;
+          acc.cookies = parts[6] || undefined;
+          acc.group_name = parts[7] || undefined;
         } else {
-          // Định dạng 8 cột cũ: user|pass|email|pass_email|mail_ao|proxy|cookies|group
-          acc.pass = rawParts[1];
-          acc.email = rawParts[2];
-          acc.pass_email = rawParts[3];
-          acc.mail_ao = rawParts[4];
-          acc.proxy = rawParts[5];
-          acc.cookies = rawParts[6];
-          acc.group_name = rawParts[7];
+          acc.pass = parts[1] || undefined;
+          acc.two_factor = parts[2] || undefined;
+          acc.email = parts[3] || undefined;
+          acc.pass_email = parts[4] || undefined;
+          acc.mail_ao = parts[5] || undefined;
+          acc.proxy = parts[6] || undefined;
+          acc.cookies = parts[7] || undefined;
         }
-      } else if (rawParts.length === 7) {
-        if (is2FaSecret(rawParts[2])) {
-          acc.pass = rawParts[1];
-          acc.two_factor = rawParts[2];
-          acc.email = rawParts[3];
-          acc.pass_email = rawParts[4];
-          acc.proxy = rawParts[5];
-          if (isCookieToken(rawParts[6])) {
-            acc.cookies = rawParts[6];
-          } else {
-            acc.group_name = rawParts[6];
-          }
+      } else if (parts.length === 7) {
+        if (isProxyString(parts[5])) {
+          acc.pass = parts[1] || undefined;
+          acc.two_factor = parts[2] || undefined;
+          acc.email = parts[3] || undefined;
+          acc.pass_email = parts[4] || undefined;
+          acc.proxy = parts[5] || undefined;
+          acc.cookies = parts[6] || undefined;
         } else {
-          acc.pass = rawParts[1];
-          acc.email = rawParts[2];
-          acc.pass_email = rawParts[3];
-          acc.mail_ao = rawParts[4];
-          acc.proxy = rawParts[5];
-          if (isCookieToken(rawParts[6])) {
-            acc.cookies = rawParts[6];
-          } else {
-            acc.group_name = rawParts[6];
-          }
+          acc.pass = parts[1] || undefined;
+          acc.two_factor = parts[2] || undefined;
+          acc.email = parts[3] || undefined;
+          acc.pass_email = parts[4] || undefined;
+          acc.mail_ao = parts[5] || undefined;
+          acc.proxy = parts[6] || undefined;
         }
-      } else {
-        // Tách cookie nếu phát hiện thấy trong các cột
-        let detectedCookie: string | undefined;
-        const parts: string[] = [rawParts[0]];
-
-        for (let i = 1; i < rawParts.length; i++) {
-          const token = rawParts[i];
-          if (!detectedCookie && isCookieToken(token)) {
-            detectedCookie = token;
-          } else {
-            parts.push(token);
-          }
+      } else if (parts.length === 6) {
+        acc.pass = parts[1] || undefined;
+        acc.two_factor = parts[2] || undefined;
+        acc.email = parts[3] || undefined;
+        acc.pass_email = parts[4] || undefined;
+        acc.mail_ao = parts[5] || undefined;
+      } else if (parts.length === 5) {
+        acc.pass = parts[1] || undefined;
+        acc.two_factor = parts[2] || undefined;
+        acc.email = parts[3] || undefined;
+        acc.pass_email = parts[4] || undefined;
+      } else if (parts.length === 4) {
+        acc.pass = parts[1] || undefined;
+        acc.two_factor = parts[2] || undefined;
+        acc.email = parts[3] || undefined;
+      } else if (parts.length === 3) {
+        acc.pass = parts[1] || undefined;
+        if (isProxyString(parts[2])) {
+          acc.proxy = parts[2];
+        } else if (isCookieString(parts[2])) {
+          acc.cookies = parts[2];
+        } else {
+          acc.two_factor = parts[2] || undefined;
         }
-
-        if (detectedCookie) {
-          acc.cookies = detectedCookie;
-        }
-
-        if (parts.length === 2) {
-          if (parts[1].includes('://') || (parts[1].includes(':') && parts[1].split(':').length >= 2)) {
-            acc.proxy = parts[1];
-          } else {
-            acc.pass = parts[1];
-          }
-        } else if (parts.length === 3) {
-          acc.pass = parts[1];
-          if (is2FaSecret(parts[2])) {
-            // Định dạng phổ biến: user|pass|2fa
-            acc.two_factor = parts[2];
-          } else if (parts[2].includes('@')) {
-            acc.email = parts[2];
-          } else if (parts[2].includes(':') || parts[2].includes('://')) {
-            acc.proxy = parts[2];
-          } else {
-            acc.group_name = parts[2];
-          }
-        } else if (parts.length === 4) {
-          acc.pass = parts[1];
-          if (is2FaSecret(parts[2])) {
-            // user|pass|2fa|nhom hoặc user|pass|2fa|proxy
-            acc.two_factor = parts[2];
-            if (parts[3].includes(':') || parts[3].includes('://')) {
-              acc.proxy = parts[3];
-            } else {
-              acc.group_name = parts[3];
-            }
-          } else if (parts[2].includes('@')) {
-            acc.email = parts[2];
-            acc.pass_email = parts[3];
-          } else if (parts[2].includes(':') || parts[2].includes('://')) {
-            acc.proxy = parts[2];
-            acc.group_name = parts[3];
-          } else {
-            acc.proxy = parts[2];
-          }
-        } else if (parts.length === 5) {
-          acc.pass = parts[1];
-          if (is2FaSecret(parts[2])) {
-            acc.two_factor = parts[2];
-            if (parts[3].includes('@')) {
-              acc.email = parts[3];
-              acc.pass_email = parts[4];
-            } else {
-              if (parts[3].includes(':') || parts[3].includes('://')) {
-                acc.proxy = parts[3];
-                acc.group_name = parts[4];
-              } else {
-                acc.group_name = parts[3];
-              }
-            }
-          } else {
-            acc.email = parts[2];
-            acc.pass_email = parts[3];
-            acc.mail_ao = parts[4];
-          }
-        } else if (parts.length >= 6) {
-          acc.pass = parts[1];
-          if (is2FaSecret(parts[2])) {
-            acc.two_factor = parts[2];
-            acc.email = parts[3];
-            acc.pass_email = parts[4];
-            if (parts[5].includes(':') || parts[5].includes('://')) {
-              acc.proxy = parts[5];
-              if (parts[6]) acc.group_name = parts[6];
-            } else {
-              acc.group_name = parts[5];
-            }
-          } else {
-            acc.email = parts[2];
-            acc.pass_email = parts[3];
-            acc.mail_ao = parts[4];
-            if (parts[5].includes(':') || parts[5].includes('://')) {
-              acc.proxy = parts[5];
-              if (parts[6]) acc.group_name = parts[6];
-            } else {
-              acc.group_name = parts[5];
-            }
-          }
-        }
+      } else if (parts.length === 2) {
+        acc.pass = parts[1] || undefined;
       }
 
       list.push(acc);
     }
 
     return list;
-  }, [rawText, separator]);
+  }, [rawText, separator, loadedFileName]);
 
   const handleImport = async () => {
     if (parsedAccounts.length === 0) {
@@ -428,8 +414,8 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Nhập Nhanh Tài Khoản (Excel CSV / TXT)"
-      description="Hỗ trợ cả file Excel (.csv) và file văn bản (.txt). Hệ thống tự nhận diện cột, nhóm kênh, cookie, proxy và tự bỏ qua dòng tiêu đề."
+      title="Nhập Nhanh Tài Khoản (Excel CSV / TXT / JSON)"
+      description="Hỗ trợ file Excel (.csv), file văn bản (.txt) chuẩn MMO TikTok và file backup JSON. Cấu trúc chuẩn cố định: UID|Pass|2FA|Email|PassMail|MailKhoiPhuc|Proxy|Cookie|Nhom."
       className="max-w-3xl"
     >
       <div className="space-y-3.5">
@@ -481,7 +467,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
               onClick={handleChooseFile}
               className="h-7 text-xs border-sky-300 text-sky-700 bg-sky-50/70 hover:bg-sky-100 font-medium px-2.5"
             >
-              <FolderOpen className="h-3.5 w-3.5 mr-1 text-sky-600" /> Chọn File CSV / TXT Từ Máy
+              <FolderOpen className="h-3.5 w-3.5 mr-1 text-sky-600" /> Chọn File TXT / CSV / JSON Từ Máy
             </Button>
 
             <Button
@@ -522,14 +508,14 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
         <div className="bg-slate-50/90 p-2.5 rounded-lg border border-slate-200/80 text-[11px] text-slate-600 space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-slate-700 font-bold flex items-center gap-1">
-              <FileSpreadsheet className="h-3.5 w-3.5 text-sky-600" /> Thứ tự 9 cột chuẩn hóa (Tự nhận diện cả user|pass|2fa):
+              <FileSpreadsheet className="h-3.5 w-3.5 text-sky-600" /> Thứ tự 9 cột chuẩn hóa MMO TikTok (Cố định vị trí, không bị đảo cột):
             </span>
             <span className="text-slate-400 text-[10px] flex items-center gap-1">
               <Info className="h-3 w-3" /> Tự động bỏ qua dòng tiêu đề nếu có
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-1 font-mono text-[10px]">
-            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700 font-bold">1. Username</span>
+            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700 font-bold">1. UID / User</span>
             <span className="text-slate-300">→</span>
             <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">2. Password</span>
             <span className="text-slate-300">→</span>
@@ -539,13 +525,13 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
             <span className="text-slate-300">→</span>
             <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">5. Pass Email</span>
             <span className="text-slate-300">→</span>
-            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">6. Mail Ảo</span>
+            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">6. Mail Khôi Phục</span>
             <span className="text-slate-300">→</span>
             <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">7. Proxy</span>
             <span className="text-slate-300">→</span>
             <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">8. Cookie</span>
             <span className="text-slate-300">→</span>
-            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700 font-bold">9. Nhóm Kênh</span>
+            <span className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-700 font-bold">9. Nhóm</span>
           </div>
         </div>
 
@@ -557,7 +543,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
             onChange={(e) => setRawText(e.target.value)}
             onDrop={handleDrop}
             onDragOver={(e) => e.preventDefault()}
-            placeholder={`Dán danh sách tài khoản tại đây HOẶC kéo thả file .csv / .txt vào đây (mỗi dòng 1 acc):\n# Định dạng 1 (Acc mua 2FA): user|pass|2fa\ntiktok_user_01|Pass123456|JBSWY3DPEHPK3PXP\n\n# Định dạng 2 (Kèm nhóm): user|pass|2fa|nhom\ntiktok_user_02|Pass654321|4W67ZQLU5Q4V476W|Nhóm Reup\n\n# Định dạng 3 (Đầy đủ 9 cột CSV / TXT):\ntiktok_user_03,Pass123456,JBSWY3DPEHPK3PXP,user03@outlook.com,PassMail123,mailao03@gmail.com,http://user:pass@127.0.0.1:8080,,Nhóm Nuôi US`}
+            placeholder={`Dán danh sách tài khoản HOẶC kéo thả file .txt / .csv / .json vào đây:\n# Định dạng 1 (Cơ bản): user|pass\ntiktok_user_01|Pass123456\n\n# Định dạng 2 (Có 2FA): user|pass|2fa\ntiktok_user_02|Pass123456|JBSWY3DPEHPK3PXP\n\n# Định dạng 3 (Không có 2FA, để trống cột 2FA): user|pass||email|passmail\ntiktok_user_03|Pass123456||user03@outlook.com|PassMail123\n\n# Định dạng 4 (Đầy đủ 9 cột chuẩn MMO TikTok):\ntiktok_user_04|Pass123456|JBSWY3DPEHPK3PXP|user04@outlook.com|PassMail123|mailao04@gmail.com|http://user:pass@127.0.0.1:8080|sessionid=xyz|Nhóm Nuôi US`}
             className="w-full p-2.5 font-mono text-xs rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all"
           />
         </div>

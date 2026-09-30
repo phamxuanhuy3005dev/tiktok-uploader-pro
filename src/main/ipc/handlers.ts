@@ -160,16 +160,46 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return str;
   };
 
-  // Export danh sách tài khoản ra file CSV / TXT với đầy đủ tên cột và nhóm
+  const TIKTOK_COOKIE_NAMES = new Set([
+    'sessionid', 'sessionid_ss', 'sid_tt', 'sid_guard', 'uid_tt', 'uid_tt_ss',
+    'tt_chain_token', 'csrf_token', 'ttwid', 'msToken', 'odin_tt', 'store-country-sign',
+    'passport_csrf_token', 'passport_csrf_token_default', 'tt_csrf_token', 's_v_web_id'
+  ]);
+
+  const cleanCookieForExport = (rawCookies: any): string => {
+    if (!rawCookies) return '';
+    let str = typeof rawCookies === 'string' ? rawCookies.trim() : '';
+    if (!str && !Array.isArray(rawCookies)) return '';
+
+    if (Array.isArray(rawCookies) || str.startsWith('[') || str.startsWith('{')) {
+      try {
+        const parsed = Array.isArray(rawCookies) ? rawCookies : JSON.parse(str);
+        if (Array.isArray(parsed)) {
+          const matched = parsed.filter((c: any) => c && c.name && TIKTOK_COOKIE_NAMES.has(c.name));
+          const listToUse = matched.length > 0 ? matched : parsed.slice(0, 15);
+          return listToUse
+            .map((c: any) => `${c.name}=${c.value}`)
+            .join('; ')
+            .replace(/[\r\n|]/g, ' ')
+            .trim();
+        }
+      } catch (_) {}
+    }
+
+    return str.replace(/[\r\n|]/g, ' ').trim();
+  };
+
+  // Export danh sách tài khoản ra file CSV / TXT / JSON với đầy đủ tên cột và nhóm
   ipcMain.handle('profiles:exportAccounts', async (_, accounts: any[]) => {
     const activeWin = getValidWindow();
     const today = new Date().toISOString().slice(0, 10);
     const options = {
-      title: 'Xuất Danh Sách Tài Khoản (Excel CSV / TXT)',
+      title: 'Xuất Danh Sách Tài Khoản (Excel CSV / TXT / JSON)',
       defaultPath: `tiktok_accounts_${today}.csv`,
       filters: [
         { name: 'Excel Spreadsheet (*.csv)', extensions: ['csv'] },
         { name: 'Text Document (*.txt)', extensions: ['txt'] },
+        { name: 'JSON Backup (*.json)', extensions: ['json'] },
         { name: 'All Files (*.*)', extensions: ['*'] }
       ]
     };
@@ -179,9 +209,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     if (!res.canceled && res.filePath) {
       const filePath = res.filePath;
-      const isCsv = filePath.toLowerCase().endsWith('.csv');
+      const lowerPath = filePath.toLowerCase();
 
-      if (isCsv) {
+      if (lowerPath.endsWith('.json')) {
+        const jsonContent = JSON.stringify(accounts || [], null, 2);
+        fs.writeFileSync(filePath, jsonContent, 'utf-8');
+        return { success: true, filePath, format: 'json' };
+      }
+
+      if (lowerPath.endsWith('.csv')) {
         const header = ['Username', 'Password', '2FA', 'Email', 'Pass_Email', 'Mail_Ao', 'Proxy', 'Cookie', 'Nhom'];
         const rows = (accounts || []).map((p) => [
           escapeCsvCell(p.account_id || p.name || ''),
@@ -191,31 +227,33 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
           escapeCsvCell(p.pass_email || ''),
           escapeCsvCell(p.mail_ao || ''),
           escapeCsvCell(p.proxy || ''),
-          escapeCsvCell(p.cookies || ''),
+          escapeCsvCell(cleanCookieForExport(p.cookies)),
           escapeCsvCell(p.group_name || 'Mặc định')
         ].join(','));
 
         // UTF-8 BOM (\uFEFF) cho phép Excel hiển thị tiếng Việt có dấu chuẩn 100% không bị vỡ font
         const csvContent = '\uFEFF' + [header.join(','), ...rows].join('\r\n');
         fs.writeFileSync(filePath, csvContent, 'utf-8');
-      } else {
-        const header = '# Username|Password|2FA|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
-        const rows = (accounts || []).map((p) => [
-          p.account_id || p.name || '',
-          p.pass || '',
-          p.two_factor || '',
-          p.email || '',
-          p.pass_email || '',
-          p.mail_ao || '',
-          p.proxy || '',
-          p.cookies || '',
-          p.group_name || 'Mặc định'
-        ].join('|'));
-
-        const txtContent = [header, ...rows].join('\r\n');
-        fs.writeFileSync(filePath, txtContent, 'utf-8');
+        return { success: true, filePath, format: 'csv' };
       }
-      return { success: true, filePath, format: isCsv ? 'csv' : 'txt' };
+
+      // Mặc định là TXT (chuẩn MMO pipe |)
+      const header = '# Username|Password|2FA|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
+      const rows = (accounts || []).map((p) => [
+        p.account_id || p.name || '',
+        p.pass || '',
+        p.two_factor || '',
+        p.email || '',
+        p.pass_email || '',
+        p.mail_ao || '',
+        p.proxy || '',
+        cleanCookieForExport(p.cookies),
+        p.group_name || 'Mặc định'
+      ].join('|'));
+
+      const txtContent = [header, ...rows].join('\r\n');
+      fs.writeFileSync(filePath, txtContent, 'utf-8');
+      return { success: true, filePath, format: 'txt' };
     }
     return { success: false, canceled: true };
   });
@@ -251,7 +289,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         const csvContent = '\uFEFF' + [header.join(','), ...sampleRows].join('\r\n');
         fs.writeFileSync(filePath, csvContent, 'utf-8');
       } else {
-        const header = '# CẤU TRÚC: Username|Password|2FA|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
+        const header = '# CẤU TRÚC MMO: Username|Password|2FA|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
         const sampleRows = [
           'tiktok_user_demo1|Pass123456|JBSWY3DPEHPK3PXP|user01@outlook.com|PassMail123|mailao01@gmail.com|http://user:pass@127.0.0.1:8080|sessionid=9f8e7d6c5b4a3...|Nhóm Nuôi US',
           'tiktok_user_demo2|Pass654321||user02@gmail.com|PassMail456||socks5://192.168.1.100:1080||Nhóm Reup Phim',
@@ -294,15 +332,16 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return { success: false, canceled: true };
   });
 
-  // Chọn và đọc file TXT / CSV từ máy tính
+  // Chọn và đọc file TXT / CSV / JSON từ máy tính
   ipcMain.handle('profiles:readTxtFile', async () => {
     const activeWin = getValidWindow();
     const options = {
-      title: 'Chọn File Danh Sách Tài Khoản (CSV hoặc TXT)',
+      title: 'Chọn File Danh Sách Tài Khoản (CSV, TXT hoặc JSON)',
       filters: [
-        { name: 'Excel CSV & TXT Files (*.csv, *.txt)', extensions: ['csv', 'txt'] },
+        { name: 'Mọi định dạng tài khoản (*.txt, *.csv, *.json)', extensions: ['txt', 'csv', 'json'] },
         { name: 'Excel Spreadsheet (*.csv)', extensions: ['csv'] },
         { name: 'Text Document (*.txt)', extensions: ['txt'] },
+        { name: 'JSON Backup (*.json)', extensions: ['json'] },
         { name: 'All Files (*.*)', extensions: ['*'] }
       ],
       properties: ['openFile'] as ('openFile')[]

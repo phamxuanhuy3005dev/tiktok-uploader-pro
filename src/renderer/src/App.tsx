@@ -328,9 +328,42 @@ export const App: React.FC = () => {
   };
 
   const handleExportSelectedTxt = async () => {
-    if (selectedProfileIds.size === 0) return;
-    const selected = profiles.filter((p) => selectedProfileIds.has(p.id));
-    const lines = selected.map((p) => {
+    const targetProfiles = selectedProfileIds.size > 0 
+      ? profiles.filter((p) => selectedProfileIds.has(p.id))
+      : filteredProfiles;
+
+    if (targetProfiles.length === 0) {
+      toast.error('Không có tài khoản nào để xuất!');
+      return;
+    }
+
+    const cleanCookie = (raw: any): string => {
+      if (!raw) return '';
+      let str = typeof raw === 'string' ? raw.trim() : '';
+      if (!str) return '';
+      if (str.startsWith('[') || str.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(str);
+          if (Array.isArray(parsed)) {
+            const TIKTOK_COOKIE_NAMES = new Set([
+              'sessionid', 'sessionid_ss', 'sid_tt', 'sid_guard', 'uid_tt', 'uid_tt_ss',
+              'tt_chain_token', 'csrf_token', 'ttwid', 'msToken', 'odin_tt', 'store-country-sign',
+              'passport_csrf_token', 'passport_csrf_token_default', 'tt_csrf_token', 's_v_web_id'
+            ]);
+            const matched = parsed.filter((c: any) => c && c.name && TIKTOK_COOKIE_NAMES.has(c.name));
+            const listToUse = matched.length > 0 ? matched : parsed.slice(0, 15);
+            return listToUse
+              .map((c: any) => `${c.name}=${c.value}`)
+              .join('; ')
+              .replace(/[\r\n|]/g, ' ')
+              .trim();
+          }
+        } catch (_) {}
+      }
+      return str.replace(/[\r\n|]/g, ' ').trim();
+    };
+
+    const lines = targetProfiles.map((p) => {
       const items = [
         p.account_id || p.name || '',
         p.pass || '',
@@ -339,7 +372,7 @@ export const App: React.FC = () => {
         p.pass_email || '',
         p.mail_ao || '',
         p.proxy || '',
-        p.cookies || '',
+        cleanCookie(p.cookies),
         p.group_name || 'Mặc định'
       ];
       return items.join('|');
@@ -350,16 +383,16 @@ export const App: React.FC = () => {
     await navigator.clipboard.writeText(clipboardContent).catch(() => {});
 
     try {
-      const res = await window.api.exportAccounts(selected);
+      const res = await window.api.exportAccounts(targetProfiles);
       if (res.success && res.filePath) {
         const fileName = res.filePath.split(/[/\\]/).pop();
-        const typeLabel = res.format === 'csv' ? 'Excel CSV' : 'TXT';
-        toast.success(`Đã xuất ${selected.length} tài khoản ra file [${fileName}] (${typeLabel}) & copy vào clipboard!`);
+        const typeLabel = res.format === 'csv' ? 'Excel CSV' : (res.format === 'json' ? 'JSON' : 'TXT');
+        toast.success(`Đã xuất ${targetProfiles.length} tài khoản ra file [${fileName}] (${typeLabel}) & copy vào clipboard!`);
       } else if (!res.canceled) {
-        toast.success(`Đã copy ${selected.length} tài khoản vào clipboard!`);
+        toast.success(`Đã copy ${targetProfiles.length} tài khoản vào clipboard!`);
       }
     } catch (_) {
-      toast.success(`Đã copy ${selected.length} tài khoản vào clipboard!`);
+      toast.success(`Đã copy ${targetProfiles.length} tài khoản vào clipboard!`);
     }
   };
 
@@ -585,6 +618,18 @@ export const App: React.FC = () => {
                   >
                     <Shuffle className="h-3.5 w-3.5 mr-1 text-sky-600" /> Chia Đều Video
                   </Button>
+
+                  {/* Nút Xuất Danh Sách File (CSV / TXT / JSON) */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isProcessing || filteredProfiles.length === 0}
+                    onClick={handleExportSelectedTxt}
+                    title="Xuất danh sách tài khoản ra file Excel CSV, TXT (chuẩn MMO) hoặc JSON"
+                    className="h-8 text-xs border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80 shrink-0 px-2.5"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Xuất File ({filteredProfiles.length})
+                  </Button>
                 </div>
               </div>
 
@@ -648,16 +693,16 @@ export const App: React.FC = () => {
                         </select>
                       </div>
 
-                      {/* Xuất File Excel CSV / TXT để giao khách hoặc lưu trữ */}
+                      {/* Xuất File Excel CSV / TXT / JSON các kênh đang chọn */}
                       <Button
                         variant="outline"
                         size="sm"
                         disabled={isProcessing}
                         onClick={handleExportSelectedTxt}
-                        title="Xuất file Excel CSV hoặc TXT (có tên cột rõ ràng) kèm nhóm & cookie để giao khách hoặc lưu trữ"
+                        title="Xuất file Excel CSV, TXT (chuẩn MMO) hoặc JSON các kênh đang chọn"
                         className="h-8 text-xs border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80 px-2.5 disabled:opacity-50"
                       >
-                        <FileSpreadsheet className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Xuất File (Excel / TXT)
+                        <FileSpreadsheet className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Xuất Đã Chọn ({selectedProfileIds.size})
                       </Button>
 
                       {/* Xóa hàng loạt */}
