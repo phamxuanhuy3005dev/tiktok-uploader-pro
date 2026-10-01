@@ -747,13 +747,21 @@ export async function focusProfileBrowser(profileId: string): Promise<boolean> {
   }
 }
 
+export function getCookieDbPath(userDataDir: string): string | null {
+  if (!userDataDir || !fs.existsSync(userDataDir)) return null;
+  const networkCookies = path.join(userDataDir, 'Default', 'Network', 'Cookies');
+  if (fs.existsSync(networkCookies)) return networkCookies;
+  const legacyCookies = path.join(userDataDir, 'Default', 'Cookies');
+  if (fs.existsSync(legacyCookies)) return legacyCookies;
+  return null;
+}
+
 /**
  * Kiểm tra nhanh trực tiếp file SQLite Cookies trên đĩa cứng xem có chứa sessionid hay không (< 1ms)
  */
 export function hasSessionInCookieDb(userDataDir: string): boolean {
-  if (!userDataDir || !fs.existsSync(userDataDir)) return false;
-  const cookieDb = path.join(userDataDir, 'Default', 'Cookies');
-  if (!fs.existsSync(cookieDb)) return false;
+  const cookieDb = getCookieDbPath(userDataDir);
+  if (!cookieDb) return false;
   try {
     const tempDb = new Database(cookieDb, {
       readonly: true,
@@ -814,25 +822,141 @@ export async function openManualBrowser(
   const userDataDir = path.join(PROFILES_DIR, profile.name);
   let isCleanedUp = false;
 
-  // 1. Quét định kỳ mỗi 2 giây trong khi người dùng duyệt web
-  // Ngay khi vừa đăng nhập thành công là app tự đổi sang "Đã đăng nhập" trong realtime!
+  // Nếu tài khoản đã từng đăng nhập, kiểm tra và tự động reload nếu TikTok SSR bị kẹt ở giao diện khách (guest shell)
+  const isKnownLoggedIn = isTikTokLoggedIn(profile.cookies) || hasSessionInCookieDb(userDataDir);
+  if (isKnownLoggedIn) {
+    (async () => {
+      try {
+        await page.waitForTimeout(2500);
+        if (page.isClosed() || isCleanedUp) return;
+
+        const avatarVisible = await page
+          .locator('[data-e2e="profile-icon"], img[class*="avatar"], a[href*="/@"]')
+          .first()
+          .isVisible({ timeout: 1000 })
+          .catch(() => false);
+
+        if (!avatarVisible && !page.isClosed() && !isCleanedUp) {
+          const loginBtnVisible = await page
+            .locator('[data-e2e="top-login-button"], button:has-text("Log in"), button:has-text("Đăng nhập")')
+            .first()
+            .isVisible({ timeout: 1000 })
+            .catch(() => false);
+
+          if (loginBtnVisible && !page.isClosed() && !isCleanedUp) {
+            console.log(`[${profile.name}] 🔄 TikTok SSR hiển thị nút Login do cache khách, tự động F5 đồng bộ...`);
+            await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+          }
+        }
+      } catch (_) {}
+    })();
+  }
+
   let isSynced = isTikTokLoggedIn(profile.cookies);
+  let lastAuthStatus: 'logged_in' | 'logged_out' | 'unknown' = isSynced ? 'logged_in' : 'logged_out';
+  let lastCookies: any[] = [];
+
+  // Hàm kiểm tra chính xác trạng thái xác thực trên trang TikTok qua API & DOM
+  const checkPageAuth = async (): Promise<'logged_in' | 'logged_out' | 'unknown'> => {
+    try {
+      if (page.isClosed()) return 'unknown';
+      const url = page.url();
+      if (!url.includes('tiktok.com')) return 'unknown';
+
+      // 1. Kiểm tra trực tiếp từ passport API của TikTok (chuẩn xác nhất)
+      const res = await page.evaluate(async () => {
+        try {
+          const apiRes = await fetch('/passport/web/account/info/', {
+            headers: { Accept: 'application/json' },
+            credentials: 'include'
+          });
+          const json = await apiRes.json();
+          if (json?.data?.user_id || (json?.message === 'success' && !json?.data?.error_code)) {
+            return 'logged_in';
+          }
+          if (
+            json?.data?.error_code === 13 ||
+            json?.data?.name === 'session_expired' ||
+            json?.message === 'error'
+          ) {
+            return 'logged_out';
+          }
+        } catch (_) {}
+
+        // 2. Fallback qua DOM elements
+        const hasAvatar = Boolean(
+          document.querySelector('[data-e2e="profile-icon"], img[class*="avatar"], a[href*="/@"]')
+        );
+        const hasLoginBtn = Boolean(
+          document.querySelector(
+            '[data-e2e="top-login-button"], button[data-e2e="nav-login-button"], button:has-text("Log in"), button:has-text("Đăng nhập")'
+          )
+        );
+        if (hasAvatar) return 'logged_in';
+        if (hasLoginBtn) return 'logged_out';
+
+        return 'unknown';
+      }).catch(() => 'unknown');
+
+      if (res === 'logged_in' || res === 'logged_out') {
+        return res;
+      }
+    } catch (_) {}
+
+    // Fallback: kiểm tra cookies trong browser context
+    try {
+      const currentCookies = await context.cookies().catch(() => []);
+      if (currentCookies.length > 0) {
+        lastCookies = currentCookies;
+        if (!isTikTokLoggedIn(currentCookies)) {
+          return 'logged_out';
+        }
+      }
+    } catch (_) {}
+
+    return 'unknown';
+  };
+
+  // 1. Quét định kỳ mỗi 2 giây trong khi người dùng duyệt web
+  // Tự động nhận diện ĐĂNG NHẬP THÀNH CÔNG hoặc ĐĂNG XUẤT trong thời gian thực!
   const syncInterval = setInterval(async () => {
     if (isCleanedUp) {
       clearInterval(syncInterval);
       return;
     }
     try {
-      const cookies = await context.cookies().catch(() => []);
-      if (isTikTokLoggedIn(cookies)) {
+      const currentCookies = await context.cookies().catch(() => []);
+      if (currentCookies.length > 0) {
+        lastCookies = currentCookies;
+      }
+
+      const status = await checkPageAuth();
+      if (status === 'unknown') return;
+
+      lastAuthStatus = status;
+
+      if (status === 'logged_in') {
         if (!isSynced) {
           isSynced = true;
+          const freshCookies = currentCookies.length > 0 ? currentCookies : lastCookies;
           profileRepo.update({
             id: profile.id,
-            cookies: JSON.stringify(cookies),
+            cookies: JSON.stringify(freshCookies),
           });
           console.log(
             `[${profile.name}] 🟢 Phát hiện đăng nhập TikTok thành công trong lúc duyệt web!`,
+          );
+          if (onUpdated) onUpdated();
+        }
+      } else if (status === 'logged_out') {
+        if (isSynced) {
+          isSynced = false;
+          profileRepo.update({
+            id: profile.id,
+            cookies: null,
+          });
+          console.log(
+            `[${profile.name}] 🔴 Phát hiện đăng xuất khỏi TikTok trong lúc duyệt web!`,
           );
           if (onUpdated) onUpdated();
         }
@@ -846,53 +970,52 @@ export async function openManualBrowser(
     clearInterval(syncInterval);
 
     try {
-      let cookies: any[] = [];
-      try {
-        cookies = await context.cookies().catch(() => []);
-      } catch (_) {}
-
-      // Nếu context đã đóng trước đó -> trích xuất trực tiếp từ userDataDir trên đĩa
-      if (cookies.length === 0 && hasSessionInCookieDb(userDataDir)) {
-        console.log(
-          `[${profile.name}] 🔍 Tìm thấy sessionid trên disk, đang đồng bộ cookies...`,
-        );
-        cookies = await extractProfileCookies(userDataDir);
-      }
-
-      const loggedIn = isTikTokLoggedIn(cookies);
-      if (loggedIn) {
+      if (lastAuthStatus === 'logged_out' || !isSynced) {
+        // Đã đăng xuất khỏi TikTok
         profileRepo.update({
           id: profile.id,
-          cookies: JSON.stringify(cookies),
+          cookies: null,
           status: 'idle',
         });
         console.log(
-          `[${profile.name}] ✅ Đã xác nhận đăng nhập TikTok thành công (Có sessionid)!`,
+          `[${profile.name}] ⚠️ Đóng trình duyệt: Đã đăng xuất khỏi TikTok.`,
         );
       } else {
-        const wasPreviouslyLoggedIn = isTikTokLoggedIn(profile.cookies);
-        if (cookies.length > 0) {
-          // Trình duyệt có cookie nhưng không có session -> người dùng đã bấm Đăng Xuất trên TikTok
-          profileRepo.update({
-            id: profile.id,
-            cookies: null,
-            status: 'idle',
-          });
+        // Vẫn đang đăng nhập -> lưu lại cookie mới nhất
+        let cookies: any[] = [];
+        try {
+          cookies = await context.cookies().catch(() => []);
+        } catch (_) {}
+
+        if (cookies.length === 0 && lastCookies.length > 0) {
+          cookies = lastCookies;
+        }
+
+        if (cookies.length === 0 && hasSessionInCookieDb(userDataDir)) {
           console.log(
-            `[${profile.name}] ⚠️ Đóng trình duyệt: Đã đăng xuất khỏi TikTok.`,
+            `[${profile.name}] 🔍 Tìm thấy sessionid trên disk, đang đồng bộ cookies...`,
           );
-        } else if (!wasPreviouslyLoggedIn) {
+          cookies = await extractProfileCookies(userDataDir);
+        }
+
+        const loggedIn = isTikTokLoggedIn(cookies);
+        if (loggedIn) {
+          profileRepo.update({
+            id: profile.id,
+            cookies: JSON.stringify(cookies),
+            status: 'idle',
+          });
+          console.log(
+            `[${profile.name}] ✅ Đã xác nhận đăng nhập TikTok thành công (Có sessionid)!`,
+          );
+        } else {
           profileRepo.update({
             id: profile.id,
             cookies: null,
             status: 'idle',
           });
-          console.log(`[${profile.name}] ℹ️ Đóng trình duyệt: Chưa đăng nhập.`);
-        } else {
-          // cookies.length === 0 nhưng trước đó đã login -> Giữ nguyên session cũ, không xóa!
-          profileRepo.updateStatus(profile.id, 'idle');
           console.log(
-            `[${profile.name}] 🛡️ Giữ nguyên phiên đăng nhập cũ (trình duyệt đóng trước khi nạp cookies hoặc mất mạng).`,
+            `[${profile.name}] ⚠️ Đóng trình duyệt: Không tìm thấy phiên đăng nhập.`,
           );
         }
       }
@@ -903,7 +1026,7 @@ export async function openManualBrowser(
     activeContexts.delete(profile.id);
     await context.close().catch(() => {});
 
-    // Giải phóng triệt để process Chrome còn treo sau khi bấm đóng X trên macOS
+    // Giải phóng triệt để process Chrome còn treo sau khi bấm đóng X trên macOS/Windows
     await releaseProfileLocks(userDataDir, profile.name).catch(() => {});
 
     if (onClosed) onClosed();
