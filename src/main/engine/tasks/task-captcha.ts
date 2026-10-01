@@ -1,5 +1,5 @@
-import { Page } from 'playwright';
-import { Notification } from 'electron';
+import { Notification } from "electron";
+import { Page } from "playwright";
 
 export async function detectCaptcha(page: Page): Promise<boolean> {
   if (!page || page.isClosed()) return false;
@@ -8,13 +8,13 @@ export async function detectCaptcha(page: Page): Promise<boolean> {
     const frames = page.frames();
     for (const frame of frames) {
       if (frame === page.mainFrame()) continue;
-      const url = frame.url() || '';
+      const url = frame.url() || "";
       if (
-        url.includes('verify.tiktok.com') ||
-        url.includes('verify.byteoversea.com') ||
-        url.includes('verify.snssdk.com') ||
-        url.includes('/captcha/') ||
-        url.includes('security/captcha')
+        url.includes("verify.tiktok.com") ||
+        url.includes("verify.byteoversea.com") ||
+        url.includes("verify.snssdk.com") ||
+        url.includes("/captcha/") ||
+        url.includes("security/captcha")
       ) {
         return true;
       }
@@ -24,20 +24,28 @@ export async function detectCaptcha(page: Page): Promise<boolean> {
     const captchaSelector = [
       'iframe[src*="verify"]',
       'iframe[src*="captcha"]',
-      '#captcha-verify-container',
-      '#captcha_container',
-      '.captcha_verify_container',
-      '.captcha-verify-container',
+      "#captcha-verify-container",
+      "#captcha_container",
+      ".captcha_verify_container",
+      ".captcha-verify-container",
       '[class*="secsdk-captcha"]',
       'div[class*="captcha-verify-box"]',
-      'div[class*="verify-wrap"]'
-    ].join(', ');
+      'div[class*="verify-wrap"]',
+    ].join(", ");
 
-    const count = await page.locator(captchaSelector).count().catch(() => 0);
+    const count = await page
+      .locator(captchaSelector)
+      .count()
+      .catch(() => 0);
     if (count > 0) {
       const loc = page.locator(captchaSelector);
       for (let i = 0; i < Math.min(count, 3); i++) {
-        if (await loc.nth(i).isVisible().catch(() => false)) {
+        if (
+          await loc
+            .nth(i)
+            .isVisible()
+            .catch(() => false)
+        ) {
           return true;
         }
       }
@@ -58,7 +66,7 @@ export async function handleCaptchaWait(
   page: Page,
   profileName: string,
   log: (msg: string) => void,
-  maxWaitSeconds = 180
+  maxWaitSeconds = 180,
 ): Promise<boolean> {
   const isCaptcha = await detectCaptcha(page);
   if (!isCaptcha) return true;
@@ -74,9 +82,9 @@ export async function handleCaptchaWait(
   try {
     if (Notification.isSupported()) {
       new Notification({
-        title: '⚠️ TikTok Captcha Required',
+        title: "⚠️ TikTok Captcha Required",
         body: `Kênh [${profileName}] cần giải Captcha để tiếp tục upload!`,
-        silent: false
+        silent: false,
       }).show();
     }
   } catch (_) {}
@@ -86,7 +94,7 @@ export async function handleCaptchaWait(
 
   while (Date.now() - startTime < maxWaitMs) {
     if (page.isClosed()) {
-      throw new Error('Trình duyệt đã bị đóng trong khi chờ giải Captcha.');
+      throw new Error("Trình duyệt đã bị đóng trong khi chờ giải Captcha.");
     }
     await page.waitForTimeout(2000);
 

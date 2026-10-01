@@ -1,6 +1,6 @@
-import { Page } from 'playwright';
-import { ProfileRecord } from '../../db/database';
-import { dismissPopups } from './task-navigate';
+import { Page } from "playwright";
+import { ProfileRecord } from "../../db/database";
+import { dismissPopups } from "./task-navigate";
 
 /**
  * Tính toán mốc thời gian tiếp theo theo chế độ Auto-Increment (cộng dồn đều đặn, vd: 10 phút)
@@ -12,7 +12,7 @@ import { dismissPopups } from './task-navigate';
 export function calculateNextIncrement(
   lastScheduledDate: Date | null,
   intervalMinutes: number = 10,
-  now: Date = new Date()
+  now: Date = new Date(),
 ): Date {
   const stepMin = Number(intervalMinutes) || 10;
   const stepMs = stepMin * 60 * 1000;
@@ -43,7 +43,9 @@ export function calculateNextIncrement(
   }
 
   // Làm tròn LÊN mốc chia hết cho 5 phút để khớp với dropdown TikTok
-  return new Date(Math.ceil(baseTime.getTime() / ROUND_STEP_MS) * ROUND_STEP_MS);
+  return new Date(
+    Math.ceil(baseTime.getTime() / ROUND_STEP_MS) * ROUND_STEP_MS,
+  );
 }
 
 /**
@@ -52,10 +54,10 @@ export function calculateNextIncrement(
 export function calculateNextGoldenHour(
   goldenHoursStr: string,
   videoIndex: number,
-  baseDate = new Date()
+  baseDate = new Date(),
 ): Date {
   const hours = goldenHoursStr
-    .split(',')
+    .split(",")
     .map((h) => h.trim())
     .filter(Boolean);
 
@@ -66,7 +68,7 @@ export function calculateNextGoldenHour(
   const slotIndex = videoIndex % hours.length;
   const dayOffset = Math.floor(videoIndex / hours.length);
 
-  const [targetH, targetM] = hours[slotIndex].split(':').map(Number);
+  const [targetH, targetM] = hours[slotIndex].split(":").map(Number);
   const targetDate = new Date(baseDate);
   targetDate.setDate(targetDate.getDate() + dayOffset);
   targetDate.setHours(targetH || 12, targetM || 0, 0, 0);
@@ -87,10 +89,12 @@ async function selectTimeInPicker(
   page: Page,
   timeInput: any,
   timeStr: string,
-  log: (msg: string) => void
+  log: (msg: string) => void,
 ): Promise<void> {
-  const [targetHour, targetMinute] = timeStr.split(':');
-  log(`Cài đặt Giờ phát hành: ${timeStr} (Giờ: ${targetHour}, Phút: ${targetMinute})...`);
+  const [targetHour, targetMinute] = timeStr.split(":");
+  log(
+    `Cài đặt Giờ phát hành: ${timeStr} (Giờ: ${targetHour}, Phút: ${targetMinute})...`,
+  );
 
   await timeInput.scrollIntoViewIfNeeded().catch(() => {});
 
@@ -103,28 +107,38 @@ async function selectTimeInPicker(
     const clickedInDom = await page
       .evaluate(
         ({ hour, minute }) => {
-          const container = document.querySelector('.tiktok-timepicker-time-picker-container');
+          const container = document.querySelector(
+            ".tiktok-timepicker-time-picker-container",
+          );
           if (!container) return false;
 
           // Cột giờ bên trái
-          const hourSpans = Array.from(container.querySelectorAll('.tiktok-timepicker-left'));
-          const targetHSpan = hourSpans.find((s) => s.textContent?.trim() === hour);
+          const hourSpans = Array.from(
+            container.querySelectorAll(".tiktok-timepicker-left"),
+          );
+          const targetHSpan = hourSpans.find(
+            (s) => s.textContent?.trim() === hour,
+          );
           if (targetHSpan) {
-            (targetHSpan as HTMLElement).scrollIntoView?.({ block: 'nearest' });
+            (targetHSpan as HTMLElement).scrollIntoView?.({ block: "nearest" });
             (targetHSpan as HTMLElement).click();
           }
 
           // Cột phút bên phải
-          const minSpans = Array.from(container.querySelectorAll('.tiktok-timepicker-right'));
-          const targetMSpan = minSpans.find((s) => s.textContent?.trim() === minute);
+          const minSpans = Array.from(
+            container.querySelectorAll(".tiktok-timepicker-right"),
+          );
+          const targetMSpan = minSpans.find(
+            (s) => s.textContent?.trim() === minute,
+          );
           if (targetMSpan) {
-            (targetMSpan as HTMLElement).scrollIntoView?.({ block: 'nearest' });
+            (targetMSpan as HTMLElement).scrollIntoView?.({ block: "nearest" });
             (targetMSpan as HTMLElement).click();
           }
 
           return !!(targetHSpan && targetMSpan);
         },
-        { hour: targetHour, minute: targetMinute }
+        { hour: targetHour, minute: targetMinute },
       )
       .catch(() => false);
 
@@ -133,8 +147,10 @@ async function selectTimeInPicker(
     // 3. Đóng timepicker bằng cách click lại timeInput nếu đang mở
     const isOpen = await page
       .evaluate(() => {
-        const c = document.querySelector('.tiktok-timepicker-time-picker-container');
-        return c && !c.classList.contains('tiktok-timepicker-invisible');
+        const c = document.querySelector(
+          ".tiktok-timepicker-time-picker-container",
+        );
+        return c && !c.classList.contains("tiktok-timepicker-invisible");
       })
       .catch(() => false);
 
@@ -144,13 +160,17 @@ async function selectTimeInPicker(
     }
 
     // 4. Kiểm tra lại giá trị sau khi chọn
-    const currentVal = ((await timeInput.inputValue().catch(() => '')) || '').trim();
+    const currentVal = (
+      (await timeInput.inputValue().catch(() => "")) || ""
+    ).trim();
     if (currentVal === timeStr) {
       log(`Đã chọn thành công mốc giờ: ${timeStr} trên TikTok Studio.`);
       return;
     }
 
-    log(`Lần ${attempt}: Giờ hiện tại là "${currentVal}" (chờ "${timeStr}"), thử lại...`);
+    log(
+      `Lần ${attempt}: Giờ hiện tại là "${currentVal}" (chờ "${timeStr}"), thử lại...`,
+    );
     await page.waitForTimeout(500);
   }
 }
@@ -162,10 +182,12 @@ async function selectDateInPicker(
   page: Page,
   dateInput: any,
   dateStr: string,
-  log: (msg: string) => void
+  log: (msg: string) => void,
 ): Promise<void> {
   await dateInput.scrollIntoViewIfNeeded().catch(() => {});
-  const currentVal = ((await dateInput.inputValue().catch(() => '')) || '').trim();
+  const currentVal = (
+    (await dateInput.inputValue().catch(() => "")) || ""
+  ).trim();
 
   // Nếu ngày hiện tại trên ô nhập đã là hôm nay hoặc đã khớp sẵn dateStr
   const isSameDay =
@@ -175,13 +197,15 @@ async function selectDateInPicker(
       new Date(currentVal).toDateString() === new Date(dateStr).toDateString());
 
   if (isSameDay) {
-    log(`Ngày phát hành trên TikTok đã là ngày mong muốn (${currentVal}), giữ nguyên không mở lịch.`);
+    log(
+      `Ngày phát hành trên TikTok đã là ngày mong muốn (${currentVal}), giữ nguyên không mở lịch.`,
+    );
     return;
   }
 
   log(`Cập nhật Ngày phát hành: từ "${currentVal}" sang "${dateStr}"...`);
 
-  const targetDayNum = parseInt(dateStr.split('-')[2] || '0', 10);
+  const targetDayNum = parseInt(dateStr.split("-")[2] || "0", 10);
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     // 1. Mở popup calendar
@@ -192,36 +216,44 @@ async function selectDateInPicker(
     await page
       .evaluate(
         ({ day }) => {
-          const calendar = document.querySelector('.calendar-wrapper');
+          const calendar = document.querySelector(".calendar-wrapper");
           if (!calendar) return false;
-          const validDays = Array.from(calendar.querySelectorAll('.day.valid'));
-          const match = validDays.find((d) => d.textContent?.trim() === String(day));
+          const validDays = Array.from(calendar.querySelectorAll(".day.valid"));
+          const match = validDays.find(
+            (d) => d.textContent?.trim() === String(day),
+          );
           if (match) {
             (match as HTMLElement).click();
             return true;
           }
           return false;
         },
-        { day: targetDayNum }
+        { day: targetDayNum },
       )
       .catch(() => false);
 
     await page.waitForTimeout(300);
 
     // 3. Đóng calendar nếu vẫn còn mở bằng cách click body
-    const isOpen = await page.evaluate(() => !!document.querySelector('.calendar-wrapper')).catch(() => false);
+    const isOpen = await page
+      .evaluate(() => !!document.querySelector(".calendar-wrapper"))
+      .catch(() => false);
     if (isOpen) {
       await page.evaluate(() => document.body.click()).catch(() => {});
       await page.waitForTimeout(200);
     }
 
-    const newVal = ((await dateInput.inputValue().catch(() => '')) || '').trim();
+    const newVal = (
+      (await dateInput.inputValue().catch(() => "")) || ""
+    ).trim();
     if (newVal === dateStr) {
       log(`Đã chọn thành công ngày: ${dateStr} trên TikTok Studio.`);
       return;
     }
 
-    log(`Lần ${attempt}: Ngày hiện tại là "${newVal}" (chờ "${dateStr}"), thử lại...`);
+    log(
+      `Lần ${attempt}: Ngày hiện tại là "${newVal}" (chờ "${dateStr}"), thử lại...`,
+    );
     await page.waitForTimeout(500);
   }
 }
@@ -232,15 +264,19 @@ export async function applySchedule(
   videoIndex: number,
   log: (msg: string) => void,
   lastScheduledDate: Date | null = null,
-  hasExistingBatch = false
+  hasExistingBatch = false,
 ): Promise<Date> {
   // Nếu chế độ immediate và là video đầu tiên (và chưa có batch nào đang schedule)
-  if (profile.schedule_mode === 'immediate' && videoIndex === 0 && !hasExistingBatch) {
-    log('Chế độ Immediate: Đăng video ngay lập tức (Public).');
+  if (
+    profile.schedule_mode === "immediate" &&
+    videoIndex === 0 &&
+    !hasExistingBatch
+  ) {
+    log("Chế độ Immediate: Đăng video ngay lập tức (Public).");
     return new Date();
   }
 
-  log('Đang kích hoạt chế độ Lên lịch phát hành (Schedule)...');
+  log("Đang kích hoạt chế độ Lên lịch phát hành (Schedule)...");
 
   await dismissPopups(page, log);
 
@@ -248,11 +284,13 @@ export async function applySchedule(
   const checkAndAllowSchedule = async () => {
     const allowBtn = page
       .locator(
-        'div:has-text("scheduled posting") button:has-text("Allow"), div[role="dialog"]:has-text("scheduled posting") button:has-text("Allow"), div[role="dialog"] button:has-text("Allow")'
+        'div:has-text("scheduled posting") button:has-text("Allow"), div[role="dialog"]:has-text("scheduled posting") button:has-text("Allow"), div[role="dialog"] button:has-text("Allow")',
       )
       .first();
     if (await allowBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-      log('Phát hiện popup "Allow your video to be saved for scheduled posting?". Đang tự động bấm "Allow"...');
+      log(
+        'Phát hiện popup "Allow your video to be saved for scheduled posting?". Đang tự động bấm "Allow"...',
+      );
       await allowBtn.click({ force: true }).catch(() => {});
       await page.waitForTimeout(800);
       return true;
@@ -266,7 +304,9 @@ export async function applySchedule(
 
   if (!isChecked) {
     const scheduleLabel = page
-      .locator('label.Radio__root:has(input[value="schedule"]), label:has-text("Schedule"), *:has-text("Schedule")')
+      .locator(
+        'label.Radio__root:has(input[value="schedule"]), label:has-text("Schedule"), *:has-text("Schedule")',
+      )
       .last();
     await scheduleLabel.scrollIntoViewIfNeeded().catch(() => {});
     await scheduleLabel.click({ force: true }).catch(() => {});
@@ -276,7 +316,9 @@ export async function applySchedule(
   }
 
   if (!isChecked) {
-    log('Cảnh báo: Chưa kiểm tra được radio Schedule đã chọn, thử click trực tiếp radio...');
+    log(
+      "Cảnh báo: Chưa kiểm tra được radio Schedule đã chọn, thử click trực tiếp radio...",
+    );
     await scheduleRadioInput.check({ force: true }).catch(() => {});
     await page.waitForTimeout(500);
     await checkAndAllowSchedule();
@@ -284,36 +326,38 @@ export async function applySchedule(
 
   // 2. Tính toán ngày & giờ
   let scheduledTime: Date;
-  if (profile.schedule_mode === 'golden_hours') {
+  if (profile.schedule_mode === "golden_hours") {
     scheduledTime = calculateNextGoldenHour(
-      profile.golden_hours || '11:30,17:30,20:00',
+      profile.golden_hours || "11:30,17:30,20:00",
       videoIndex,
-      lastScheduledDate || new Date()
+      lastScheduledDate || new Date(),
     );
   } else {
     // auto_increment
     scheduledTime = calculateNextIncrement(
       lastScheduledDate,
       profile.schedule_interval || 10,
-      new Date()
+      new Date(),
     );
   }
 
   const year = scheduledTime.getFullYear();
-  const month = String(scheduledTime.getMonth() + 1).padStart(2, '0');
-  const day = String(scheduledTime.getDate()).padStart(2, '0');
+  const month = String(scheduledTime.getMonth() + 1).padStart(2, "0");
+  const day = String(scheduledTime.getDate()).padStart(2, "0");
   const dateStr = `${year}-${month}-${day}`;
 
-  const hour = String(scheduledTime.getHours()).padStart(2, '0');
-  const min = String(scheduledTime.getMinutes()).padStart(2, '0');
+  const hour = String(scheduledTime.getHours()).padStart(2, "0");
+  const min = String(scheduledTime.getMinutes()).padStart(2, "0");
   const timeStr = `${hour}:${min}`;
 
-  log(`Mốc thời gian lên lịch dự kiến: ${dateStr} lúc ${timeStr} (khoảng cách: ${profile.schedule_interval || 10} phút)`);
+  log(
+    `Mốc thời gian lên lịch dự kiến: ${dateStr} lúc ${timeStr} (khoảng cách: ${profile.schedule_interval || 10} phút)`,
+  );
 
   // 3. Tương tác với các ô Date và Time input
   try {
     const inputs = page.locator(
-      'input.TUXTextInputCore-input, input[placeholder*="YYYY"], input[placeholder*="HH"], .date-picker-input input, .time-picker-input input'
+      'input.TUXTextInputCore-input, input[placeholder*="YYYY"], input[placeholder*="HH"], .date-picker-input input, .time-picker-input input',
     );
 
     const count = await inputs.count();
@@ -321,10 +365,14 @@ export async function applySchedule(
     let dateInput: any = null;
 
     for (let i = 0; i < count; i++) {
-      const val = (await inputs.nth(i).inputValue().catch(() => '')) || '';
-      if (val.includes(':')) {
+      const val =
+        (await inputs
+          .nth(i)
+          .inputValue()
+          .catch(() => "")) || "";
+      if (val.includes(":")) {
         timeInput = inputs.nth(i);
-      } else if (val.includes('-') || val.includes('/')) {
+      } else if (val.includes("-") || val.includes("/")) {
         dateInput = inputs.nth(i);
       }
     }
@@ -348,14 +396,18 @@ export async function applySchedule(
       }
 
       // 3.3. Xác thực giá trị thực tế sau khi thiết lập
-      const actualDate = (await dateInput.inputValue().catch(() => '')) || '';
-      const actualTime = (await timeInput.inputValue().catch(() => '')) || '';
+      const actualDate = (await dateInput.inputValue().catch(() => "")) || "";
+      const actualTime = (await timeInput.inputValue().catch(() => "")) || "";
 
-      log(`Xác nhận lịch phát hành trên TikTok Studio: Ngày = "${actualDate}", Giờ = "${actualTime}"`);
+      log(
+        `Xác nhận lịch phát hành trên TikTok Studio: Ngày = "${actualDate}", Giờ = "${actualTime}"`,
+      );
 
       await dismissPopups(page, log);
     } else {
-      log('Lưu ý: Không tìm thấy đủ 2 ô nhập ngày giờ, giữ mốc thời gian mặc định của TikTok.');
+      log(
+        "Lưu ý: Không tìm thấy đủ 2 ô nhập ngày giờ, giữ mốc thời gian mặc định của TikTok.",
+      );
     }
   } catch (e: any) {
     log(`Lưu ý khi điền lịch: ${e.message}`);

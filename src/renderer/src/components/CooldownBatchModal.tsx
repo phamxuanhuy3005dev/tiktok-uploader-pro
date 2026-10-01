@@ -1,7 +1,13 @@
-import React from 'react';
-import { Modal } from './ui/Modal';
-import { Button } from './ui/Button';
-import { Clock, ShieldAlert, CheckCircle2, AlertTriangle, ShieldCheck, Play } from 'lucide-react';
+import {
+  CheckCircle2,
+  Clock,
+  Play,
+  ShieldAlert,
+  ShieldCheck,
+} from "lucide-react";
+import React from "react";
+import { Button } from "./ui/Button";
+import { Modal } from "./ui/Modal";
 
 export interface CooldownBatchItem {
   name: string;
@@ -28,7 +34,7 @@ export const CooldownBatchModal: React.FC<CooldownBatchModalProps> = ({
   safeCount,
   totalCount,
   onConfirmRunAll,
-  onConfirmRunSafeOnly
+  onConfirmRunSafeOnly,
 }) => {
   return (
     <Modal
@@ -40,38 +46,49 @@ export const CooldownBatchModal: React.FC<CooldownBatchModalProps> = ({
     >
       <div className="space-y-4">
         {/* Banner cảnh báo */}
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
-          <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
           <div className="space-y-1">
-            <span className="font-bold text-amber-950 block">Tại sao cần giãn cách 24 tiếng?</span>
+            <span className="block font-bold text-amber-950">
+              Tại sao cần giãn cách 24 tiếng?
+            </span>
             <p className="text-[11px] leading-relaxed text-amber-800">
-              Đối với các kênh đang trong giai đoạn <b>nuôi tương tác (warmup)</b>, đăng video trước 24h dễ bị thuật toán TikTok nhận diện là spam và bóp phân phối hiển thị (view).
+              Đối với các kênh đang trong giai đoạn{" "}
+              <b>nuôi tương tác (warmup)</b>, đăng video trước 24h dễ bị thuật
+              toán TikTok nhận diện là spam và bóp phân phối hiển thị (view).
             </p>
           </div>
         </div>
 
         {/* Danh sách kênh chưa đủ 24h */}
         <div>
-          <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
+          <div className="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-700">
             <span className="flex items-center gap-1.5 text-amber-800">
               <Clock className="h-3.5 w-3.5 text-amber-600" />
               Kênh chưa đủ 24h ({cooldownProfiles.length})
             </span>
-            <span className="text-[11px] text-slate-500 font-normal">Cần chờ thêm</span>
+            <span className="text-[11px] font-normal text-slate-500">
+              Cần chờ thêm
+            </span>
           </div>
 
-          <div className="max-h-48 overflow-y-auto rounded-xl border border-amber-200/80 divide-y divide-amber-100 bg-amber-50/30">
+          <div className="max-h-48 divide-y divide-amber-100 overflow-y-auto rounded-xl border border-amber-200/80 bg-amber-50/30">
             {cooldownProfiles.map((item, idx) => (
-              <div key={idx} className="flex items-center justify-between px-3 py-2 text-xs">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold text-slate-800 truncate">{item.name}</span>
+              <div
+                key={idx}
+                className="flex items-center justify-between px-3 py-2 text-xs"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-semibold text-slate-800">
+                    {item.name}
+                  </span>
                   {item.groupName && (
-                    <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded shrink-0">
+                    <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
                       {item.groupName}
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0 text-[11px] font-semibold text-amber-700 bg-amber-100/70 px-2 py-0.5 rounded-full border border-amber-200">
+                <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-amber-200 bg-amber-100/70 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
                   <Clock className="h-3 w-3 animate-pulse" />
                   <span>Còn {item.remainingText}</span>
                 </div>
@@ -82,21 +99,21 @@ export const CooldownBatchModal: React.FC<CooldownBatchModalProps> = ({
 
         {/* Thông tin kênh an toàn */}
         {safeCount > 0 && (
-          <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-center justify-between">
+          <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-emerald-900">
             <span className="flex items-center gap-1.5 font-medium">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
               Có <b>{safeCount}</b> kênh đã đủ 24h và sẵn sàng đăng an toàn.
             </span>
           </div>
         )}
 
         {/* Action Buttons */}
-        <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-col gap-2 border-t border-slate-100 pt-2 sm:flex-row">
           {safeCount > 0 && (
             <Button
               type="button"
               onClick={onConfirmRunSafeOnly}
-              className="flex-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-sm shadow-emerald-600/20"
+              className="flex-1 gap-1.5 bg-emerald-600 text-xs text-white shadow-sm shadow-emerald-600/20 hover:bg-emerald-700"
             >
               <ShieldCheck className="h-3.5 w-3.5" />
               Chỉ Chạy {safeCount} Kênh Đủ 24h
@@ -107,10 +124,10 @@ export const CooldownBatchModal: React.FC<CooldownBatchModalProps> = ({
             type="button"
             variant="outline"
             onClick={onConfirmRunAll}
-            className="flex-1 text-xs border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold gap-1.5"
+            className="flex-1 gap-1.5 border-amber-300 bg-amber-50 text-xs font-bold text-amber-900 hover:bg-amber-100"
             title="Chạy tất cả các kênh đã chọn, bỏ qua cảnh báo 24h"
           >
-            <Play className="h-3.5 w-3.5 text-amber-600 fill-amber-600" />
+            <Play className="h-3.5 w-3.5 fill-amber-600 text-amber-600" />
             Vẫn Chạy Tất Cả ({totalCount} Kênh)
           </Button>
 
@@ -118,7 +135,7 @@ export const CooldownBatchModal: React.FC<CooldownBatchModalProps> = ({
             type="button"
             variant="outline"
             onClick={onClose}
-            className="text-xs text-slate-600 border-slate-200 hover:bg-slate-100"
+            className="border-slate-200 text-xs text-slate-600 hover:bg-slate-100"
           >
             Hủy Bỏ
           </Button>

@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
-import { X } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { X } from "lucide-react";
+import React, { useEffect } from "react";
+import { cn } from "../../lib/utils";
 
 export interface ModalProps {
   isOpen: boolean;
@@ -17,19 +17,19 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   description,
   children,
-  className
+  className,
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === "Escape") onClose();
     };
     if (isOpen) {
-      window.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
+      window.addEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "hidden";
     }
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'unset';
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "unset";
     };
   }, [isOpen, onClose]);
 
@@ -47,18 +47,20 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          'relative w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl text-slate-800 transition-all duration-200 z-10 max-h-[90vh] overflow-y-auto',
-          className
+          "relative z-10 max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 text-slate-800 shadow-2xl transition-all duration-200",
+          className,
         )}
       >
-        <div className="flex items-start justify-between pb-4 border-b border-slate-100 mb-5">
+        <div className="mb-5 flex items-start justify-between border-b border-slate-100 pb-4">
           <div>
             <h3 className="text-lg font-bold text-slate-900">{title}</h3>
-            {description && <p className="text-xs text-slate-500 mt-1">{description}</p>}
+            {description && (
+              <p className="mt-1 text-xs text-slate-500">{description}</p>
+            )}
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+            className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
             <X className="h-5 w-5" />
           </button>

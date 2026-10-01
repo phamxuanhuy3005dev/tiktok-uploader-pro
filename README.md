@@ -33,16 +33,20 @@
 Tool hoạt động theo mô hình **Smart Portable Runner** (giống tool cũ): Cực kỳ mượt, không cần cài đặt phức tạp, tự động cập nhật code mới mỗi khi mở app!
 
 ### 📥 1. Tải về lần đầu:
+
 Mở Terminal (Mac) hoặc Git Bash / CMD (Windows) và chạy:
+
 ```bash
 git clone https://github.com/phamxuanhuy3005dev/tiktok-uploader-pro.git
 ```
 
 ### ⚡ 2. Khởi chạy 1 chạm:
+
 - **Trên macOS**: Nhấp đúp chuột vào file **`Chay-App-Mac.command`**
 - **Trên Windows**: Nhấp đúp chuột vào file **`Chay-App-Windows.bat`**
 
 > **Cơ chế tự động của Smart Runner**:
+>
 > - Tự động chạy `git pull` để nhận code mới nhất từ GitHub.
 > - Tự động cài thư viện (`npm install` & `playwright`) nếu máy mới chưa có.
 > - Tự động kiểm tra file thay đổi và compile siêu tốc (< 0.6s).
@@ -56,7 +60,7 @@ git clone https://github.com/phamxuanhuy3005dev/tiktok-uploader-pro.git
    - Bấm nút **"Thêm Profile"** trên giao diện.
    - Điền tên kênh (ví dụ: `review_phim_01`), chọn Nhóm kênh.
    - Chọn Folder video riêng hoặc dùng tính năng **"Chia Đều Video"** để tự động phân phối 1 thư mục mẹ cho nhiều profile theo nhóm.
-   - Thiết lập cấu hình nhạc: *Tắt nhạc* hoặc *Bật nhạc yêu thích (Xoay vòng hoặc Cố định bài)*.
+   - Thiết lập cấu hình nhạc: _Tắt nhạc_ hoặc _Bật nhạc yêu thích (Xoay vòng hoặc Cố định bài)_.
    - Thiết lập proxy (nếu nuôi nick ngoại: hỗ trợ `http://`, `socks5://`, có nút kiểm tra IP/Quốc gia trực tiếp).
 
 2. **Bước 2: Đăng Nhập Tài Khoản Lần Đầu**:

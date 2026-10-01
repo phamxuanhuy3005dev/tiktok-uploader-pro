@@ -1,19 +1,31 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron';
-import fs from 'fs';
-import path from 'path';
-import { profileRepo, logRepo, configRepo, groupRepo, ProfileRecord, PROFILES_DIR } from '../db/database';
+import { BrowserWindow, dialog, ipcMain } from "electron";
+import fs from "fs";
+import path from "path";
 import {
-  openManualBrowser,
+  configRepo,
+  groupRepo,
+  logRepo,
+  ProfileRecord,
+  profileRepo,
+  PROFILES_DIR,
+} from "../db/database";
+import {
+  exportProfilesToJson,
+  importFromOldTool,
+  importProfilesFromJson,
+  importProfilesFromJsonString,
+} from "../db/migration";
+import {
   closeProfileContext,
-  testProxyConnection,
-  isProfileActive,
+  deleteProfileDiskData,
   focusProfileBrowser,
-  deleteProfileDiskData
-} from '../engine/browser-pool';
-import { uploadQueue } from '../queue/task-queue';
-import { importFromOldTool, exportProfilesToJson, importProfilesFromJson, importProfilesFromJsonString } from '../db/migration';
-import { generateTotp } from '../engine/totp';
-import { fetchAndSaveProfileStats } from '../engine/stats-fetcher';
+  isProfileActive,
+  openManualBrowser,
+  testProxyConnection,
+} from "../engine/browser-pool";
+import { fetchAndSaveProfileStats } from "../engine/stats-fetcher";
+import { generateTotp } from "../engine/totp";
+import { uploadQueue } from "../queue/task-queue";
 
 let currentMainWindow: BrowserWindow | null = null;
 let isIpcRegistered = false;
@@ -43,28 +55,34 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   uploadQueue.onProgress((event) => {
     const activeWin = getValidWindow();
     if (activeWin && !activeWin.isDestroyed()) {
-      activeWin.webContents.send('upload:progress', event);
+      activeWin.webContents.send("upload:progress", event);
     }
   });
 
   // Profiles
-  ipcMain.handle('profiles:getAll', async () => {
+  ipcMain.handle("profiles:getAll", async () => {
     return profileRepo.getAll();
   });
 
-  ipcMain.handle('profiles:create', async (_, profile: Omit<ProfileRecord, 'created_at'>) => {
-    // Nếu có thư mục zombie cũ còn sót trên đĩa từ profile bị xóa trước đó, dọn sạch để đảm bảo profile mới hoàn toàn sạch sẽ
-    await deleteProfileDiskData(profile.name);
-    profileRepo.create(profile);
-    return profileRepo.getAll();
-  });
+  ipcMain.handle(
+    "profiles:create",
+    async (_, profile: Omit<ProfileRecord, "created_at">) => {
+      // Nếu có thư mục zombie cũ còn sót trên đĩa từ profile bị xóa trước đó, dọn sạch để đảm bảo profile mới hoàn toàn sạch sẽ
+      await deleteProfileDiskData(profile.name);
+      profileRepo.create(profile);
+      return profileRepo.getAll();
+    },
+  );
 
-  ipcMain.handle('profiles:update', async (_, profile: Partial<ProfileRecord> & { id: string }) => {
-    profileRepo.update(profile);
-    return profileRepo.getAll();
-  });
+  ipcMain.handle(
+    "profiles:update",
+    async (_, profile: Partial<ProfileRecord> & { id: string }) => {
+      profileRepo.update(profile);
+      return profileRepo.getAll();
+    },
+  );
 
-  ipcMain.handle('profiles:delete', async (_, id: string) => {
+  ipcMain.handle("profiles:delete", async (_, id: string) => {
     const profile = profileRepo.getById(id);
     if (profile) {
       if (isProfileActive(id)) {
@@ -77,32 +95,38 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const updated = profileRepo.getAll();
     const activeWin = getValidWindow();
     if (activeWin && !activeWin.isDestroyed()) {
-      activeWin.webContents.send('profiles:updated', updated);
+      activeWin.webContents.send("profiles:updated", updated);
     }
     return updated;
   });
 
-  ipcMain.handle('profiles:bulkCreate', async (_, profiles: any[]) => {
+  ipcMain.handle("profiles:bulkCreate", async (_, profiles: any[]) => {
     const count = profileRepo.bulkCreate(profiles);
     const updated = profileRepo.getAll();
     const activeWin = getValidWindow();
     if (activeWin && !activeWin.isDestroyed()) {
-      activeWin.webContents.send('profiles:updated', updated);
+      activeWin.webContents.send("profiles:updated", updated);
     }
     return { count, profiles: updated };
   });
 
-  ipcMain.handle('profiles:bulkUpdateGroup', async (_, { profileIds, groupName }: { profileIds: string[]; groupName: string }) => {
-    profileRepo.bulkUpdateGroup(profileIds, groupName);
-    const updated = profileRepo.getAll();
-    const activeWin = getValidWindow();
-    if (activeWin && !activeWin.isDestroyed()) {
-      activeWin.webContents.send('profiles:updated', updated);
-    }
-    return updated;
-  });
+  ipcMain.handle(
+    "profiles:bulkUpdateGroup",
+    async (
+      _,
+      { profileIds, groupName }: { profileIds: string[]; groupName: string },
+    ) => {
+      profileRepo.bulkUpdateGroup(profileIds, groupName);
+      const updated = profileRepo.getAll();
+      const activeWin = getValidWindow();
+      if (activeWin && !activeWin.isDestroyed()) {
+        activeWin.webContents.send("profiles:updated", updated);
+      }
+      return updated;
+    },
+  );
 
-  ipcMain.handle('profiles:bulkDelete', async (_, profileIds: string[]) => {
+  ipcMain.handle("profiles:bulkDelete", async (_, profileIds: string[]) => {
     for (const id of profileIds) {
       const profile = profileRepo.getById(id);
       if (profile) {
@@ -116,12 +140,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const updated = profileRepo.getAll();
     const activeWin = getValidWindow();
     if (activeWin && !activeWin.isDestroyed()) {
-      activeWin.webContents.send('profiles:updated', updated);
+      activeWin.webContents.send("profiles:updated", updated);
     }
     return updated;
   });
 
-  ipcMain.handle('profiles:deleteAll', async () => {
+  ipcMain.handle("profiles:deleteAll", async () => {
     const all = profileRepo.getAll();
     for (const p of all) {
       await closeProfileContext(p.id).catch(() => {});
@@ -142,51 +166,55 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Kiểm tra kết nối Proxy thực tế
-  ipcMain.handle('proxy:test', async (_, rawProxy: string) => {
+  ipcMain.handle("proxy:test", async (_, rawProxy: string) => {
     return testProxyConnection(rawProxy);
   });
 
   // Import từ tool cũ tiktok-at
-  ipcMain.handle('profiles:importOld', async () => {
+  ipcMain.handle("profiles:importOld", async () => {
     const res = importFromOldTool();
     return {
       profiles: profileRepo.getAll(),
-      ...res
+      ...res,
     };
   });
 
   // Export profiles ra file JSON
-  ipcMain.handle('profiles:exportJson', async (_, specificProfiles?: any[]) => {
+  ipcMain.handle("profiles:exportJson", async (_, specificProfiles?: any[]) => {
     const activeWin = getValidWindow();
     const today = new Date().toISOString().slice(0, 10);
     const options = {
-      title: 'Xuất Danh Sách Profiles (JSON)',
+      title: "Xuất Danh Sách Profiles (JSON)",
       defaultPath: `tiktok_profiles_backup_${today}.json`,
-      filters: [{ name: 'JSON Backup Files (*.json)', extensions: ['json'] }]
+      filters: [{ name: "JSON Backup Files (*.json)", extensions: ["json"] }],
     };
-    const res = activeWin 
+    const res = activeWin
       ? await dialog.showSaveDialog(activeWin, options)
       : await dialog.showSaveDialog(options);
 
     if (!res.canceled && res.filePath) {
       exportProfilesToJson(res.filePath, specificProfiles);
-      return { success: true, filePath: res.filePath, count: (specificProfiles || profileRepo.getAll()).length };
+      return {
+        success: true,
+        filePath: res.filePath,
+        count: (specificProfiles || profileRepo.getAll()).length,
+      };
     }
     return { success: false, canceled: true };
   });
 
   // Import profiles từ file JSON
-  ipcMain.handle('profiles:importJson', async () => {
+  ipcMain.handle("profiles:importJson", async () => {
     const activeWin = getValidWindow();
     const options = {
-      title: 'Chọn File JSON Profiles Cần Nhập',
+      title: "Chọn File JSON Profiles Cần Nhập",
       filters: [
-        { name: 'JSON Backup Files (*.json)', extensions: ['json'] },
-        { name: 'All Files (*.*)', extensions: ['*'] }
+        { name: "JSON Backup Files (*.json)", extensions: ["json"] },
+        { name: "All Files (*.*)", extensions: ["*"] },
       ],
-      properties: ['openFile'] as ('openFile')[]
+      properties: ["openFile"] as "openFile"[],
     };
-    const res = activeWin 
+    const res = activeWin
       ? await dialog.showOpenDialog(activeWin, options)
       : await dialog.showOpenDialog(options);
 
@@ -196,7 +224,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       const updated = profileRepo.getAll();
       const validWin = getValidWindow();
       if (validWin && !validWin.isDestroyed()) {
-        validWin.webContents.send('profiles:updated', updated);
+        validWin.webContents.send("profiles:updated", updated);
       }
       return { success: true, count, filePath, profiles: updated };
     }
@@ -204,70 +232,97 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Import profiles từ chuỗi JSON (paste hoặc drag-drop)
-  ipcMain.handle('profiles:importJsonString', async (_, jsonContent: string) => {
-    const count = importProfilesFromJsonString(jsonContent);
-    const updated = profileRepo.getAll();
-    const activeWin = getValidWindow();
-    if (activeWin && !activeWin.isDestroyed()) {
-      activeWin.webContents.send('profiles:updated', updated);
-    }
-    return { success: true, count, profiles: updated };
-  });
+  ipcMain.handle(
+    "profiles:importJsonString",
+    async (_, jsonContent: string) => {
+      const count = importProfilesFromJsonString(jsonContent);
+      const updated = profileRepo.getAll();
+      const activeWin = getValidWindow();
+      if (activeWin && !activeWin.isDestroyed()) {
+        activeWin.webContents.send("profiles:updated", updated);
+      }
+      return { success: true, count, profiles: updated };
+    },
+  );
 
   // Hàm hỗ trợ escape chuỗi sang định dạng ô CSV (Excel tương thích)
   const escapeCsvCell = (val: any): string => {
-    if (val === null || val === undefined) return '';
+    if (val === null || val === undefined) return "";
     const str = String(val);
-    if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    if (
+      str.includes(",") ||
+      str.includes('"') ||
+      str.includes("\n") ||
+      str.includes("\r")
+    ) {
       return `"${str.replace(/"/g, '""')}"`;
     }
     return str;
   };
 
   const TIKTOK_COOKIE_NAMES = new Set([
-    'sessionid', 'sessionid_ss', 'sid_tt', 'sid_guard', 'uid_tt', 'uid_tt_ss',
-    'tt_chain_token', 'csrf_token', 'ttwid', 'msToken', 'odin_tt', 'store-country-sign',
-    'passport_csrf_token', 'passport_csrf_token_default', 'tt_csrf_token', 's_v_web_id'
+    "sessionid",
+    "sessionid_ss",
+    "sid_tt",
+    "sid_guard",
+    "uid_tt",
+    "uid_tt_ss",
+    "tt_chain_token",
+    "csrf_token",
+    "ttwid",
+    "msToken",
+    "odin_tt",
+    "store-country-sign",
+    "passport_csrf_token",
+    "passport_csrf_token_default",
+    "tt_csrf_token",
+    "s_v_web_id",
   ]);
 
   const cleanCookieForExport = (rawCookies: any): string => {
-    if (!rawCookies) return '';
-    let str = typeof rawCookies === 'string' ? rawCookies.trim() : '';
-    if (!str && !Array.isArray(rawCookies)) return '';
+    if (!rawCookies) return "";
+    let str = typeof rawCookies === "string" ? rawCookies.trim() : "";
+    if (!str && !Array.isArray(rawCookies)) return "";
 
-    if (Array.isArray(rawCookies) || str.startsWith('[') || str.startsWith('{')) {
+    if (
+      Array.isArray(rawCookies) ||
+      str.startsWith("[") ||
+      str.startsWith("{")
+    ) {
       try {
         const parsed = Array.isArray(rawCookies) ? rawCookies : JSON.parse(str);
         if (Array.isArray(parsed)) {
-          const matched = parsed.filter((c: any) => c && c.name && TIKTOK_COOKIE_NAMES.has(c.name));
+          const matched = parsed.filter(
+            (c: any) => c && c.name && TIKTOK_COOKIE_NAMES.has(c.name),
+          );
           const listToUse = matched.length > 0 ? matched : parsed.slice(0, 15);
           return listToUse
             .map((c: any) => `${c.name}=${c.value}`)
-            .join('; ')
-            .replace(/[\r\n|]/g, ' ')
+            .join("; ")
+            .replace(/[\r\n|]/g, " ")
             .trim();
         }
       } catch (_) {}
     }
 
-    return str.replace(/[\r\n|]/g, ' ').trim();
+    return str.replace(/[\r\n|]/g, " ").trim();
   };
 
   // Export danh sách tài khoản ra file CSV / TXT / JSON với đầy đủ tên cột và nhóm
-  ipcMain.handle('profiles:exportAccounts', async (_, accounts: any[]) => {
+  ipcMain.handle("profiles:exportAccounts", async (_, accounts: any[]) => {
     const activeWin = getValidWindow();
     const today = new Date().toISOString().slice(0, 10);
     const options = {
-      title: 'Xuất Danh Sách Tài Khoản (Excel CSV / TXT / JSON)',
+      title: "Xuất Danh Sách Tài Khoản (Excel CSV / TXT / JSON)",
       defaultPath: `tiktok_accounts_${today}.csv`,
       filters: [
-        { name: 'Excel Spreadsheet (*.csv)', extensions: ['csv'] },
-        { name: 'Text Document (*.txt)', extensions: ['txt'] },
-        { name: 'JSON Backup (*.json)', extensions: ['json'] },
-        { name: 'All Files (*.*)', extensions: ['*'] }
-      ]
+        { name: "Excel Spreadsheet (*.csv)", extensions: ["csv"] },
+        { name: "Text Document (*.txt)", extensions: ["txt"] },
+        { name: "JSON Backup (*.json)", extensions: ["json"] },
+        { name: "All Files (*.*)", extensions: ["*"] },
+      ],
     };
-    const res = activeWin 
+    const res = activeWin
       ? await dialog.showSaveDialog(activeWin, options)
       : await dialog.showSaveDialog(options);
 
@@ -275,137 +330,194 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       const filePath = res.filePath;
       const lowerPath = filePath.toLowerCase();
 
-      if (lowerPath.endsWith('.json')) {
+      if (lowerPath.endsWith(".json")) {
         const jsonContent = JSON.stringify(accounts || [], null, 2);
-        fs.writeFileSync(filePath, jsonContent, 'utf-8');
-        return { success: true, filePath, format: 'json' };
+        fs.writeFileSync(filePath, jsonContent, "utf-8");
+        return { success: true, filePath, format: "json" };
       }
 
-      if (lowerPath.endsWith('.csv')) {
-        const header = ['Username', 'Password', '2FA', 'Email', 'Pass_Email', 'Mail_Ao', 'Proxy', 'Cookie', 'Nhom'];
-        const rows = (accounts || []).map((p) => [
-          escapeCsvCell(p.account_id || p.name || ''),
-          escapeCsvCell(p.pass || ''),
-          escapeCsvCell(p.two_factor || ''),
-          escapeCsvCell(p.email || ''),
-          escapeCsvCell(p.pass_email || ''),
-          escapeCsvCell(p.mail_ao || ''),
-          escapeCsvCell(p.proxy || ''),
-          escapeCsvCell(cleanCookieForExport(p.cookies)),
-          escapeCsvCell(p.group_name || 'Mặc định')
-        ].join(','));
+      if (lowerPath.endsWith(".csv")) {
+        const header = [
+          "Username",
+          "Password",
+          "2FA",
+          "Email",
+          "Pass_Email",
+          "Mail_Ao",
+          "Proxy",
+          "Cookie",
+          "Nhom",
+        ];
+        const rows = (accounts || []).map((p) =>
+          [
+            escapeCsvCell(p.account_id || p.name || ""),
+            escapeCsvCell(p.pass || ""),
+            escapeCsvCell(p.two_factor || ""),
+            escapeCsvCell(p.email || ""),
+            escapeCsvCell(p.pass_email || ""),
+            escapeCsvCell(p.mail_ao || ""),
+            escapeCsvCell(p.proxy || ""),
+            escapeCsvCell(cleanCookieForExport(p.cookies)),
+            escapeCsvCell(p.group_name || "Mặc định"),
+          ].join(","),
+        );
 
         // UTF-8 BOM (\uFEFF) cho phép Excel hiển thị tiếng Việt có dấu chuẩn 100% không bị vỡ font
-        const csvContent = '\uFEFF' + [header.join(','), ...rows].join('\r\n');
-        fs.writeFileSync(filePath, csvContent, 'utf-8');
-        return { success: true, filePath, format: 'csv' };
+        const csvContent = "\uFEFF" + [header.join(","), ...rows].join("\r\n");
+        fs.writeFileSync(filePath, csvContent, "utf-8");
+        return { success: true, filePath, format: "csv" };
       }
 
       // Mặc định là TXT (chuẩn MMO pipe |)
-      const header = '# Username|Password|2FA|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
-      const rows = (accounts || []).map((p) => [
-        p.account_id || p.name || '',
-        p.pass || '',
-        p.two_factor || '',
-        p.email || '',
-        p.pass_email || '',
-        p.mail_ao || '',
-        p.proxy || '',
-        cleanCookieForExport(p.cookies),
-        p.group_name || 'Mặc định'
-      ].join('|'));
+      const header =
+        "# Username|Password|2FA|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom";
+      const rows = (accounts || []).map((p) =>
+        [
+          p.account_id || p.name || "",
+          p.pass || "",
+          p.two_factor || "",
+          p.email || "",
+          p.pass_email || "",
+          p.mail_ao || "",
+          p.proxy || "",
+          cleanCookieForExport(p.cookies),
+          p.group_name || "Mặc định",
+        ].join("|"),
+      );
 
-      const txtContent = [header, ...rows].join('\r\n');
-      fs.writeFileSync(filePath, txtContent, 'utf-8');
-      return { success: true, filePath, format: 'txt' };
+      const txtContent = [header, ...rows].join("\r\n");
+      fs.writeFileSync(filePath, txtContent, "utf-8");
+      return { success: true, filePath, format: "txt" };
     }
     return { success: false, canceled: true };
   });
 
   // Tải file mẫu danh sách tài khoản (CSV Excel hoặc TXT)
-  ipcMain.handle('profiles:downloadTemplate', async () => {
+  ipcMain.handle("profiles:downloadTemplate", async () => {
     const activeWin = getValidWindow();
     const options = {
-      title: 'Tải File Mẫu Danh Sách Tài Khoản',
-      defaultPath: 'tiktok_accounts_template.csv',
+      title: "Tải File Mẫu Danh Sách Tài Khoản",
+      defaultPath: "tiktok_accounts_template.csv",
       filters: [
-        { name: 'Excel Spreadsheet (*.csv)', extensions: ['csv'] },
-        { name: 'Text Document (*.txt)', extensions: ['txt'] },
-        { name: 'All Files (*.*)', extensions: ['*'] }
-      ]
+        { name: "Excel Spreadsheet (*.csv)", extensions: ["csv"] },
+        { name: "Text Document (*.txt)", extensions: ["txt"] },
+        { name: "All Files (*.*)", extensions: ["*"] },
+      ],
     };
-    const res = activeWin 
+    const res = activeWin
       ? await dialog.showSaveDialog(activeWin, options)
       : await dialog.showSaveDialog(options);
 
     if (!res.canceled && res.filePath) {
       const filePath = res.filePath;
-      const isCsv = filePath.toLowerCase().endsWith('.csv');
+      const isCsv = filePath.toLowerCase().endsWith(".csv");
 
       if (isCsv) {
-        const header = ['Username', 'Password', '2FA', 'Email', 'Pass_Email', 'Mail_Ao', 'Proxy', 'Cookie', 'Nhom'];
-        const sampleRows = [
-          ['tiktok_user_demo1', 'Pass123456', 'JBSWY3DPEHPK3PXP', 'user01@outlook.com', 'PassMail123', 'mailao01@gmail.com', 'http://user:pass@127.0.0.1:8080', 'sessionid=9f8e7d6c5b4a3...', 'Nhóm Nuôi US'],
-          ['tiktok_user_demo2', 'Pass654321', '', 'user02@gmail.com', 'PassMail456', '', 'socks5://192.168.1.100:1080', '', 'Nhóm Reup Phim'],
-          ['tiktok_user_demo3', 'Pass789xyz', 'KRSXG5CTMVRXEZLU', '', '', '', '', '', 'Mặc định']
-        ].map((row) => row.map(escapeCsvCell).join(','));
-
-        const csvContent = '\uFEFF' + [header.join(','), ...sampleRows].join('\r\n');
-        fs.writeFileSync(filePath, csvContent, 'utf-8');
-      } else {
-        const header = '# CẤU TRÚC MMO: Username|Password|2FA|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom';
-        const sampleRows = [
-          'tiktok_user_demo1|Pass123456|JBSWY3DPEHPK3PXP|user01@outlook.com|PassMail123|mailao01@gmail.com|http://user:pass@127.0.0.1:8080|sessionid=9f8e7d6c5b4a3...|Nhóm Nuôi US',
-          'tiktok_user_demo2|Pass654321||user02@gmail.com|PassMail456||socks5://192.168.1.100:1080||Nhóm Reup Phim',
-          'tiktok_user_demo3|Pass789xyz|KRSXG5CTMVRXEZLU||||||Mặc định'
+        const header = [
+          "Username",
+          "Password",
+          "2FA",
+          "Email",
+          "Pass_Email",
+          "Mail_Ao",
+          "Proxy",
+          "Cookie",
+          "Nhom",
         ];
-        const txtContent = [header, ...sampleRows].join('\r\n');
-        fs.writeFileSync(filePath, txtContent, 'utf-8');
+        const sampleRows = [
+          [
+            "tiktok_user_demo1",
+            "Pass123456",
+            "JBSWY3DPEHPK3PXP",
+            "user01@outlook.com",
+            "PassMail123",
+            "mailao01@gmail.com",
+            "http://user:pass@127.0.0.1:8080",
+            "sessionid=9f8e7d6c5b4a3...",
+            "Nhóm Nuôi US",
+          ],
+          [
+            "tiktok_user_demo2",
+            "Pass654321",
+            "",
+            "user02@gmail.com",
+            "PassMail456",
+            "",
+            "socks5://192.168.1.100:1080",
+            "",
+            "Nhóm Reup Phim",
+          ],
+          [
+            "tiktok_user_demo3",
+            "Pass789xyz",
+            "KRSXG5CTMVRXEZLU",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Mặc định",
+          ],
+        ].map((row) => row.map(escapeCsvCell).join(","));
+
+        const csvContent =
+          "\uFEFF" + [header.join(","), ...sampleRows].join("\r\n");
+        fs.writeFileSync(filePath, csvContent, "utf-8");
+      } else {
+        const header =
+          "# CẤU TRÚC MMO: Username|Password|2FA|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom";
+        const sampleRows = [
+          "tiktok_user_demo1|Pass123456|JBSWY3DPEHPK3PXP|user01@outlook.com|PassMail123|mailao01@gmail.com|http://user:pass@127.0.0.1:8080|sessionid=9f8e7d6c5b4a3...|Nhóm Nuôi US",
+          "tiktok_user_demo2|Pass654321||user02@gmail.com|PassMail456||socks5://192.168.1.100:1080||Nhóm Reup Phim",
+          "tiktok_user_demo3|Pass789xyz|KRSXG5CTMVRXEZLU||||||Mặc định",
+        ];
+        const txtContent = [header, ...sampleRows].join("\r\n");
+        fs.writeFileSync(filePath, txtContent, "utf-8");
       }
-      return { success: true, filePath, format: isCsv ? 'csv' : 'txt' };
+      return { success: true, filePath, format: isCsv ? "csv" : "txt" };
     }
     return { success: false, canceled: true };
   });
 
   // Lấy mã OTP 2FA trực tiếp từ chuỗi secret theo thuật toán RFC 6238
-  ipcMain.handle('profiles:get2FaCode', async (_, secret: string) => {
+  ipcMain.handle("profiles:get2FaCode", async (_, secret: string) => {
     return generateTotp(secret);
   });
 
   // Export danh sách tài khoản ra file TXT (Legacy)
-  ipcMain.handle('profiles:exportTxt', async (_, content: string) => {
+  ipcMain.handle("profiles:exportTxt", async (_, content: string) => {
     const activeWin = getValidWindow();
     const today = new Date().toISOString().slice(0, 10);
     const options = {
-      title: 'Lưu Danh Sách Tài Khoản Ra File TXT',
+      title: "Lưu Danh Sách Tài Khoản Ra File TXT",
       defaultPath: `tiktok_accounts_${today}.txt`,
       filters: [
-        { name: 'Text Document (*.txt)', extensions: ['txt'] },
-        { name: 'CSV File (*.csv)', extensions: ['csv'] },
-        { name: 'All Files (*.*)', extensions: ['*'] }
-      ]
+        { name: "Text Document (*.txt)", extensions: ["txt"] },
+        { name: "CSV File (*.csv)", extensions: ["csv"] },
+        { name: "All Files (*.*)", extensions: ["*"] },
+      ],
     };
-    const res = activeWin 
+    const res = activeWin
       ? await dialog.showSaveDialog(activeWin, options)
       : await dialog.showSaveDialog(options);
 
     if (!res.canceled && res.filePath) {
-      fs.writeFileSync(res.filePath, content, 'utf-8');
+      fs.writeFileSync(res.filePath, content, "utf-8");
       return { success: true, filePath: res.filePath };
     }
     return { success: false, canceled: true };
   });
 
   // Chọn và đọc file JSON từ máy tính
-  ipcMain.handle('profiles:readTxtFile', async () => {
+  ipcMain.handle("profiles:readTxtFile", async () => {
     const activeWin = getValidWindow();
     const options = {
-      title: 'Chọn File JSON Profiles',
+      title: "Chọn File JSON Profiles",
       filters: [
-        { name: 'JSON Profiles (*.json)', extensions: ['json'] },
-        { name: 'All Files (*.*)', extensions: ['*'] }
+        { name: "JSON Profiles (*.json)", extensions: ["json"] },
+        { name: "All Files (*.*)", extensions: ["*"] },
       ],
-      properties: ['openFile'] as ('openFile')[]
+      properties: ["openFile"] as "openFile"[],
     };
     const res = activeWin
       ? await dialog.showOpenDialog(activeWin, options)
@@ -413,7 +525,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     if (!res.canceled && res.filePaths.length > 0) {
       const filePath = res.filePaths[0];
-      const content = fs.readFileSync(filePath, 'utf-8');
+      const content = fs.readFileSync(filePath, "utf-8");
       const fileName = path.basename(filePath);
       return { success: true, content, fileName, filePath };
     }
@@ -421,14 +533,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Mở trình duyệt đăng nhập thủ công
-  ipcMain.handle('profiles:openBrowser', async (_, id: string) => {
+  ipcMain.handle("profiles:openBrowser", async (_, id: string) => {
     const profile = profileRepo.getById(id);
-    if (!profile) throw new Error('Không tìm thấy profile');
+    if (!profile) throw new Error("Không tìm thấy profile");
 
     const notifyUpdated = () => {
       const activeWin = getValidWindow();
       if (activeWin && !activeWin.isDestroyed()) {
-        activeWin.webContents.send('profiles:updated', profileRepo.getAll());
+        activeWin.webContents.send("profiles:updated", profileRepo.getAll());
       }
     };
 
@@ -442,27 +554,29 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     await openManualBrowser(
       profile,
       () => notifyUpdated(),
-      () => notifyUpdated()
+      () => notifyUpdated(),
     );
     notifyUpdated(); // Cập nhật ngay lập tức sang trạng thái manual_session
     return { success: true, alreadyOpen: false };
   });
 
-  ipcMain.handle('profiles:closeBrowser', async (_, id: string) => {
+  ipcMain.handle("profiles:closeBrowser", async (_, id: string) => {
     await closeProfileContext(id);
-    profileRepo.updateStatus(id, 'idle');
+    profileRepo.updateStatus(id, "idle");
     const activeWin = getValidWindow();
     if (activeWin && !activeWin.isDestroyed()) {
-      activeWin.webContents.send('profiles:updated', profileRepo.getAll());
+      activeWin.webContents.send("profiles:updated", profileRepo.getAll());
     }
     return true;
   });
 
   // Native folder selector
-  ipcMain.handle('dialog:selectFolder', async () => {
+  ipcMain.handle("dialog:selectFolder", async () => {
     const activeWin = getValidWindow();
     const options = {
-      properties: ['openDirectory', 'createDirectory'] as ('openDirectory' | 'createDirectory')[]
+      properties: ["openDirectory", "createDirectory"] as (
+        "openDirectory" | "createDirectory"
+      )[],
     };
     const result = activeWin
       ? await dialog.showOpenDialog(activeWin, options)
@@ -475,17 +589,23 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Quét thư mục video
-  ipcMain.handle('videos:scanFolder', async (_, folderPath: string) => {
+  ipcMain.handle("videos:scanFolder", async (_, folderPath: string) => {
     if (!folderPath || !fs.existsSync(folderPath)) {
-      return { exists: false, count: 0, totalCount: 0, files: [], videoFiles: [] };
+      return {
+        exists: false,
+        count: 0,
+        totalCount: 0,
+        files: [],
+        videoFiles: [],
+      };
     }
-    const validExts = new Set(['.mp4', '.mov', '.webm', '.mkv']);
+    const validExts = new Set([".mp4", ".mov", ".webm", ".mkv"]);
     try {
       const entries = fs.readdirSync(folderPath, { withFileTypes: true });
       const files = entries
         .filter((entry) => {
           if (!entry.isFile()) return false;
-          if (entry.name.startsWith('.')) return false;
+          if (entry.name.startsWith(".")) return false;
           const ext = path.extname(entry.name).toLowerCase();
           return validExts.has(ext);
         })
@@ -496,55 +616,68 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         count: files.length,
         totalCount: files.length,
         files,
-        videoFiles: files
+        videoFiles: files,
       };
     } catch {
-      return { exists: false, count: 0, totalCount: 0, files: [], videoFiles: [] };
+      return {
+        exists: false,
+        count: 0,
+        totalCount: 0,
+        files: [],
+        videoFiles: [],
+      };
     }
   });
 
   // Chia đều video từ 1 folder cho các kênh (hoặc theo nhóm)
   ipcMain.handle(
-    'videos:distribute',
+    "videos:distribute",
     async (
       _,
       {
         sourceFolder,
         targetProfileIds,
-        mode = 'move'
+        mode = "move",
       }: {
         sourceFolder: string;
         targetProfileIds: string[];
-        mode?: 'move' | 'copy';
-      }
+        mode?: "move" | "copy";
+      },
     ) => {
       if (!sourceFolder || !fs.existsSync(sourceFolder)) {
-        throw new Error('Thư mục nguồn không tồn tại!');
+        throw new Error("Thư mục nguồn không tồn tại!");
       }
 
       if (!targetProfileIds || targetProfileIds.length === 0) {
-        throw new Error('Vui lòng chọn ít nhất 1 profile để chia đều video!');
+        throw new Error("Vui lòng chọn ít nhất 1 profile để chia đều video!");
       }
 
-      const validExts = new Set(['.mp4', '.mov', '.webm', '.mkv']);
+      const validExts = new Set([".mp4", ".mov", ".webm", ".mkv"]);
       let allFiles: string[] = [];
       try {
         const entries = fs.readdirSync(sourceFolder, { withFileTypes: true });
         allFiles = entries
           .filter((entry) => {
             if (!entry.isFile()) return false;
-            if (entry.name.startsWith('.')) return false;
+            if (entry.name.startsWith(".")) return false;
             const ext = path.extname(entry.name).toLowerCase();
             return validExts.has(ext);
           })
           .map((entry) => entry.name)
-          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+          .sort((a, b) =>
+            a.localeCompare(b, undefined, {
+              numeric: true,
+              sensitivity: "base",
+            }),
+          );
       } catch (err: any) {
         throw new Error(`Không thể đọc thư mục nguồn: ${err.message}`);
       }
 
       if (allFiles.length === 0) {
-        throw new Error('Không tìm thấy video hợp lệ nào (.mp4, .mov, .webm, .mkv) trong thư mục nguồn!');
+        throw new Error(
+          "Không tìm thấy video hợp lệ nào (.mp4, .mov, .webm, .mkv) trong thư mục nguồn!",
+        );
       }
 
       const profiles = targetProfileIds
@@ -552,7 +685,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         .filter(Boolean) as ProfileRecord[];
 
       if (profiles.length === 0) {
-        throw new Error('Không tìm thấy thông tin các kênh hợp lệ.');
+        throw new Error("Không tìm thấy thông tin các kênh hợp lệ.");
       }
 
       const results: Array<{
@@ -565,10 +698,13 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       for (let i = 0; i < profiles.length; i++) {
         const p = profiles[i];
         // Phân bổ xoay vòng đều (Round-Robin)
-        const assigned = allFiles.filter((_, idx) => idx % profiles.length === i);
-        
+        const assigned = allFiles.filter(
+          (_, idx) => idx % profiles.length === i,
+        );
+
         // Chuẩn hóa tên thư mục an toàn trên Windows và macOS (loại bỏ ký tự cấm: < > : " / \ | ? *)
-        const safeFolderName = p.name.replace(/[<>:"/\\|?*]/g, '_').trim() || `profile_${p.id}`;
+        const safeFolderName =
+          p.name.replace(/[<>:"/\\|?*]/g, "_").trim() || `profile_${p.id}`;
         const pFolder = path.join(sourceFolder, safeFolderName);
         if (!fs.existsSync(pFolder)) {
           fs.mkdirSync(pFolder, { recursive: true });
@@ -577,7 +713,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         for (const file of assigned) {
           const srcPath = path.join(sourceFolder, file);
           const dstPath = path.join(pFolder, file);
-          if (mode === 'move') {
+          if (mode === "move") {
             try {
               fs.renameSync(srcPath, dstPath);
             } catch {
@@ -593,14 +729,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         // Cập nhật video_folder cho profile trong database
         profileRepo.update({
           id: p.id,
-          video_folder: pFolder
+          video_folder: pFolder,
         });
 
         results.push({
           profileId: p.id,
           profileName: p.name,
           folder: pFolder,
-          assignedVideos: assigned
+          assignedVideos: assigned,
         });
       }
 
@@ -610,101 +746,108 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         totalVideos: allFiles.length,
         profilesCount: profiles.length,
         results,
-        updatedProfiles: profileRepo.getAll()
+        updatedProfiles: profileRepo.getAll(),
       };
-    }
+    },
   );
 
   // Bắt đầu upload cho danh sách profile
-  ipcMain.handle('queue:start', async (_, profileIds: string[], runOptions?: { maxVideos?: number }) => {
-    for (const id of profileIds) {
-      const profile = profileRepo.getById(id);
-      if (profile) {
-        await uploadQueue.addProfile(profile, runOptions);
+  ipcMain.handle(
+    "queue:start",
+    async (_, profileIds: string[], runOptions?: { maxVideos?: number }) => {
+      for (const id of profileIds) {
+        const profile = profileRepo.getById(id);
+        if (profile) {
+          await uploadQueue.addProfile(profile, runOptions);
+        }
       }
-    }
+      return uploadQueue.getStats();
+    },
+  );
+
+  ipcMain.handle("queue:getStats", async () => {
     return uploadQueue.getStats();
   });
 
-  ipcMain.handle('queue:getStats', async () => {
-    return uploadQueue.getStats();
-  });
-
-  ipcMain.handle('queue:setConcurrency', async (_, concurrency: number) => {
+  ipcMain.handle("queue:setConcurrency", async (_, concurrency: number) => {
     const limit = Math.max(1, Math.min(10, Number(concurrency) || 2));
     uploadQueue.setConcurrency(limit);
-    configRepo.set('concurrency', String(limit));
+    configRepo.set("concurrency", String(limit));
     return uploadQueue.getStats();
   });
 
-  ipcMain.handle('queue:getConcurrency', async () => {
+  ipcMain.handle("queue:getConcurrency", async () => {
     return uploadQueue.getConcurrency();
   });
 
-  ipcMain.handle('logs:getByProfile', async (_, profileId: string) => {
+  ipcMain.handle("logs:getByProfile", async (_, profileId: string) => {
     return logRepo.getByProfile(profileId);
   });
 
-  ipcMain.handle('logs:getAll', async () => {
+  ipcMain.handle("logs:getAll", async () => {
     return logRepo.getAll(500);
   });
 
-  ipcMain.handle('logs:clear', async () => {
+  ipcMain.handle("logs:clear", async () => {
     logRepo.clear();
     return true;
   });
 
   // Quản lý Danh Sách Nhóm (Groups)
-  ipcMain.handle('groups:getAll', async () => {
+  ipcMain.handle("groups:getAll", async () => {
     return groupRepo.getAll();
   });
 
-  ipcMain.handle('groups:create', async (_, name: string) => {
+  ipcMain.handle("groups:create", async (_, name: string) => {
     return groupRepo.create(name);
   });
 
-  ipcMain.handle('groups:rename', async (_, { id, newName }: { id: string; newName: string }) => {
-    const res = groupRepo.rename(id, newName);
-    const updatedProfiles = profileRepo.getAll();
-    const updatedGroups = groupRepo.getAll();
-    const activeWin = getValidWindow();
-    if (activeWin && !activeWin.isDestroyed()) {
-      activeWin.webContents.send('profiles:updated', updatedProfiles);
-    }
-    return { ...res, updatedProfiles, updatedGroups };
-  });
+  ipcMain.handle(
+    "groups:rename",
+    async (_, { id, newName }: { id: string; newName: string }) => {
+      const res = groupRepo.rename(id, newName);
+      const updatedProfiles = profileRepo.getAll();
+      const updatedGroups = groupRepo.getAll();
+      const activeWin = getValidWindow();
+      if (activeWin && !activeWin.isDestroyed()) {
+        activeWin.webContents.send("profiles:updated", updatedProfiles);
+      }
+      return { ...res, updatedProfiles, updatedGroups };
+    },
+  );
 
-  ipcMain.handle('groups:delete', async (_, id: string) => {
+  ipcMain.handle("groups:delete", async (_, id: string) => {
     const res = groupRepo.delete(id);
     const updatedProfiles = profileRepo.getAll();
     const updatedGroups = groupRepo.getAll();
     const activeWin = getValidWindow();
     if (activeWin && !activeWin.isDestroyed()) {
-      activeWin.webContents.send('profiles:updated', updatedProfiles);
+      activeWin.webContents.send("profiles:updated", updatedProfiles);
     }
     return { success: res, updatedProfiles, updatedGroups };
   });
 
   // Lấy chỉ số lượt theo dõi (Followers) và Lượt xem (Views) theo yêu cầu (On-demand)
-  ipcMain.handle('profiles:fetchStats', async (_, profileId: string) => {
+  ipcMain.handle("profiles:fetchStats", async (_, profileId: string) => {
     const profile = profileRepo.getById(profileId);
     if (!profile) {
-      throw new Error('Không tìm thấy kênh hợp lệ.');
+      throw new Error("Không tìm thấy kênh hợp lệ.");
     }
     const res = await fetchAndSaveProfileStats(profile);
     const updatedProfiles = profileRepo.getAll();
     const activeWin = getValidWindow();
     if (activeWin && !activeWin.isDestroyed()) {
-      activeWin.webContents.send('profiles:updated', updatedProfiles);
+      activeWin.webContents.send("profiles:updated", updatedProfiles);
     }
     return res;
   });
 
-  ipcMain.handle('profiles:fetchBulkStats', async (_, profileIds: string[]) => {
+  ipcMain.handle("profiles:fetchBulkStats", async (_, profileIds: string[]) => {
     const all = profileRepo.getAll();
-    const ids = Array.isArray(profileIds) && profileIds.length > 0 
-      ? profileIds 
-      : all.map((p) => p.id);
+    const ids =
+      Array.isArray(profileIds) && profileIds.length > 0
+        ? profileIds
+        : all.map((p) => p.id);
 
     let successCount = 0;
     const activeWin = getValidWindow();
@@ -715,10 +858,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       if (!p) continue;
 
       if (activeWin && !activeWin.isDestroyed()) {
-        activeWin.webContents.send('stats:progress', {
+        activeWin.webContents.send("stats:progress", {
           current: i + 1,
           total: ids.length,
-          profileName: p.name
+          profileName: p.name,
         });
       }
 
@@ -735,7 +878,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     const updatedProfiles = profileRepo.getAll();
     if (activeWin && !activeWin.isDestroyed()) {
-      activeWin.webContents.send('profiles:updated', updatedProfiles);
+      activeWin.webContents.send("profiles:updated", updatedProfiles);
     }
     return { success: true, count: successCount, profiles: updatedProfiles };
   });

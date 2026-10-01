@@ -4,14 +4,17 @@
 
 export function isNurturingGroup(groupName?: string | null): boolean {
   if (!groupName) return false;
-  const lower = groupName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const lower = groupName
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
   return (
-    lower.includes('nuoi') ||
-    lower.includes('warmup') ||
-    lower.includes('warm-up') ||
-    lower.includes('nurture') ||
-    lower.includes('kenh moi') ||
-    lower.includes('moi')
+    lower.includes("nuoi") ||
+    lower.includes("warmup") ||
+    lower.includes("warm-up") ||
+    lower.includes("nurture") ||
+    lower.includes("kenh moi") ||
+    lower.includes("moi")
   );
 }
 
@@ -28,7 +31,7 @@ export interface CooldownStatus {
 
 export function getCooldownStatus(
   lastRun?: string | null,
-  groupName?: string | null
+  groupName?: string | null,
 ): CooldownStatus {
   const isNurturing = isNurturingGroup(groupName);
 
@@ -39,9 +42,9 @@ export function getCooldownStatus(
       remainingMs: 0,
       remainingHours: 0,
       remainingMinutes: 0,
-      remainingText: 'Chưa từng chạy',
+      remainingText: "Chưa từng chạy",
       elapsedHours: 999,
-      lastRunFormatted: 'Chưa từng chạy'
+      lastRunFormatted: "Chưa từng chạy",
     };
   }
 
@@ -53,9 +56,9 @@ export function getCooldownStatus(
       remainingMs: 0,
       remainingHours: 0,
       remainingMinutes: 0,
-      remainingText: 'Thời gian không hợp lệ',
+      remainingText: "Thời gian không hợp lệ",
       elapsedHours: 999,
-      lastRunFormatted: 'Không xác định'
+      lastRunFormatted: "Không xác định",
     };
   }
 
@@ -65,19 +68,22 @@ export function getCooldownStatus(
 
   const elapsedHours = Math.floor(elapsedMs / (3600 * 1000));
   const remainingHours = Math.max(0, Math.floor(remainingMs / (3600 * 1000)));
-  const remainingMinutes = Math.max(0, Math.floor((remainingMs % (3600 * 1000)) / (60 * 1000)));
+  const remainingMinutes = Math.max(
+    0,
+    Math.floor((remainingMs % (3600 * 1000)) / (60 * 1000)),
+  );
 
   const isUnderCooldown = isNurturing && remainingMs > 0;
   const remainingText = isUnderCooldown
     ? `${remainingHours}h ${remainingMinutes}m`
-    : 'Đã đủ 24h';
+    : "Đã đủ 24h";
 
   const lastRunDate = new Date(lastRun);
-  const lastRunFormatted = lastRunDate.toLocaleTimeString('vi-VN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    day: '2-digit',
-    month: '2-digit'
+  const lastRunFormatted = lastRunDate.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
   });
 
   return {
@@ -88,6 +94,6 @@ export function getCooldownStatus(
     remainingMinutes,
     remainingText,
     elapsedHours,
-    lastRunFormatted
+    lastRunFormatted,
   };
 }

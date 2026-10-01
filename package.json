@@ -17,7 +17,11 @@
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:mac": "npm run build && electron-builder --mac",
-    "build:win": "npm run build && electron-builder --win"
+    "build:win": "npm run build && electron-builder --win",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "**/*": "prettier --write --ignore-unknown"
   },
   "build": {
     "appId": "com.tiktok.uploaderpro",
@@ -28,11 +32,17 @@
     "mac": {
       "icon": "resources/icon.icns",
       "category": "public.app-category.utilities",
-      "target": ["dmg", "zip"]
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "win": {
       "icon": "resources/icon.png",
-      "target": ["nsis", "portable"]
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -63,7 +73,11 @@
     "electron": "^34.2.0",
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
     "postcss": "^8.5.1",
+    "prettier": "^3.9.9",
+    "prettier-plugin-tailwindcss": "^0.8.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwindcss": "^3.4.17",

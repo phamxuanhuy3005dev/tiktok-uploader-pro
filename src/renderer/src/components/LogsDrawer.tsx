@@ -1,8 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { ExternalLink, CheckCircle2, XCircle, Clock, Video, RefreshCw, AlertCircle } from 'lucide-react';
-import { Modal } from './ui/Modal';
-import { Button } from './ui/Button';
-import { Badge } from './ui/Badge';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  RefreshCw,
+  Video,
+  XCircle,
+} from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Badge } from "./ui/Badge";
+import { Button } from "./ui/Button";
+import { Modal } from "./ui/Modal";
 
 interface LogsDrawerProps {
   isOpen: boolean;
@@ -10,7 +18,11 @@ interface LogsDrawerProps {
   profile: any;
 }
 
-export const LogsDrawer: React.FC<LogsDrawerProps> = ({ isOpen, onClose, profile }) => {
+export const LogsDrawer: React.FC<LogsDrawerProps> = ({
+  isOpen,
+  onClose,
+  profile,
+}) => {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -34,8 +46,8 @@ export const LogsDrawer: React.FC<LogsDrawerProps> = ({ isOpen, onClose, profile
 
   if (!profile) return null;
 
-  const successCount = logs.filter((l) => l.status === 'success').length;
-  const failedCount = logs.filter((l) => l.status === 'failed').length;
+  const successCount = logs.filter((l) => l.status === "success").length;
+  const failedCount = logs.filter((l) => l.status === "failed").length;
 
   return (
     <Modal
@@ -47,9 +59,11 @@ export const LogsDrawer: React.FC<LogsDrawerProps> = ({ isOpen, onClose, profile
     >
       <div className="space-y-4">
         {/* Quick summary badges */}
-        <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-xs">
+        <div className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-xs">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-700">Tổng cộng: {logs.length} lượt upload</span>
+            <span className="font-semibold text-slate-700">
+              Tổng cộng: {logs.length} lượt upload
+            </span>
             {successCount > 0 && (
               <Badge variant="success" className="text-[11px]">
                 {successCount} thành công
@@ -64,77 +78,93 @@ export const LogsDrawer: React.FC<LogsDrawerProps> = ({ isOpen, onClose, profile
           <button
             onClick={loadLogs}
             disabled={loading}
-            className="flex items-center gap-1 text-slate-500 hover:text-sky-600 transition-colors text-xs font-medium"
+            className="flex items-center gap-1 text-xs font-medium text-slate-500 transition-colors hover:text-sky-600"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Làm mới
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+            />{" "}
+            Làm mới
           </button>
         </div>
 
         {/* Logs list */}
         {loading ? (
-          <div className="py-12 text-center text-xs text-slate-400">Đang tải lịch sử bài đăng...</div>
+          <div className="py-12 text-center text-xs text-slate-400">
+            Đang tải lịch sử bài đăng...
+          </div>
         ) : logs.length === 0 ? (
-          <div className="py-12 text-center text-xs text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-12 text-center text-xs text-slate-400">
             Kênh này chưa có video nào được đăng tải.
           </div>
         ) : (
-          <div className="max-h-[55vh] overflow-y-auto space-y-2.5 pr-1 scrollbar-thin">
+          <div className="scrollbar-thin max-h-[55vh] space-y-2.5 overflow-y-auto pr-1">
             {logs.map((log) => {
-              const isSuccess = log.status === 'success';
+              const isSuccess = log.status === "success";
 
               return (
                 <div
                   key={log.id}
-                  className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border transition-all ${
+                  className={`flex flex-col justify-between gap-3 rounded-xl border p-3.5 transition-all sm:flex-row sm:items-center ${
                     isSuccess
-                      ? 'bg-white border-slate-200/90 hover:border-sky-300 shadow-xs'
-                      : 'bg-red-50/40 border-red-200 hover:border-red-300'
+                      ? "shadow-xs border-slate-200/90 bg-white hover:border-sky-300"
+                      : "border-red-200 bg-red-50/40 hover:border-red-300"
                   }`}
                 >
-                  <div className="flex items-start gap-3 min-w-0">
+                  <div className="flex min-w-0 items-start gap-3">
                     <div
-                      className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 border ${
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
                         isSuccess
-                          ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                          : 'bg-red-100 text-red-600 border-red-200'
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-600"
+                          : "border-red-200 bg-red-100 text-red-600"
                       }`}
                     >
-                      {isSuccess ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                      {isSuccess ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : (
+                        <XCircle className="h-4 w-4" />
+                      )}
                     </div>
 
                     <div className="min-w-0 space-y-0.5">
                       <div className="flex items-center gap-2">
-                        <p className="font-bold text-slate-800 text-xs truncate">{log.video_name}</p>
+                        <p className="truncate text-xs font-bold text-slate-800">
+                          {log.video_name}
+                        </p>
                         {log.video_id && (
-                          <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded shrink-0">
+                          <span className="py-0.2 shrink-0 rounded bg-slate-100 px-1.5 font-mono text-[10px] text-slate-400">
                             ID: {log.video_id}
                           </span>
                         )}
                       </div>
 
                       {log.error_message ? (
-                        <p className="text-red-600 text-[11px] font-medium flex items-center gap-1">
+                        <p className="flex items-center gap-1 text-[11px] font-medium text-red-600">
                           <AlertCircle className="h-3 w-3 shrink-0" />
-                          <span className="line-clamp-2">{log.error_message}</span>
+                          <span className="line-clamp-2">
+                            {log.error_message}
+                          </span>
                         </p>
                       ) : (
-                        <p className="text-slate-400 text-[11px] flex items-center gap-1.5 font-mono">
-                          <Clock className="h-3 w-3 text-slate-400 shrink-0" />
-                          <span>{new Date(log.created_at).toLocaleString('vi-VN')}</span>
+                        <p className="flex items-center gap-1.5 font-mono text-[11px] text-slate-400">
+                          <Clock className="h-3 w-3 shrink-0 text-slate-400" />
+                          <span>
+                            {new Date(log.created_at).toLocaleString("vi-VN")}
+                          </span>
                         </p>
                       )}
                     </div>
                   </div>
 
                   {log.video_url && (
-                    <div className="shrink-0 flex sm:justify-end">
+                    <div className="flex shrink-0 sm:justify-end">
                       <a
                         href={log.video_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-500 hover:text-white border border-sky-200 text-xs font-semibold shadow-xs transition-all"
+                        className="shadow-xs inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 transition-all hover:bg-sky-500 hover:text-white"
                       >
-                        <Video className="h-3.5 w-3.5" /> Xem Video <ExternalLink className="h-3 w-3" />
+                        <Video className="h-3.5 w-3.5" /> Xem Video{" "}
+                        <ExternalLink className="h-3 w-3" />
                       </a>
                     </div>
                   )}
@@ -144,8 +174,13 @@ export const LogsDrawer: React.FC<LogsDrawerProps> = ({ isOpen, onClose, profile
           </div>
         )}
 
-        <div className="flex justify-end pt-3 border-t border-slate-100">
-          <Button variant="outline" size="sm" onClick={onClose} className="text-xs">
+        <div className="flex justify-end border-t border-slate-100 pt-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onClose}
+            className="text-xs"
+          >
             Đóng
           </Button>
         </div>

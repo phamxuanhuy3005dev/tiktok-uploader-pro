@@ -1,5 +1,8 @@
-import { ProfileRecord, profileRepo } from '../db/database';
-import { runUploadPipeline, PipelineProgressEvent } from '../engine/upload-pipeline';
+import { ProfileRecord, profileRepo } from "../db/database";
+import {
+  PipelineProgressEvent,
+  runUploadPipeline,
+} from "../engine/upload-pipeline";
 
 /**
  * Hàng đợi bất đồng bộ thuần (Zero-dependency async concurrency queue)
@@ -72,17 +75,21 @@ export class UploadQueueManager {
     return this.runningProfiles.has(profileId);
   }
 
-  public async addProfile(profile: ProfileRecord, runOptions?: { maxVideos?: number }): Promise<void> {
+  public async addProfile(
+    profile: ProfileRecord,
+    runOptions?: { maxVideos?: number },
+  ): Promise<void> {
     if (this.runningProfiles.has(profile.id)) {
       throw new Error(`Profile ${profile.name} đang trong tiến trình chạy.`);
     }
 
     this.runningProfiles.add(profile.id);
-    profileRepo.updateStatus(profile.id, 'queued');
+    profileRepo.updateStatus(profile.id, "queued");
 
-    const effectiveProfile = runOptions?.maxVideos !== undefined
-      ? { ...profile, max_videos: runOptions.maxVideos }
-      : profile;
+    const effectiveProfile =
+      runOptions?.maxVideos !== undefined
+        ? { ...profile, max_videos: runOptions.maxVideos }
+        : profile;
 
     this.queue.add(async () => {
       try {
@@ -92,10 +99,10 @@ export class UploadQueueManager {
       } catch (err: any) {
         this.emitProgress({
           profileId: profile.id,
-          videoName: '',
-          step: 'ERROR',
+          videoName: "",
+          step: "ERROR",
           message: err.message,
-          type: 'error'
+          type: "error",
         });
       } finally {
         this.runningProfiles.delete(profile.id);
@@ -112,11 +119,14 @@ export class UploadQueueManager {
       size: this.queue.size,
       pending: this.queue.pending,
       concurrency: this.getConcurrency(),
-      runningProfiles: Array.from(this.runningProfiles)
+      runningProfiles: Array.from(this.runningProfiles),
     };
   }
 }
 
-import { configRepo } from '../db/database';
-const initialConcurrency = Math.max(1, parseInt(configRepo.get('concurrency', '2'), 10) || 2);
+import { configRepo } from "../db/database";
+const initialConcurrency = Math.max(
+  1,
+  parseInt(configRepo.get("concurrency", "2"), 10) || 2,
+);
 export const uploadQueue = new UploadQueueManager(initialConcurrency);

@@ -1,36 +1,36 @@
-import path from 'path';
-import fs from 'fs';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { chromium, BrowserContext, Page } from 'playwright';
-import Database from 'better-sqlite3';
-import { ProfileRecord, PROFILES_DIR, profileRepo } from '../db/database';
+import Database from "better-sqlite3";
+import { exec } from "child_process";
+import fs from "fs";
+import path from "path";
+import { BrowserContext, chromium, Page } from "playwright";
+import { promisify } from "util";
+import { ProfileRecord, profileRepo, PROFILES_DIR } from "../db/database";
 
 const execAsync = promisify(exec);
 const activeContexts = new Map<string, BrowserContext>();
 
 const CLEAN_CHROME_ARGS = [
-  '--disable-blink-features=AutomationControlled',
-  '--no-first-run',
-  '--no-default-browser-check',
-  '--password-store=basic',
-  '--disable-direct-composition-video-overlays',
-  '--disable-features=UseMultiplaneOverlayForHardwareVideo',
-  '--enable-features=PaintHolding',
-  '--metrics-recording-only',
-  '--disable-breakpad',
-  '--disable-prompt-on-repost',
-  '--disable-sync',
-  '--disable-default-apps',
-  '--disable-component-update',
-  '--lang=en-US',
+  "--disable-blink-features=AutomationControlled",
+  "--no-first-run",
+  "--no-default-browser-check",
+  "--password-store=basic",
+  "--disable-direct-composition-video-overlays",
+  "--disable-features=UseMultiplaneOverlayForHardwareVideo",
+  "--enable-features=PaintHolding",
+  "--metrics-recording-only",
+  "--disable-breakpad",
+  "--disable-prompt-on-repost",
+  "--disable-sync",
+  "--disable-default-apps",
+  "--disable-component-update",
+  "--lang=en-US",
 ];
 
 const LOCK_FILES = [
-  'SingletonLock',
-  'SingletonCookie',
-  'SingletonSocket',
-  'lockfile',
+  "SingletonLock",
+  "SingletonCookie",
+  "SingletonSocket",
+  "lockfile",
 ];
 
 /**
@@ -39,27 +39,27 @@ const LOCK_FILES = [
 export async function getProfilePids(userDataDir: string): Promise<number[]> {
   if (!userDataDir || !fs.existsSync(userDataDir)) return [];
   try {
-    if (process.platform === 'win32') {
-      const dirName = path.basename(userDataDir).replace(/["'\\]/g, '');
+    if (process.platform === "win32") {
+      const dirName = path.basename(userDataDir).replace(/["'\\]/g, "");
       if (!dirName) return [];
       const psCmd = `powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Where-Object { ($_.Name -like '*chrome*') -and ($_.CommandLine -like '*${dirName}*') } | Select-Object -ExpandProperty ProcessId"`;
-      const { stdout } = await execAsync(psCmd).catch(() => ({ stdout: '' }));
+      const { stdout } = await execAsync(psCmd).catch(() => ({ stdout: "" }));
       return stdout
-        .split('\n')
+        .split("\n")
         .map((s) => parseInt(s.trim(), 10))
         .filter((pid) => pid && !isNaN(pid) && pid > 0);
     } else {
       // macOS và Linux
-      const { stdout } = await execAsync('ps -Ao pid,args').catch(() => ({
-        stdout: '',
+      const { stdout } = await execAsync("ps -Ao pid,args").catch(() => ({
+        stdout: "",
       }));
       const pids: number[] = [];
-      for (const line of stdout.split('\n')) {
+      for (const line of stdout.split("\n")) {
         if (
           line.includes(userDataDir) &&
-          (line.includes('chrome') ||
-            line.includes('Chromium') ||
-            line.includes('Google Chrome'))
+          (line.includes("chrome") ||
+            line.includes("Chromium") ||
+            line.includes("Google Chrome"))
         ) {
           const parts = line.trim().split(/\s+/);
           const pid = parseInt(parts[0], 10);
@@ -107,10 +107,10 @@ export async function releaseProfileLocks(
     );
     for (const pid of pids) {
       try {
-        if (process.platform === 'win32') {
+        if (process.platform === "win32") {
           await execAsync(`taskkill /F /T /PID ${pid}`).catch(() => {});
         } else {
-          process.kill(pid, 'SIGKILL');
+          process.kill(pid, "SIGKILL");
         }
       } catch (_) {}
     }
@@ -133,11 +133,11 @@ export async function releaseProfileLocks(
 export function cleanProfileGpuCache(userDataDir: string): void {
   if (!fs.existsSync(userDataDir)) return;
   const staleDirs = [
-    path.join(userDataDir, 'Default', 'GPUCache'),
-    path.join(userDataDir, 'Default', 'DawnGraphiteCache'),
-    path.join(userDataDir, 'Default', 'DawnWebGPUCache'),
-    path.join(userDataDir, 'GrShaderCache'),
-    path.join(userDataDir, 'ShaderCache'),
+    path.join(userDataDir, "Default", "GPUCache"),
+    path.join(userDataDir, "Default", "DawnGraphiteCache"),
+    path.join(userDataDir, "Default", "DawnWebGPUCache"),
+    path.join(userDataDir, "GrShaderCache"),
+    path.join(userDataDir, "ShaderCache"),
   ];
   for (const dir of staleDirs) {
     try {
@@ -200,13 +200,13 @@ export function parseProxy(rawProxy?: string | null): ParsedProxy | undefined {
 
   // 1. Guard triệt để: Nếu dính cookie hoặc chuỗi lỗi, TUYỆT ĐỐI không parse thành proxy
   if (
-    str.includes(';') ||
-    str.includes('sessionid') ||
-    str.includes('msToken') ||
-    str.includes('sid_tt') ||
-    str.includes('ttwid') ||
-    str.startsWith('[') ||
-    str.startsWith('{') ||
+    str.includes(";") ||
+    str.includes("sessionid") ||
+    str.includes("msToken") ||
+    str.includes("sid_tt") ||
+    str.includes("ttwid") ||
+    str.startsWith("[") ||
+    str.startsWith("{") ||
     str.length > 250
   ) {
     console.warn(
@@ -217,8 +217,8 @@ export function parseProxy(rawProxy?: string | null): ParsedProxy | undefined {
   }
 
   // 2. Format: host:port:username:password
-  const colonParts = str.split(':');
-  if (!str.includes('://') && !str.includes('@') && colonParts.length === 4) {
+  const colonParts = str.split(":");
+  if (!str.includes("://") && !str.includes("@") && colonParts.length === 4) {
     const port = Number(colonParts[1]);
     if (!isNaN(port) && port > 0 && port <= 65535) {
       return {
@@ -230,7 +230,7 @@ export function parseProxy(rawProxy?: string | null): ParsedProxy | undefined {
   }
 
   // 3. Format: host:port
-  if (!str.includes('://') && !str.includes('@') && colonParts.length === 2) {
+  if (!str.includes("://") && !str.includes("@") && colonParts.length === 2) {
     const port = Number(colonParts[1]);
     if (!isNaN(port) && port > 0 && port <= 65535) {
       return {
@@ -240,7 +240,7 @@ export function parseProxy(rawProxy?: string | null): ParsedProxy | undefined {
   }
 
   // 4. Nếu thiếu protocol (ví dụ user:pass@host:port), thêm http://
-  if (!str.includes('://')) {
+  if (!str.includes("://")) {
     str = `http://${str}`;
   }
 
@@ -249,7 +249,7 @@ export function parseProxy(rawProxy?: string | null): ParsedProxy | undefined {
     if (!parsed.hostname || !parsed.port) {
       return undefined;
     }
-    const protocol = parsed.protocol || 'http:';
+    const protocol = parsed.protocol || "http:";
     const server = `${protocol}//${parsed.hostname}:${parsed.port}`;
     const result: ParsedProxy = { server };
 
@@ -281,36 +281,36 @@ export function resolveBrowserLaunchOptions(): {
     }
   } catch (_) {}
 
-  if (process.platform === 'darwin') {
+  if (process.platform === "darwin") {
     if (
       fs.existsSync(
-        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
       )
     ) {
-      return { channel: 'chrome' };
+      return { channel: "chrome" };
     }
-  } else if (process.platform === 'win32') {
+  } else if (process.platform === "win32") {
     const winPaths = [
-      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
       path.join(
-        process.env.LOCALAPPDATA || '',
-        'Google\\Chrome\\Application\\chrome.exe',
+        process.env.LOCALAPPDATA || "",
+        "Google\\Chrome\\Application\\chrome.exe",
       ),
     ];
     if (winPaths.some((p) => fs.existsSync(p))) {
-      return { channel: 'chrome' };
+      return { channel: "chrome" };
     }
     const edgePaths = [
-      'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-      'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+      "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+      "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
     ];
     if (edgePaths.some((p) => fs.existsSync(p))) {
-      return { channel: 'msedge' };
+      return { channel: "msedge" };
     }
   }
 
-  return { channel: 'chrome' };
+  return { channel: "chrome" };
 }
 
 /**
@@ -323,7 +323,7 @@ export async function testProxyConnection(
   if (!proxyConfig) {
     return {
       success: false,
-      error: 'Chưa nhập địa chỉ proxy hoặc định dạng không hợp lệ.',
+      error: "Chưa nhập địa chỉ proxy hoặc định dạng không hợp lệ.",
     };
   }
 
@@ -333,53 +333,53 @@ export async function testProxyConnection(
     const browserOpts: any = {
       headless: true,
       proxy: proxyConfig,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
       ...resolveBrowserLaunchOptions(),
     };
     testBrowser = await chromium.launch(browserOpts);
 
     const context = await testBrowser.newContext({
-      locale: 'en-US',
+      locale: "en-US",
     });
     const page = await context.newPage();
 
-    const response = await page.goto('https://api.ipify.org?format=json', {
+    const response = await page.goto("https://api.ipify.org?format=json", {
       timeout: 15000,
-      waitUntil: 'commit',
+      waitUntil: "commit",
     });
 
     if (!response || !response.ok()) {
-      throw new Error(`HTTP ${response?.status() || 'Unknown'}`);
+      throw new Error(`HTTP ${response?.status() || "Unknown"}`);
     }
 
-    const bodyText = await page.textContent('body');
+    const bodyText = await page.textContent("body");
     const elapsed = Date.now() - startTime;
-    const json = JSON.parse(bodyText || '{}');
+    const json = JSON.parse(bodyText || "{}");
 
     return {
       success: true,
-      ip: json.ip || 'Unknown IP',
+      ip: json.ip || "Unknown IP",
       latencyMs: elapsed,
     };
   } catch (err: any) {
     const elapsed = Date.now() - startTime;
-    let errMsg = err.message || 'Lỗi không xác định';
+    let errMsg = err.message || "Lỗi không xác định";
     if (
-      errMsg.includes('ERR_TIMED_OUT') ||
-      errMsg.includes('Timeout') ||
-      errMsg.includes('timeout')
+      errMsg.includes("ERR_TIMED_OUT") ||
+      errMsg.includes("Timeout") ||
+      errMsg.includes("timeout")
     ) {
       errMsg =
-        'Quá thời gian chờ (Proxy Timeout - Kiểm tra lại server proxy hoặc whitelist IP mạng nhà).';
-    } else if (errMsg.includes('ERR_PROXY_CONNECTION_FAILED')) {
+        "Quá thời gian chờ (Proxy Timeout - Kiểm tra lại server proxy hoặc whitelist IP mạng nhà).";
+    } else if (errMsg.includes("ERR_PROXY_CONNECTION_FAILED")) {
       errMsg =
-        'Không kết nối được tới Proxy (Sai IP/Port hoặc máy chủ proxy offline).';
+        "Không kết nối được tới Proxy (Sai IP/Port hoặc máy chủ proxy offline).";
     } else if (
-      errMsg.includes('ERR_PROXY_AUTH_REQUESTED') ||
-      errMsg.includes('407')
+      errMsg.includes("ERR_PROXY_AUTH_REQUESTED") ||
+      errMsg.includes("407")
     ) {
       errMsg =
-        'Proxy yêu cầu tài khoản/mật khẩu xác thực (407 Proxy Authentication Required).';
+        "Proxy yêu cầu tài khoản/mật khẩu xác thực (407 Proxy Authentication Required).";
     }
     return {
       success: false,
@@ -401,7 +401,7 @@ export interface TikTokCookieObject {
   expires?: number;
   httpOnly?: boolean;
   secure?: boolean;
-  sameSite?: 'Strict' | 'Lax' | 'None';
+  sameSite?: "Strict" | "Lax" | "None";
 }
 
 /**
@@ -419,23 +419,23 @@ export function normalizeTikTokCookies(
 
   let data: any = rawCookies;
 
-  if (typeof data === 'string') {
+  if (typeof data === "string") {
     let str = data.trim();
     if (!str) return [];
 
     // 1. Thử giải mã nếu là chuỗi Base64
     if (
-      !str.startsWith('[') &&
-      !str.startsWith('{') &&
-      !str.includes(';') &&
+      !str.startsWith("[") &&
+      !str.startsWith("{") &&
+      !str.includes(";") &&
       str.length > 30
     ) {
       try {
-        const decoded = Buffer.from(str, 'base64').toString('utf-8');
+        const decoded = Buffer.from(str, "base64").toString("utf-8");
         if (
-          decoded.startsWith('[') ||
-          decoded.startsWith('{') ||
-          decoded.includes('=')
+          decoded.startsWith("[") ||
+          decoded.startsWith("{") ||
+          decoded.includes("=")
         ) {
           str = decoded.trim();
         }
@@ -443,7 +443,7 @@ export function normalizeTikTokCookies(
     }
 
     // 2. Thử parse nếu là JSON
-    if (str.startsWith('[') || str.startsWith('{')) {
+    if (str.startsWith("[") || str.startsWith("{")) {
       try {
         data = JSON.parse(str);
       } catch (_) {
@@ -452,21 +452,21 @@ export function normalizeTikTokCookies(
     }
 
     // 3. Nếu vẫn là chuỗi: parse dạng "name=val; name2=val2" hoặc Netscape
-    if (typeof data === 'string') {
+    if (typeof data === "string") {
       const results: TikTokCookieObject[] = [];
 
       // Netscape tab-separated format
-      if (str.includes('\t')) {
-        const lines = str.split('\n');
+      if (str.includes("\t")) {
+        const lines = str.split("\n");
         for (const line of lines) {
           const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith('#')) continue;
-          const cols = trimmed.split('\t');
+          if (!trimmed || trimmed.startsWith("#")) continue;
+          const cols = trimmed.split("\t");
           if (cols.length >= 7) {
             results.push({
-              domain: cols[0].startsWith('.') ? cols[0] : `.${cols[0]}`,
-              path: cols[2] || '/',
-              secure: cols[3].toUpperCase() === 'TRUE',
+              domain: cols[0].startsWith(".") ? cols[0] : `.${cols[0]}`,
+              path: cols[2] || "/",
+              secure: cols[3].toUpperCase() === "TRUE",
               expires: parseInt(cols[4], 10) || undefined,
               name: cols[5].trim(),
               value: cols[6].trim(),
@@ -477,11 +477,11 @@ export function normalizeTikTokCookies(
       }
 
       // Chuẩn HTTP Cookie string: name=value; name2=value2
-      const pairs = str.split(';');
+      const pairs = str.split(";");
       for (const pair of pairs) {
         const trimmed = pair.trim();
         if (!trimmed) continue;
-        const eqIdx = trimmed.indexOf('=');
+        const eqIdx = trimmed.indexOf("=");
         if (eqIdx > 0) {
           const name = trimmed.substring(0, eqIdx).trim();
           let value = trimmed.substring(eqIdx + 1).trim();
@@ -492,10 +492,10 @@ export function normalizeTikTokCookies(
             results.push({
               name,
               value,
-              domain: '.tiktok.com',
-              path: '/',
+              domain: ".tiktok.com",
+              path: "/",
               secure: true,
-              sameSite: name === 'sessionid_ss' ? 'None' : 'Lax',
+              sameSite: name === "sessionid_ss" ? "None" : "Lax",
             });
           }
         }
@@ -514,55 +514,55 @@ export function normalizeTikTokCookies(
         if (!name) return null;
 
         // Bỏ qua các cookie prefix __Host- ngoại lai để tránh lỗi CDP Protocol error
-        if (name.startsWith('__Host-')) return null;
+        if (name.startsWith("__Host-")) return null;
 
         // Chuẩn hóa domain: nếu thuộc tiktok.com thì bắt buộc có dấu chấm đi đầu (.tiktok.com)
         // để Chromium gửi cookie cho cả www.tiktok.com và các subdomain (tránh lỗi host-only cookie)
-        let domain = item.domain ? String(item.domain).trim() : '.tiktok.com';
-        if (domain.includes('tiktok.com') && !domain.startsWith('.')) {
+        let domain = item.domain ? String(item.domain).trim() : ".tiktok.com";
+        if (domain.includes("tiktok.com") && !domain.startsWith(".")) {
           domain = `.${domain}`;
         }
 
         let expires: number | undefined;
-        if (typeof item.expires === 'number' && item.expires > 0) {
+        if (typeof item.expires === "number" && item.expires > 0) {
           expires = Math.floor(item.expires);
         } else if (
-          typeof item.expirationDate === 'number' &&
+          typeof item.expirationDate === "number" &&
           item.expirationDate > 0
         ) {
           expires = Math.floor(item.expirationDate);
         }
 
         const isSameSiteNone =
-          item.sameSite === 'None' || name === 'sessionid_ss';
+          item.sameSite === "None" || name === "sessionid_ss";
         const secure =
           item.secure !== undefined
             ? Boolean(item.secure)
-            : domain.includes('tiktok.com') || isSameSiteNone;
+            : domain.includes("tiktok.com") || isSameSiteNone;
 
         const res: TikTokCookieObject = {
           name,
           value,
           domain,
-          path: item.path || '/',
+          path: item.path || "/",
           expires,
           httpOnly:
             item.httpOnly !== undefined
               ? Boolean(item.httpOnly)
-              : name.includes('sessionid') || name.includes('sid_tt')
+              : name.includes("sessionid") || name.includes("sid_tt")
                 ? true
                 : undefined,
           secure: isSameSiteNone ? true : secure,
         };
 
         if (
-          item.sameSite === 'Strict' ||
-          item.sameSite === 'Lax' ||
-          item.sameSite === 'None'
+          item.sameSite === "Strict" ||
+          item.sameSite === "Lax" ||
+          item.sameSite === "None"
         ) {
           res.sameSite = item.sameSite;
-        } else if (name === 'sessionid_ss') {
-          res.sameSite = 'None';
+        } else if (name === "sessionid_ss") {
+          res.sameSite = "None";
         }
 
         return res;
@@ -584,9 +584,9 @@ export function isTikTokLoggedIn(rawCookies?: string | any[] | null): boolean {
     const list = normalizeTikTokCookies(rawCookies);
     return list.some(
       (c) =>
-        (c.name === 'sessionid' ||
-          c.name === 'sessionid_ss' ||
-          c.name === 'sid_tt') &&
+        (c.name === "sessionid" ||
+          c.name === "sessionid_ss" ||
+          c.name === "sid_tt") &&
         c.value &&
         String(c.value).trim().length > 5,
     );
@@ -624,10 +624,10 @@ export async function launchProfileContext(
     headless,
     viewport: null, // Full màn hình
     args: [...CLEAN_CHROME_ARGS],
-    ignoreDefaultArgs: ['--no-sandbox'],
-    locale: 'en-US',
+    ignoreDefaultArgs: ["--no-sandbox"],
+    locale: "en-US",
     extraHTTPHeaders: {
-      'Accept-Language': 'en-US,en;q=0.9',
+      "Accept-Language": "en-US,en;q=0.9",
     },
     ...resolveBrowserLaunchOptions(),
   };
@@ -640,7 +640,7 @@ export async function launchProfileContext(
       `[${profile.name}] 🌐 Kích hoạt Proxy: ${proxyConfig.server} ${
         proxyConfig.username
           ? `(User: ${proxyConfig.username})`
-          : '(Direct Auth)'
+          : "(Direct Auth)"
       }`,
     );
   }
@@ -675,15 +675,15 @@ export async function launchProfileContext(
         }
 
         // Đồng bộ cookie jar với CDP Network Process để đảm bảo Chromium commit cookie vào store trước khi navigate
-        await context.cookies('https://www.tiktok.com').catch(() => []);
+        await context.cookies("https://www.tiktok.com").catch(() => []);
         await new Promise((r) => setTimeout(r, 150));
 
         const hasSession = parsedCookies.some(
-          (c) => c.name === 'sessionid' || c.name === 'sessionid_ss',
+          (c) => c.name === "sessionid" || c.name === "sessionid_ss",
         );
         console.log(
           `[${profile.name}] 🍪 Đã nạp thành công ${loadedCount}/${parsedCookies.length} cookies vào trình duyệt ${
-            hasSession ? '(Có sessionid login)' : ''
+            hasSession ? "(Có sessionid login)" : ""
           }.`,
         );
       }
@@ -708,8 +708,8 @@ export async function launchProfileContext(
       } catch (_) {}
     }, 250);
   };
-  page.on('close', checkAllPagesClosed);
-  context.on('page', (p) => p.on('close', checkAllPagesClosed));
+  page.on("close", checkAllPagesClosed);
+  context.on("page", (p) => p.on("close", checkAllPagesClosed));
 
   return { context, page };
 }
@@ -729,7 +729,7 @@ export async function focusProfileBrowser(profileId: string): Promise<boolean> {
     await page.bringToFront().catch(() => {});
 
     // Trên macOS: Focus chính xác process Chrome/Chromium của profile này bằng unix id (PID)
-    if (process.platform === 'darwin') {
+    if (process.platform === "darwin") {
       const profile = profileRepo.getById(profileId);
       if (profile) {
         const userDataDir = path.join(PROFILES_DIR, profile.name);
@@ -749,9 +749,14 @@ export async function focusProfileBrowser(profileId: string): Promise<boolean> {
 
 export function getCookieDbPath(userDataDir: string): string | null {
   if (!userDataDir || !fs.existsSync(userDataDir)) return null;
-  const networkCookies = path.join(userDataDir, 'Default', 'Network', 'Cookies');
+  const networkCookies = path.join(
+    userDataDir,
+    "Default",
+    "Network",
+    "Cookies",
+  );
   if (fs.existsSync(networkCookies)) return networkCookies;
-  const legacyCookies = path.join(userDataDir, 'Default', 'Cookies');
+  const legacyCookies = path.join(userDataDir, "Default", "Cookies");
   if (fs.existsSync(legacyCookies)) return legacyCookies;
   return null;
 }
@@ -813,17 +818,18 @@ export async function openManualBrowser(
   onUpdated?: () => void,
 ): Promise<void> {
   const { context, page } = await launchProfileContext(profile, false);
-  profileRepo.updateStatus(profile.id, 'manual_session');
+  profileRepo.updateStatus(profile.id, "manual_session");
 
   await page
-    .goto('https://www.tiktok.com/', { waitUntil: 'domcontentloaded' })
+    .goto("https://www.tiktok.com/", { waitUntil: "domcontentloaded" })
     .catch(() => {});
 
   const userDataDir = path.join(PROFILES_DIR, profile.name);
   let isCleanedUp = false;
 
   // Nếu tài khoản đã từng đăng nhập, kiểm tra và tự động reload nếu TikTok SSR bị kẹt ở giao diện khách (guest shell)
-  const isKnownLoggedIn = isTikTokLoggedIn(profile.cookies) || hasSessionInCookieDb(userDataDir);
+  const isKnownLoggedIn =
+    isTikTokLoggedIn(profile.cookies) || hasSessionInCookieDb(userDataDir);
   if (isKnownLoggedIn) {
     (async () => {
       try {
@@ -831,21 +837,29 @@ export async function openManualBrowser(
         if (page.isClosed() || isCleanedUp) return;
 
         const avatarVisible = await page
-          .locator('[data-e2e="profile-icon"], img[class*="avatar"], a[href*="/@"]')
+          .locator(
+            '[data-e2e="profile-icon"], img[class*="avatar"], a[href*="/@"]',
+          )
           .first()
           .isVisible({ timeout: 1000 })
           .catch(() => false);
 
         if (!avatarVisible && !page.isClosed() && !isCleanedUp) {
           const loginBtnVisible = await page
-            .locator('[data-e2e="top-login-button"], button:has-text("Log in"), button:has-text("Đăng nhập")')
+            .locator(
+              '[data-e2e="top-login-button"], button:has-text("Log in"), button:has-text("Đăng nhập")',
+            )
             .first()
             .isVisible({ timeout: 1000 })
             .catch(() => false);
 
           if (loginBtnVisible && !page.isClosed() && !isCleanedUp) {
-            console.log(`[${profile.name}] 🔄 TikTok SSR hiển thị nút Login do cache khách, tự động F5 đồng bộ...`);
-            await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+            console.log(
+              `[${profile.name}] 🔄 TikTok SSR hiển thị nút Login do cache khách, tự động F5 đồng bộ...`,
+            );
+            await page
+              .reload({ waitUntil: "domcontentloaded", timeout: 15000 })
+              .catch(() => {});
           }
         }
       } catch (_) {}
@@ -853,52 +867,63 @@ export async function openManualBrowser(
   }
 
   let isSynced = isTikTokLoggedIn(profile.cookies);
-  let lastAuthStatus: 'logged_in' | 'logged_out' | 'unknown' = isSynced ? 'logged_in' : 'logged_out';
+  let lastAuthStatus: "logged_in" | "logged_out" | "unknown" = isSynced
+    ? "logged_in"
+    : "logged_out";
   let lastCookies: any[] = [];
 
   // Hàm kiểm tra chính xác trạng thái xác thực trên trang TikTok qua API & DOM
-  const checkPageAuth = async (): Promise<'logged_in' | 'logged_out' | 'unknown'> => {
+  const checkPageAuth = async (): Promise<
+    "logged_in" | "logged_out" | "unknown"
+  > => {
     try {
-      if (page.isClosed()) return 'unknown';
+      if (page.isClosed()) return "unknown";
       const url = page.url();
-      if (!url.includes('tiktok.com')) return 'unknown';
+      if (!url.includes("tiktok.com")) return "unknown";
 
       // 1. Kiểm tra trực tiếp từ passport API của TikTok (chuẩn xác nhất)
-      const res = await page.evaluate(async () => {
-        try {
-          const apiRes = await fetch('/passport/web/account/info/', {
-            headers: { Accept: 'application/json' },
-            credentials: 'include'
-          });
-          const json = await apiRes.json();
-          if (json?.data?.user_id || (json?.message === 'success' && !json?.data?.error_code)) {
-            return 'logged_in';
-          }
-          if (
-            json?.data?.error_code === 13 ||
-            json?.data?.name === 'session_expired' ||
-            json?.message === 'error'
-          ) {
-            return 'logged_out';
-          }
-        } catch (_) {}
+      const res = await page
+        .evaluate(async () => {
+          try {
+            const apiRes = await fetch("/passport/web/account/info/", {
+              headers: { Accept: "application/json" },
+              credentials: "include",
+            });
+            const json = await apiRes.json();
+            if (
+              json?.data?.user_id ||
+              (json?.message === "success" && !json?.data?.error_code)
+            ) {
+              return "logged_in";
+            }
+            if (
+              json?.data?.error_code === 13 ||
+              json?.data?.name === "session_expired" ||
+              json?.message === "error"
+            ) {
+              return "logged_out";
+            }
+          } catch (_) {}
 
-        // 2. Fallback qua DOM elements
-        const hasAvatar = Boolean(
-          document.querySelector('[data-e2e="profile-icon"], img[class*="avatar"], a[href*="/@"]')
-        );
-        const hasLoginBtn = Boolean(
-          document.querySelector(
-            '[data-e2e="top-login-button"], button[data-e2e="nav-login-button"], button:has-text("Log in"), button:has-text("Đăng nhập")'
-          )
-        );
-        if (hasAvatar) return 'logged_in';
-        if (hasLoginBtn) return 'logged_out';
+          // 2. Fallback qua DOM elements
+          const hasAvatar = Boolean(
+            document.querySelector(
+              '[data-e2e="profile-icon"], img[class*="avatar"], a[href*="/@"]',
+            ),
+          );
+          const hasLoginBtn = Boolean(
+            document.querySelector(
+              '[data-e2e="top-login-button"], button[data-e2e="nav-login-button"], button:has-text("Log in"), button:has-text("Đăng nhập")',
+            ),
+          );
+          if (hasAvatar) return "logged_in";
+          if (hasLoginBtn) return "logged_out";
 
-        return 'unknown';
-      }).catch(() => 'unknown');
+          return "unknown";
+        })
+        .catch(() => "unknown");
 
-      if (res === 'logged_in' || res === 'logged_out') {
+      if (res === "logged_in" || res === "logged_out") {
         return res;
       }
     } catch (_) {}
@@ -909,12 +934,12 @@ export async function openManualBrowser(
       if (currentCookies.length > 0) {
         lastCookies = currentCookies;
         if (!isTikTokLoggedIn(currentCookies)) {
-          return 'logged_out';
+          return "logged_out";
         }
       }
     } catch (_) {}
 
-    return 'unknown';
+    return "unknown";
   };
 
   // 1. Quét định kỳ mỗi 2 giây trong khi người dùng duyệt web
@@ -931,14 +956,15 @@ export async function openManualBrowser(
       }
 
       const status = await checkPageAuth();
-      if (status === 'unknown') return;
+      if (status === "unknown") return;
 
       lastAuthStatus = status;
 
-      if (status === 'logged_in') {
+      if (status === "logged_in") {
         if (!isSynced) {
           isSynced = true;
-          const freshCookies = currentCookies.length > 0 ? currentCookies : lastCookies;
+          const freshCookies =
+            currentCookies.length > 0 ? currentCookies : lastCookies;
           profileRepo.update({
             id: profile.id,
             cookies: JSON.stringify(freshCookies),
@@ -948,7 +974,7 @@ export async function openManualBrowser(
           );
           if (onUpdated) onUpdated();
         }
-      } else if (status === 'logged_out') {
+      } else if (status === "logged_out") {
         if (isSynced) {
           isSynced = false;
           profileRepo.update({
@@ -970,12 +996,12 @@ export async function openManualBrowser(
     clearInterval(syncInterval);
 
     try {
-      if (lastAuthStatus === 'logged_out' || !isSynced) {
+      if (lastAuthStatus === "logged_out" || !isSynced) {
         // Đã đăng xuất khỏi TikTok
         profileRepo.update({
           id: profile.id,
           cookies: null,
-          status: 'idle',
+          status: "idle",
         });
         console.log(
           `[${profile.name}] ⚠️ Đóng trình duyệt: Đã đăng xuất khỏi TikTok.`,
@@ -1003,7 +1029,7 @@ export async function openManualBrowser(
           profileRepo.update({
             id: profile.id,
             cookies: JSON.stringify(cookies),
-            status: 'idle',
+            status: "idle",
           });
           console.log(
             `[${profile.name}] ✅ Đã xác nhận đăng nhập TikTok thành công (Có sessionid)!`,
@@ -1012,7 +1038,7 @@ export async function openManualBrowser(
           profileRepo.update({
             id: profile.id,
             cookies: null,
-            status: 'idle',
+            status: "idle",
           });
           console.log(
             `[${profile.name}] ⚠️ Đóng trình duyệt: Không tìm thấy phiên đăng nhập.`,
@@ -1020,7 +1046,7 @@ export async function openManualBrowser(
         }
       }
     } catch (_) {
-      profileRepo.updateStatus(profile.id, 'idle');
+      profileRepo.updateStatus(profile.id, "idle");
     }
 
     activeContexts.delete(profile.id);
@@ -1034,7 +1060,7 @@ export async function openManualBrowser(
 
   // QUAN TRỌNG: Chỉ lắng nghe context.on('close'), TUYỆT ĐỐI KHÔNG gán page.on('close', handleClose)
   // để người dùng đóng tab đầu tiên (tiktok.com) vẫn không bị đóng luôn toàn bộ trình duyệt!
-  context.on('close', handleClose);
+  context.on("close", handleClose);
 }
 
 /**

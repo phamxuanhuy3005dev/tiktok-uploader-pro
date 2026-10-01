@@ -60,31 +60,31 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   ];
 
   return (
-    <header className="bg-white border-b border-slate-200/90 shadow-sm sticky top-0 z-30 select-none">
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6">
+    <header className="sticky top-0 z-30 select-none border-b border-slate-200/90 bg-white shadow-sm">
+      <div className="mx-auto max-w-[1600px] px-4 sm:px-6">
         {/* Top bar: Added pl-20 on macOS so traffic light buttons (red, yellow, green) never overlap */}
         <div
-          className="flex items-center justify-between h-16 gap-4 pl-20 sm:pl-22"
+          className="sm:pl-22 flex h-16 items-center justify-between gap-4 pl-20"
           style={{ WebkitAppRegion: "drag" } as any}
         >
           {/* Logo & Brand */}
           <div
-            className="flex items-center gap-3 shrink-0"
+            className="flex shrink-0 items-center gap-3"
             style={{ WebkitAppRegion: "no-drag" } as any}
           >
-            <div className="h-10 w-10 rounded-xl shadow-md shadow-sky-500/20 shrink-0 overflow-hidden border border-sky-100 bg-sky-50 flex items-center justify-center">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-sky-100 bg-sky-50 shadow-md shadow-sky-500/20">
               <img
                 src={appIcon}
                 alt="App Icon"
-                className="h-full w-full object-cover rounded-xl"
+                className="h-full w-full rounded-xl object-cover"
               />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-slate-800 tracking-tight">
+                <h1 className="text-base font-bold tracking-tight text-slate-800">
                   TikTok Uploader Pro
                 </h1>
-                <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-600 border border-sky-200">
+                <span className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-600">
                   <Sparkles className="h-3 w-3" /> US / Global MMO
                 </span>
               </div>
@@ -106,9 +106,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 size="sm"
                 onClick={onCooldownGuide}
                 title="Xem hướng dẫn cơ chế tính 24h & cách đặt tên nhóm kênh nuôi"
-                className="h-8 text-xs border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 shrink-0 px-2.5 font-medium"
+                className="h-8 shrink-0 cursor-help border-amber-300 bg-amber-50 px-2.5 text-xs font-medium text-amber-900 hover:bg-amber-100"
               >
-                <Clock className="h-3.5 w-3.5 mr-1 text-amber-600" /> HD
+                <Clock className="mr-1 h-3.5 w-3.5 text-amber-600" /> HD
                 Cooldown 24h
               </Button>
             )}
@@ -119,9 +119,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 size="sm"
                 onClick={onBulkImport}
                 title="Nhập danh sách profiles từ file JSON hoặc dán JSON"
-                className="text-xs border-slate-200 text-slate-700 bg-white hover:bg-slate-50"
+                className="border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50"
               >
-                <FileJson className="h-3.5 w-3.5 mr-1 text-sky-500" /> Nhập JSON
+                <FileJson className="mr-1 h-3.5 w-3.5 text-sky-500" /> Nhập JSON
               </Button>
             )}
 
@@ -131,14 +131,14 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               onClick={onAddProfile}
               className="text-xs shadow-sm shadow-sky-500/20"
             >
-              <Plus className="h-3.5 w-3.5 mr-1" /> Thêm Profile
+              <Plus className="mr-1 h-3.5 w-3.5" /> Thêm Profile
             </Button>
           </div>
         </div>
 
         {/* Navigation Tabs */}
         <div
-          className="flex items-center gap-1 -mb-px overflow-x-auto scrollbar-none pt-1"
+          className="scrollbar-none -mb-px flex items-center gap-1 overflow-x-auto pt-1"
           style={{ WebkitAppRegion: "no-drag" } as any}
         >
           {tabs.map((tab) => {
@@ -148,10 +148,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all shrink-0 ${
+                className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition-all ${
                   isActive
-                    ? "border-sky-500 text-sky-600 bg-sky-50/50 rounded-t-lg"
-                    : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+                    ? "rounded-t-lg border-sky-500 bg-sky-50/50 text-sky-600"
+                    : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"
                 }`}
               >
                 <Icon
@@ -160,9 +160,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 <span>{tab.label}</span>
                 {tab.badge && (
                   <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
                       tab.pulse
-                        ? "bg-rose-500 text-white animate-pulse"
+                        ? "animate-pulse bg-rose-500 text-white"
                         : isActive
                           ? "bg-sky-100 text-sky-700"
                           : "bg-slate-100 text-slate-500"

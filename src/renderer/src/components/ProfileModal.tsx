@@ -1,9 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { Folder, Music, Calendar, Globe, AlertTriangle, Users, KeyRound, Mail, ShieldCheck, Copy } from 'lucide-react';
-import { Modal } from './ui/Modal';
-import { Button } from './ui/Button';
-import { Input } from './ui/Input';
-import { toast } from 'sonner';
+import {
+  AlertTriangle,
+  Calendar,
+  Copy,
+  Folder,
+  Globe,
+  KeyRound,
+  Mail,
+  Music,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "./ui/Button";
+import { Input } from "./ui/Input";
+import { Modal } from "./ui/Modal";
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -18,30 +29,37 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onClose,
   onSave,
   initialData,
-  availableGroups = []
+  availableGroups = [],
 }) => {
-  const [name, setName] = useState('');
-  const [groupName, setGroupName] = useState('Mặc định');
+  const [name, setName] = useState("");
+  const [groupName, setGroupName] = useState("Mặc định");
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
-  const [newGroupInput, setNewGroupInput] = useState('');
-  const [videoFolder, setVideoFolder] = useState('');
-  const [accountId, setAccountId] = useState('');
-  const [pass, setPass] = useState('');
-  const [twoFactor, setTwoFactor] = useState('');
-  const [otpResult, setOtpResult] = useState<{ otp: string; remainingSec: number } | null>(null);
+  const [newGroupInput, setNewGroupInput] = useState("");
+  const [videoFolder, setVideoFolder] = useState("");
+  const [accountId, setAccountId] = useState("");
+  const [pass, setPass] = useState("");
+  const [twoFactor, setTwoFactor] = useState("");
+  const [otpResult, setOtpResult] = useState<{
+    otp: string;
+    remainingSec: number;
+  } | null>(null);
   const [isGettingOtp, setIsGettingOtp] = useState(false);
-  const [email, setEmail] = useState('');
-  const [passEmail, setPassEmail] = useState('');
-  const [mailAo, setMailAo] = useState('');
+  const [email, setEmail] = useState("");
+  const [passEmail, setPassEmail] = useState("");
+  const [mailAo, setMailAo] = useState("");
   const [enableMusic, setEnableMusic] = useState(true);
-  const [musicMode, setMusicMode] = useState<'favorite_single' | 'favorite_rotate'>('favorite_rotate');
+  const [musicMode, setMusicMode] = useState<
+    "favorite_single" | "favorite_rotate"
+  >("favorite_rotate");
   const [favoriteIndex, setFavoriteIndex] = useState(0);
   const [musicVolume, setMusicVolume] = useState(-50);
-  const [scheduleMode, setScheduleMode] = useState<'immediate' | 'auto_increment' | 'golden_hours'>('auto_increment');
+  const [scheduleMode, setScheduleMode] = useState<
+    "immediate" | "auto_increment" | "golden_hours"
+  >("auto_increment");
   const [scheduleInterval, setScheduleInterval] = useState(10);
-  const [goldenHours, setGoldenHours] = useState('11:30,17:30,20:00');
-  const [proxy, setProxy] = useState('');
-  const [cookies, setCookies] = useState('');
+  const [goldenHours, setGoldenHours] = useState("11:30,17:30,20:00");
+  const [proxy, setProxy] = useState("");
+  const [cookies, setCookies] = useState("");
   const [maxVideos, setMaxVideos] = useState<number | string>(50);
   const [loading, setLoading] = useState(false);
   const [isTestingProxy, setIsTestingProxy] = useState(false);
@@ -54,7 +72,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
   const handleGenerateOtp = async () => {
     if (!twoFactor.trim()) {
-      toast.warning('Vui lòng nhập mã bí mật 2FA trước!');
+      toast.warning("Vui lòng nhập mã bí mật 2FA trước!");
       return;
     }
     setIsGettingOtp(true);
@@ -63,9 +81,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       if (res && res.otp) {
         setOtpResult(res);
         await navigator.clipboard.writeText(res.otp);
-        toast.success(`Đã tạo mã OTP: ${res.otp} (Đã copy, còn ${res.remainingSec}s)!`);
+        toast.success(
+          `Đã tạo mã OTP: ${res.otp} (Đã copy, còn ${res.remainingSec}s)!`,
+        );
       } else {
-        toast.error('Mã 2FA không hợp lệ (cần chuỗi Base32 chuẩn RFC 6238)!');
+        toast.error("Mã 2FA không hợp lệ (cần chuỗi Base32 chuẩn RFC 6238)!");
       }
     } catch (err: any) {
       toast.error(`Lỗi tạo mã OTP: ${err.message}`);
@@ -82,7 +102,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       const res = await window.api.testProxy(proxy.trim());
       setProxyTestResult(res);
     } catch (err: any) {
-      setProxyTestResult({ success: false, error: err.message || 'Lỗi khi kiểm tra proxy' });
+      setProxyTestResult({
+        success: false,
+        error: err.message || "Lỗi khi kiểm tra proxy",
+      });
     } finally {
       setIsTestingProxy(false);
     }
@@ -91,49 +114,53 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   useEffect(() => {
     setProxyTestResult(null);
     setIsCreatingGroup(false);
-    setNewGroupInput('');
+    setNewGroupInput("");
     if (initialData) {
-      setName(initialData.name || '');
-      setGroupName(initialData.group_name || 'Mặc định');
-      setVideoFolder(initialData.video_folder || '');
-      setMaxVideos(initialData.max_videos !== undefined && initialData.max_videos !== null ? initialData.max_videos : 50);
-      setAccountId(initialData.account_id || '');
-      setPass(initialData.pass || '');
-      setTwoFactor(initialData.two_factor || '');
+      setName(initialData.name || "");
+      setGroupName(initialData.group_name || "Mặc định");
+      setVideoFolder(initialData.video_folder || "");
+      setMaxVideos(
+        initialData.max_videos !== undefined && initialData.max_videos !== null
+          ? initialData.max_videos
+          : 50,
+      );
+      setAccountId(initialData.account_id || "");
+      setPass(initialData.pass || "");
+      setTwoFactor(initialData.two_factor || "");
       setOtpResult(null);
-      setEmail(initialData.email || '');
-      setPassEmail(initialData.pass_email || '');
-      setMailAo(initialData.mail_ao || '');
-      setCookies(initialData.cookies || '');
+      setEmail(initialData.email || "");
+      setPassEmail(initialData.pass_email || "");
+      setMailAo(initialData.mail_ao || "");
+      setCookies(initialData.cookies || "");
       setEnableMusic(initialData.enable_music !== 0);
-      setMusicMode(initialData.music_mode || 'favorite_rotate');
+      setMusicMode(initialData.music_mode || "favorite_rotate");
       setFavoriteIndex(initialData.favorite_index ?? 0);
       setMusicVolume(initialData.music_volume ?? -50);
-      setScheduleMode(initialData.schedule_mode || 'auto_increment');
+      setScheduleMode(initialData.schedule_mode || "auto_increment");
       setScheduleInterval(initialData.schedule_interval ?? 10);
-      setGoldenHours(initialData.golden_hours || '11:30,17:30,20:00');
-      setProxy(initialData.proxy || '');
+      setGoldenHours(initialData.golden_hours || "11:30,17:30,20:00");
+      setProxy(initialData.proxy || "");
     } else {
-      setName('');
-      setGroupName('Mặc định');
-      setVideoFolder('');
+      setName("");
+      setGroupName("Mặc định");
+      setVideoFolder("");
       setMaxVideos(50);
-      setAccountId('');
-      setPass('');
-      setTwoFactor('');
+      setAccountId("");
+      setPass("");
+      setTwoFactor("");
       setOtpResult(null);
-      setEmail('');
-      setPassEmail('');
-      setMailAo('');
-      setCookies('');
+      setEmail("");
+      setPassEmail("");
+      setMailAo("");
+      setCookies("");
       setEnableMusic(true);
-      setMusicMode('favorite_rotate');
+      setMusicMode("favorite_rotate");
       setFavoriteIndex(0);
       setMusicVolume(-50);
-      setScheduleMode('auto_increment');
+      setScheduleMode("auto_increment");
       setScheduleInterval(10);
-      setGoldenHours('11:30,17:30,20:00');
-      setProxy('');
+      setGoldenHours("11:30,17:30,20:00");
+      setProxy("");
     }
   }, [initialData, isOpen]);
 
@@ -153,9 +180,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       await onSave({
         id: initialData?.id || `profile_${Date.now()}`,
         name: name.trim(),
-        group_name: groupName.trim() || 'Mặc định',
+        group_name: groupName.trim() || "Mặc định",
         video_folder: videoFolder.trim(),
-        max_videos: maxVideos === '' ? 50 : Math.max(0, Number(maxVideos)),
+        max_videos: maxVideos === "" ? 50 : Math.max(0, Number(maxVideos)),
         account_id: accountId.trim() || null,
         pass: pass.trim() || null,
         two_factor: twoFactor.trim() || null,
@@ -170,10 +197,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         schedule_mode: scheduleMode,
         schedule_interval: Number(scheduleInterval) || 10,
         golden_hours: goldenHours.trim(),
-        caption_mode: 'remove_title',
+        caption_mode: "remove_title",
         proxy: proxy.trim() || null,
-        status: initialData?.status || 'idle',
-        last_run: initialData?.last_run || null
+        status: initialData?.status || "idle",
+        last_run: initialData?.last_run || null,
       });
       onClose();
     } finally {
@@ -185,15 +212,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={initialData ? `Chỉnh Sửa Profile: ${initialData.name}` : 'Thêm Profile Mới'}
+      title={
+        initialData
+          ? `Chỉnh Sửa Profile: ${initialData.name}`
+          : "Thêm Profile Mới"
+      }
       description="Cấu hình tài khoản, nhóm kênh, thông tin đăng nhập, chèn nhạc và lên lịch."
       className="max-w-2xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* 1. Tên & Nhóm Kênh */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-700">
               Tên Profile (Định danh kênh)
             </label>
             <Input
@@ -205,15 +236,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5 text-slate-400" /> Nhóm Kênh (Group)
+            <div className="mb-1 flex items-center justify-between">
+              <label className="block flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-700">
+                <Users className="h-3.5 w-3.5 text-slate-400" /> Nhóm Kênh
+                (Group)
               </label>
               {!isCreatingGroup && (
                 <button
                   type="button"
                   onClick={() => setIsCreatingGroup(true)}
-                  className="text-[11px] text-sky-600 hover:text-sky-700 font-semibold hover:underline"
+                  className="text-[11px] font-semibold text-sky-600 hover:text-sky-700 hover:underline"
                 >
                   + Thêm nhóm mới
                 </button>
@@ -227,7 +259,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   value={newGroupInput}
                   onChange={(e) => setNewGroupInput(e.target.value)}
                   placeholder="Nhập tên nhóm mới..."
-                  className="text-xs h-8 flex-1"
+                  className="h-8 flex-1 text-xs"
                 />
                 <Button
                   type="button"
@@ -237,10 +269,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     if (trimmed) {
                       setGroupName(trimmed);
                       setIsCreatingGroup(false);
-                      setNewGroupInput('');
+                      setNewGroupInput("");
                     }
                   }}
-                  className="text-xs h-8 px-2.5"
+                  className="h-8 px-2.5 text-xs"
                 >
                   OK
                 </Button>
@@ -250,9 +282,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   size="sm"
                   onClick={() => {
                     setIsCreatingGroup(false);
-                    setNewGroupInput('');
+                    setNewGroupInput("");
                   }}
-                  className="text-xs h-8 px-2"
+                  className="h-8 px-2 text-xs"
                 >
                   Hủy
                 </Button>
@@ -261,49 +293,68 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <select
                 value={groupName}
                 onChange={(e) => {
-                  if (e.target.value === '__NEW__') {
+                  if (e.target.value === "__NEW__") {
                     setIsCreatingGroup(true);
                   } else {
                     setGroupName(e.target.value);
                   }
                 }}
-                className="w-full h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 font-medium focus:outline-none focus:border-sky-500"
+                className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 focus:border-sky-500 focus:outline-none"
               >
-                {Array.from(new Set(['Mặc định', ...availableGroups, groupName])).filter(Boolean).map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
+                {Array.from(
+                  new Set(["Mặc định", ...availableGroups, groupName]),
+                )
+                  .filter(Boolean)
+                  .map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
                 <option value="__NEW__">+ Nhập nhóm mới khác...</option>
               </select>
             )}
-            <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
-              <span className="text-amber-600 font-bold">💡 Mẹo:</span> Nhóm có từ <code className="bg-amber-50 text-amber-800 font-semibold px-1 rounded">nuôi</code>, <code className="bg-amber-50 text-amber-800 font-semibold px-1 rounded">warmup</code> hoặc <code className="bg-amber-50 text-amber-800 font-semibold px-1 rounded">mới</code> sẽ tự động bật bảo vệ Cooldown 24h.
+            <p className="mt-1 flex items-center gap-1 text-[10px] text-slate-500">
+              <span className="font-bold text-amber-600">💡 Mẹo:</span> Nhóm có
+              từ{" "}
+              <code className="rounded bg-amber-50 px-1 font-semibold text-amber-800">
+                nuôi
+              </code>
+              ,{" "}
+              <code className="rounded bg-amber-50 px-1 font-semibold text-amber-800">
+                warmup
+              </code>{" "}
+              hoặc{" "}
+              <code className="rounded bg-amber-50 px-1 font-semibold text-amber-800">
+                mới
+              </code>{" "}
+              sẽ tự động bật bảo vệ Cooldown 24h.
             </p>
           </div>
         </div>
 
         {/* 2. Thông tin Tài Khoản & Mật Khẩu (Quản lý kênh) */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5">
-          <div className="flex items-center gap-2 text-slate-800 font-semibold text-xs uppercase tracking-wider">
-            <ShieldCheck className="h-4 w-4 text-sky-600" /> Thông Tin Tài Khoản & Bảo Mật
+        <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-800">
+            <ShieldCheck className="h-4 w-4 text-sky-600" /> Thông Tin Tài Khoản
+            & Bảo Mật
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             <div>
-              <label className="block text-[11px] font-medium text-slate-600 mb-0.5 flex items-center gap-1">
-                <KeyRound className="h-3 w-3 text-slate-400" /> Tài khoản TikTok (Username / ID)
+              <label className="mb-0.5 block flex items-center gap-1 text-[11px] font-medium text-slate-600">
+                <KeyRound className="h-3 w-3 text-slate-400" /> Tài khoản TikTok
+                (Username / ID)
               </label>
               <Input
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
                 placeholder="User / Phone / ID"
-                className="text-xs h-8"
+                className="h-8 text-xs"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-medium text-slate-600 mb-0.5">
+              <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
                 Mật khẩu TikTok
               </label>
               <Input
@@ -311,15 +362,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 value={pass}
                 onChange={(e) => setPass(e.target.value)}
                 placeholder="Mật khẩu TikTok"
-                className="text-xs h-8 font-mono"
+                className="h-8 font-mono text-xs"
               />
             </div>
 
             {/* Mã 2FA (Authenticator App) */}
-            <div className="sm:col-span-2 bg-purple-50/50 p-2.5 rounded-xl border border-purple-100">
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-[11px] font-semibold text-purple-900 flex items-center gap-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5 text-purple-600" /> Mã 2FA (Authenticator Secret Key / 2FA Live)
+            <div className="rounded-xl border border-purple-100 bg-purple-50/50 p-2.5 sm:col-span-2">
+              <div className="mb-1 flex items-center justify-between">
+                <label className="block flex items-center gap-1.5 text-[11px] font-semibold text-purple-900">
+                  <ShieldCheck className="h-3.5 w-3.5 text-purple-600" /> Mã 2FA
+                  (Authenticator Secret Key / 2FA Live)
                 </label>
                 {twoFactor.trim() && (
                   <Button
@@ -328,9 +380,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     size="sm"
                     onClick={handleGenerateOtp}
                     disabled={isGettingOtp}
-                    className="h-6 px-2 text-[10px] bg-white border-purple-200 text-purple-700 hover:bg-purple-100/70"
+                    className="h-6 border-purple-200 bg-white px-2 text-[10px] text-purple-700 hover:bg-purple-100/70"
                   >
-                    {isGettingOtp ? 'Đang tạo...' : '🔑 Lấy mã OTP 6 số'}
+                    {isGettingOtp ? "Đang tạo..." : "🔑 Lấy mã OTP 6 số"}
                   </Button>
                 )}
               </div>
@@ -343,14 +395,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     setOtpResult(null);
                   }}
                   placeholder="Ví dụ: JBSWY3DPEHPK3PXP (Mã bí mật dạng Base32 khi mua acc)"
-                  className="text-xs h-8 font-mono bg-white flex-1"
+                  className="h-8 flex-1 bg-white font-mono text-xs"
                 />
               </div>
               {otpResult && (
-                <div className="mt-2 flex items-center justify-between bg-white px-3 py-1.5 rounded-lg border border-purple-200 text-xs">
+                <div className="mt-2 flex items-center justify-between rounded-lg border border-purple-200 bg-white px-3 py-1.5 text-xs">
                   <span className="text-slate-600">
-                    Mã OTP hiện tại: <strong className="font-mono text-sm tracking-wider text-purple-700 font-bold ml-1">{otpResult.otp}</strong>
-                    <span className="text-slate-400 text-[10px] ml-2">(Hết hạn sau: {otpResult.remainingSec}s)</span>
+                    Mã OTP hiện tại:{" "}
+                    <strong className="ml-1 font-mono text-sm font-bold tracking-wider text-purple-700">
+                      {otpResult.otp}
+                    </strong>
+                    <span className="ml-2 text-[10px] text-slate-400">
+                      (Hết hạn sau: {otpResult.remainingSec}s)
+                    </span>
                   </span>
                   <button
                     type="button"
@@ -358,19 +415,21 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                       navigator.clipboard.writeText(otpResult.otp);
                       toast.success(`Đã copy mã OTP: ${otpResult.otp}`);
                     }}
-                    className="flex items-center gap-1 text-[11px] text-purple-600 hover:text-purple-800 font-medium"
+                    className="flex items-center gap-1 text-[11px] font-medium text-purple-600 hover:text-purple-800"
                   >
                     <Copy className="h-3 w-3" /> Copy
                   </button>
                 </div>
               )}
-              <p className="text-[10px] text-purple-600/80 mt-1">
-                * Dùng cho acc có định dạng <code>user|pass|2fa</code>. Bấm "Lấy mã OTP 6 số" để lấy mã đăng nhập tức thì mà không cần vào web 2fa.live.
+              <p className="mt-1 text-[10px] text-purple-600/80">
+                * Dùng cho acc có định dạng <code>user|pass|2fa</code>. Bấm "Lấy
+                mã OTP 6 số" để lấy mã đăng nhập tức thì mà không cần vào web
+                2fa.live.
               </p>
             </div>
 
             <div>
-              <label className="block text-[11px] font-medium text-slate-600 mb-0.5 flex items-center gap-1">
+              <label className="mb-0.5 block flex items-center gap-1 text-[11px] font-medium text-slate-600">
                 <Mail className="h-3 w-3 text-slate-400" /> Email đăng ký
               </label>
               <Input
@@ -378,12 +437,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="example@outlook.com"
-                className="text-xs h-8"
+                className="h-8 text-xs"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-medium text-slate-600 mb-0.5">
+              <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
                 Mật khẩu Email
               </label>
               <Input
@@ -391,12 +450,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 value={passEmail}
                 onChange={(e) => setPassEmail(e.target.value)}
                 placeholder="Mật khẩu hòm thư"
-                className="text-xs h-8 font-mono"
+                className="h-8 font-mono text-xs"
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-[11px] font-medium text-slate-600 mb-0.5">
+              <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
                 Mail ảo / Mail khôi phục
               </label>
               <Input
@@ -404,21 +463,21 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 value={mailAo}
                 onChange={(e) => setMailAo(e.target.value)}
                 placeholder="Mail ảo liên kết..."
-                className="text-xs h-8"
+                className="h-8 text-xs"
               />
             </div>
 
             {/* Cookie Đăng Nhập */}
-            <div className="sm:col-span-2 pt-1 border-t border-slate-200/80">
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-[11px] font-semibold text-slate-700 flex items-center gap-1.5">
+            <div className="border-t border-slate-200/80 pt-1 sm:col-span-2">
+              <div className="mb-1 flex items-center justify-between">
+                <label className="block flex items-center gap-1.5 text-[11px] font-semibold text-slate-700">
                   <span>🍪 Cookie Đăng Nhập (Tùy chọn)</span>
                   {cookies.trim() ? (
-                    <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-semibold">
+                    <span className="rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                       Đã có Cookie ({cookies.length} ký tự)
                     </span>
                   ) : (
-                    <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-400">
                       Chưa có Cookie
                     </span>
                   )}
@@ -426,8 +485,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 {cookies.trim() && (
                   <button
                     type="button"
-                    onClick={() => setCookies('')}
-                    className="text-[11px] text-rose-500 hover:text-rose-700 font-medium hover:underline"
+                    onClick={() => setCookies("")}
+                    className="text-[11px] font-medium text-rose-500 hover:text-rose-700 hover:underline"
                   >
                     Xóa Cookie
                   </button>
@@ -438,19 +497,21 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 value={cookies}
                 onChange={(e) => setCookies(e.target.value)}
                 placeholder="Dán Cookie vào đây (hỗ trợ sessionid=...; JSON hoặc Base64) để tự động đăng nhập không cần mật khẩu/captcha..."
-                className="w-full p-2 font-mono text-[11px] rounded-lg border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 transition-colors"
+                className="w-full rounded-lg border border-slate-200 bg-white p-2 font-mono text-[11px] text-slate-800 placeholder-slate-400 transition-colors focus:border-sky-500 focus:outline-none"
               />
-              <p className="text-[10px] text-slate-400 mt-0.5">
-                * Khi nạp Cookie hợp lệ (có chứa <code>sessionid</code>), trình duyệt sẽ vào thẳng trang quản lý TikTok Studio mà không cần nhập mật khẩu hay giải captcha đăng nhập.
+              <p className="mt-0.5 text-[10px] text-slate-400">
+                * Khi nạp Cookie hợp lệ (có chứa <code>sessionid</code>), trình
+                duyệt sẽ vào thẳng trang quản lý TikTok Studio mà không cần nhập
+                mật khẩu hay giải captcha đăng nhập.
               </p>
             </div>
           </div>
         </div>
 
         {/* 3. Thư mục Video nguồn & Giới hạn số lượng */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-700">
               Thư mục Video nguồn
             </label>
             <div className="flex gap-2">
@@ -460,17 +521,22 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 placeholder="/Users/username/Videos/Channel1"
                 className="flex-1 font-mono text-xs"
               />
-              <Button type="button" variant="secondary" onClick={handleSelectFolder}>
-                <Folder className="h-4 w-4 mr-1 text-slate-500" /> Chọn Folder
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSelectFolder}
+              >
+                <Folder className="mr-1 h-4 w-4 text-slate-500" /> Chọn Folder
               </Button>
             </div>
-            <p className="text-[11px] text-slate-500 mt-1">
-              * Video đăng thành công sẽ tự động chuyển vào thư mục con <code className="text-slate-700 font-semibold">done/</code>.
+            <p className="mt-1 text-[11px] text-slate-500">
+              * Video đăng thành công sẽ tự động chuyển vào thư mục con{" "}
+              <code className="font-semibold text-slate-700">done/</code>.
             </p>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-700">
               Tối đa video / đợt
             </label>
             <Input
@@ -480,51 +546,60 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               value={maxVideos}
               onChange={(e) => setMaxVideos(e.target.value)}
               placeholder="50"
-              className="text-xs font-bold text-sky-700 h-9"
+              className="h-9 text-xs font-bold text-sky-700"
             />
-            <p className="text-[11px] text-slate-400 mt-1">
+            <p className="mt-1 text-[11px] text-slate-400">
               Mặc định 50. Nhập 0 để upload hết.
             </p>
           </div>
         </div>
 
         {/* 4. Khối Gắn Nhạc Favorites */}
-        <div className="rounded-xl border border-sky-100 bg-sky-50/30 p-3.5 space-y-2.5">
+        <div className="space-y-2.5 rounded-xl border border-sky-100 bg-sky-50/30 p-3.5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sky-800 font-semibold text-xs uppercase tracking-wider">
-              <Music className="h-4 w-4 text-sky-600" /> Tự Động Chèn Nhạc Favorites
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sky-800">
+              <Music className="h-4 w-4 text-sky-600" /> Tự Động Chèn Nhạc
+              Favorites
             </div>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
+            <label className="flex cursor-pointer select-none items-center gap-2">
               <input
                 type="checkbox"
                 checked={enableMusic}
                 onChange={(e) => setEnableMusic(e.target.checked)}
-                className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300"
+                className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
               />
               <span className="text-xs font-medium text-slate-700">
-                {enableMusic ? 'Đang Bật' : 'Tắt (Giữ tiếng gốc)'}
+                {enableMusic ? "Đang Bật" : "Tắt (Giữ tiếng gốc)"}
               </span>
             </label>
           </div>
 
           {enableMusic ? (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <div className="grid grid-cols-1 gap-2.5 pt-1 sm:grid-cols-2">
                 <div>
-                  <label className="block text-[11px] font-medium text-slate-600 mb-0.5">Chế độ chọn bài</label>
+                  <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
+                    Chế độ chọn bài
+                  </label>
                   <select
                     value={musicMode}
                     onChange={(e: any) => setMusicMode(e.target.value)}
-                    className="w-full h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 focus:outline-none focus:border-sky-500"
+                    className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 focus:border-sky-500 focus:outline-none"
                   >
-                    <option value="favorite_rotate">Xoay vòng các bài trong Favorites (Mặc định)</option>
-                    <option value="favorite_single">Cố định 1 bài hát chỉ định</option>
+                    <option value="favorite_rotate">
+                      Xoay vòng các bài trong Favorites (Mặc định)
+                    </option>
+                    <option value="favorite_single">
+                      Cố định 1 bài hát chỉ định
+                    </option>
                   </select>
                 </div>
 
-                {musicMode === 'favorite_single' ? (
+                {musicMode === "favorite_single" ? (
                   <div>
-                    <label className="block text-[11px] font-medium text-slate-600 mb-0.5">Vị trí bài trong Favorites (0 là đầu)</label>
+                    <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
+                      Vị trí bài trong Favorites (0 là đầu)
+                    </label>
                     <Input
                       type="number"
                       min="0"
@@ -535,7 +610,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-[11px] font-medium text-slate-600 mb-0.5">Âm lượng nhạc nền (dB)</label>
+                    <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
+                      Âm lượng nhạc nền (dB)
+                    </label>
                     <Input
                       type="number"
                       value={musicVolume}
@@ -547,9 +624,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 )}
               </div>
 
-              {musicMode === 'favorite_single' && (
+              {musicMode === "favorite_single" && (
                 <div>
-                  <label className="block text-[11px] font-medium text-slate-600 mb-0.5">Âm lượng nhạc nền (dB)</label>
+                  <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
+                    Âm lượng nhạc nền (dB)
+                  </label>
                   <Input
                     type="number"
                     value={musicVolume}
@@ -560,43 +639,53 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 </div>
               )}
 
-              <div className="flex items-start gap-2 bg-sky-100/60 rounded-lg p-2 text-xs text-sky-800">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-sky-600 mt-0.5" />
+              <div className="flex items-start gap-2 rounded-lg bg-sky-100/60 p-2 text-xs text-sky-800">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
                 <span>
-                  <strong>Bảo vệ doanh thu MMO:</strong> Giữ nguyên âm thanh gốc của video ở mức 100%, đồng thời chèn nhạc nền tài trợ từ mục Favorites ở mức -50dB để gắn Sound ID kiếm tiền.
+                  <strong>Bảo vệ doanh thu MMO:</strong> Giữ nguyên âm thanh gốc
+                  của video ở mức 100%, đồng thời chèn nhạc nền tài trợ từ mục
+                  Favorites ở mức -50dB để gắn Sound ID kiếm tiền.
                 </span>
               </div>
             </>
           ) : (
-            <p className="text-xs text-slate-500 py-1">
-              Profile này được cấu hình <strong>TẮT chèn nhạc</strong>. Video sẽ được tải lên với âm thanh gốc, không mở editor âm thanh.
+            <p className="py-1 text-xs text-slate-500">
+              Profile này được cấu hình <strong>TẮT chèn nhạc</strong>. Video sẽ
+              được tải lên với âm thanh gốc, không mở editor âm thanh.
             </p>
           )}
         </div>
 
         {/* 5. Khối Lên Lịch (Scheduling) */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 space-y-2.5">
-          <div className="flex items-center gap-2 text-slate-800 font-semibold text-xs uppercase tracking-wider">
-            <Calendar className="h-4 w-4 text-slate-500" /> Cơ Chế Lên Lịch (Scheduling)
+        <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/50 p-3.5">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-800">
+            <Calendar className="h-4 w-4 text-slate-500" /> Cơ Chế Lên Lịch
+            (Scheduling)
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             <div>
-              <label className="block text-[11px] font-medium text-slate-600 mb-0.5">Chế độ lịch</label>
+              <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
+                Chế độ lịch
+              </label>
               <select
                 value={scheduleMode}
                 onChange={(e: any) => setScheduleMode(e.target.value)}
-                className="w-full h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 focus:outline-none focus:border-sky-500"
+                className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 focus:border-sky-500 focus:outline-none"
               >
-                <option value="auto_increment">Nối tiếp lịch cũ (+ khoảng cách phút)</option>
+                <option value="auto_increment">
+                  Nối tiếp lịch cũ (+ khoảng cách phút)
+                </option>
                 <option value="golden_hours">Rải theo Khung Giờ Vàng</option>
                 <option value="immediate">Đăng ngay lập tức (Public)</option>
               </select>
             </div>
 
-            {scheduleMode === 'auto_increment' && (
+            {scheduleMode === "auto_increment" && (
               <div>
-                <label className="block text-[11px] font-medium text-slate-600 mb-0.5">Khoảng cách giữa các video (phút)</label>
+                <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
+                  Khoảng cách giữa các video (phút)
+                </label>
                 <Input
                   type="number"
                   min="5"
@@ -608,9 +697,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </div>
             )}
 
-            {scheduleMode === 'golden_hours' && (
+            {scheduleMode === "golden_hours" && (
               <div className="sm:col-span-2">
-                <label className="block text-[11px] font-medium text-slate-600 mb-0.5">Các khung giờ vàng (cách nhau bởi dấu phẩy)</label>
+                <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
+                  Các khung giờ vàng (cách nhau bởi dấu phẩy)
+                </label>
                 <Input
                   value={goldenHours}
                   onChange={(e) => setGoldenHours(e.target.value)}
@@ -623,24 +714,26 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         </div>
 
         {/* 6. Proxy */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 space-y-2">
+        <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/50 p-3.5">
           <div className="flex items-center justify-between">
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <Globe className="h-3.5 w-3.5 text-slate-400" /> Cấu Hình Proxy (Tùy chọn)
+            <label className="block flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-700">
+              <Globe className="h-3.5 w-3.5 text-slate-400" /> Cấu Hình Proxy
+              (Tùy chọn)
             </label>
             {proxy.trim() && (
               <button
                 type="button"
                 onClick={handleTestProxy}
                 disabled={isTestingProxy}
-                className="text-[11px] text-sky-600 hover:text-sky-700 font-semibold hover:underline disabled:opacity-50 flex items-center gap-1"
+                className="flex items-center gap-1 text-[11px] font-semibold text-sky-600 hover:text-sky-700 hover:underline disabled:opacity-50"
               >
                 {isTestingProxy ? (
                   <span className="flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-sky-500 animate-ping" /> Đang kiểm tra...
+                    <span className="h-2 w-2 animate-ping rounded-full bg-sky-500" />{" "}
+                    Đang kiểm tra...
                   </span>
                 ) : (
-                  'Kiểm tra kết nối'
+                  "Kiểm tra kết nối"
                 )}
               </button>
             )}
@@ -652,21 +745,25 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               setProxyTestResult(null);
             }}
             placeholder="http://user:pass@ip:port hoặc ip:port:user:pass"
-            className="font-mono text-xs h-8 bg-white"
+            className="h-8 bg-white font-mono text-xs"
           />
           {proxyTestResult && (
             <div
-              className={`mt-1.5 px-2.5 py-1.5 rounded-md text-[11px] leading-tight flex items-start gap-1.5 ${
+              className={`mt-1.5 flex items-start gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] leading-tight ${
                 proxyTestResult.success
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+                  ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border border-rose-200 bg-rose-50 text-rose-700"
               }`}
             >
-              <span className="shrink-0">{proxyTestResult.success ? '✅' : '❌'}</span>
+              <span className="shrink-0">
+                {proxyTestResult.success ? "✅" : "❌"}
+              </span>
               <div>
                 {proxyTestResult.success ? (
                   <span>
-                    Proxy hoạt động tốt! IP xuất cảnh: <strong>{proxyTestResult.ip}</strong> (Độ trễ: {proxyTestResult.latencyMs}ms)
+                    Proxy hoạt động tốt! IP xuất cảnh:{" "}
+                    <strong>{proxyTestResult.ip}</strong> (Độ trễ:{" "}
+                    {proxyTestResult.latencyMs}ms)
                   </span>
                 ) : (
                   <span>{proxyTestResult.error}</span>
@@ -677,12 +774,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         </div>
 
         {/* Nút bấm */}
-        <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
           <Button type="button" variant="ghost" onClick={onClose}>
             Hủy
           </Button>
-          <Button type="submit" variant="default" disabled={loading} className="bg-sky-500 hover:bg-sky-600 text-white font-semibold">
-            {loading ? 'Đang lưu...' : initialData ? 'Cập Nhật' : 'Tạo Profile'}
+          <Button
+            type="submit"
+            variant="default"
+            disabled={loading}
+            className="bg-sky-500 font-semibold text-white hover:bg-sky-600"
+          >
+            {loading ? "Đang lưu..." : initialData ? "Cập Nhật" : "Tạo Profile"}
           </Button>
         </div>
       </form>

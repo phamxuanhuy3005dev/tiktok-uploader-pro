@@ -644,7 +644,7 @@ export const App: React.FC = () => {
   const runningCount = queueStats.runningProfiles?.length || 0;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+    <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
       <Toaster position="top-right" theme="light" richColors />
 
       {/* Header with Navigation Tabs & Luồng Quick Picker */}
@@ -662,13 +662,13 @@ export const App: React.FC = () => {
       />
 
       {/* Main Container */}
-      <main className="flex-1 p-3 sm:p-5 max-w-[1600px] mx-auto w-full">
+      <main className="mx-auto w-full max-w-[1600px] flex-1 p-3 sm:p-5">
         {/* TAB 1: KÊNH & PROFILES */}
         {activeTab === "profiles" && (
           <div className="space-y-3.5">
             {/* Filter & Selection Toolbar */}
-            <div className="bg-white p-3 rounded-xl border border-slate-200/90 shadow-sm space-y-2.5">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+            <div className="space-y-2.5 rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm">
+              <div className="flex flex-col items-stretch justify-between gap-2.5 sm:flex-row sm:items-center">
                 {/* Search Input */}
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-2 h-4 w-4 text-slate-400" />
@@ -677,7 +677,7 @@ export const App: React.FC = () => {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Tìm theo tên kênh, email, ID tài khoản..."
-                    className="w-full pl-9 pr-3 h-8 text-xs rounded-lg border border-slate-200 bg-slate-50/70 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white transition-all"
+                    className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50/70 pl-9 pr-3 text-xs text-slate-800 transition-all placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
                   />
                   {searchQuery && (
                     <button
@@ -690,14 +690,14 @@ export const App: React.FC = () => {
                 </div>
 
                 {/* Group Selector Dropdown & Chia Đều Video */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-2.5 h-8 rounded-lg border border-slate-200 font-medium">
+                <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-500">
                     <Filter className="h-3.5 w-3.5 text-sky-500" />
                     <span>Nhóm:</span>
                     <select
                       value={selectedGroup}
                       onChange={(e) => setSelectedGroup(e.target.value)}
-                      className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer text-xs"
+                      className="cursor-pointer bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
                     >
                       <option value="all">Tất cả ({profiles.length})</option>
                       {groups.map((grp) => {
@@ -718,10 +718,10 @@ export const App: React.FC = () => {
                     isNurturingGroup(selectedGroup) && (
                       <button
                         onClick={() => setIsCooldownGuideOpen(true)}
-                        className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold hover:bg-amber-100 transition-colors shadow-xs shrink-0 cursor-pointer"
+                        className="shadow-xs flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100"
                         title="Nhóm này được nhận diện là kênh nuôi (Bảo vệ 24h). Nhấn để xem hướng dẫn chi tiết."
                       >
-                        <Clock className="h-3.5 w-3.5 text-amber-600 animate-pulse" />
+                        <Clock className="h-3.5 w-3.5 animate-pulse text-amber-600" />
                         <span>Kênh Nuôi (24h)</span>
                       </button>
                     )}
@@ -732,9 +732,9 @@ export const App: React.FC = () => {
                     size="sm"
                     onClick={() => setIsManageGroupsOpen(true)}
                     title="Quản lý danh sách nhóm, thêm mới hoặc đổi tên nhóm"
-                    className="h-8 text-xs border-slate-200 text-slate-700 bg-white hover:bg-slate-50 shrink-0 px-2.5"
+                    className="h-8 shrink-0 border-slate-200 bg-white px-2.5 text-xs text-slate-700 hover:bg-slate-50"
                   >
-                    <Users className="h-3.5 w-3.5 mr-1 text-slate-500" /> Quản
+                    <Users className="mr-1 h-3.5 w-3.5 text-slate-500" /> Quản
                     Lý Nhóm
                   </Button>
 
@@ -744,9 +744,9 @@ export const App: React.FC = () => {
                     size="sm"
                     onClick={() => setIsDistributeModalOpen(true)}
                     title="Tự động chia đều danh sách video từ 1 thư mục cho các kênh"
-                    className="h-8 text-xs border-sky-300 text-sky-700 bg-sky-50/60 hover:bg-sky-100/80 shrink-0 px-2.5"
+                    className="h-8 shrink-0 border-sky-300 bg-sky-50/60 px-2.5 text-xs text-sky-700 hover:bg-sky-100/80"
                   >
-                    <Shuffle className="h-3.5 w-3.5 mr-1 text-sky-600" /> Chia
+                    <Shuffle className="mr-1 h-3.5 w-3.5 text-sky-600" /> Chia
                     Đều Video
                   </Button>
 
@@ -757,9 +757,9 @@ export const App: React.FC = () => {
                     disabled={isProcessing}
                     onClick={() => setIsBulkImportOpen(true)}
                     title="Nhập danh sách profiles từ file JSON hoặc dán JSON"
-                    className="h-8 text-xs border-sky-300 text-sky-700 bg-sky-50/60 hover:bg-sky-100/80 shrink-0 px-2.5"
+                    className="h-8 shrink-0 border-sky-300 bg-sky-50/60 px-2.5 text-xs text-sky-700 hover:bg-sky-100/80"
                   >
-                    <FileJson className="h-3.5 w-3.5 mr-1 text-sky-600" /> Nhập
+                    <FileJson className="mr-1 h-3.5 w-3.5 text-sky-600" /> Nhập
                     JSON
                   </Button>
 
@@ -770,22 +770,22 @@ export const App: React.FC = () => {
                     disabled={isProcessing || filteredProfiles.length === 0}
                     onClick={() => handleExportJson()}
                     title="Xuất danh sách profiles ra file JSON an toàn, đầy đủ cookies"
-                    className="h-8 text-xs border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80 shrink-0 px-2.5"
+                    className="h-8 shrink-0 border-emerald-300 bg-emerald-50/60 px-2.5 text-xs text-emerald-700 hover:bg-emerald-100/80"
                   >
-                    <FileJson className="h-3.5 w-3.5 mr-1 text-emerald-600" />{" "}
+                    <FileJson className="mr-1 h-3.5 w-3.5 text-emerald-600" />{" "}
                     Xuất JSON ({filteredProfiles.length})
                   </Button>
                 </div>
               </div>
 
               {/* Selection Bar & Batch Run Actions */}
-              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
+              <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-slate-100 pt-2">
                 <div className="flex items-center gap-3">
                   {/* Checkbox Chọn tất cả */}
                   <button
                     onClick={handleToggleSelectAll}
                     disabled={filteredProfiles.length === 0}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 transition-colors hover:text-slate-900 disabled:opacity-50"
                   >
                     {isAllFilteredSelected ? (
                       <CheckSquare className="h-4 w-4 text-sky-500" />
@@ -800,17 +800,17 @@ export const App: React.FC = () => {
 
                   {/* Số lượng đã chọn & Cảnh báo kênh thiếu folder */}
                   {selectedProfileIds.size > 0 && (
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <Badge
                         variant="info"
-                        className="text-xs bg-sky-50 text-sky-700 border-sky-200"
+                        className="border-sky-200 bg-sky-50 text-xs text-sky-700"
                       >
                         Đã chọn {selectedProfileIds.size} profile
                       </Badge>
                       {profiles.filter(
                         (p) => selectedProfileIds.has(p.id) && !p.video_folder,
                       ).length > 0 && (
-                        <span className="text-[11px] text-amber-600 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-600">
                           ⚠️{" "}
                           {
                             profiles.filter(
@@ -825,14 +825,14 @@ export const App: React.FC = () => {
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex flex-wrap items-center gap-2">
                   {/* Nếu đã chọn >= 1 profile: Các thao tác hàng loạt MMO */}
                   {selectedProfileIds.size > 0 ? (
                     <>
                       {/* Chuyển nhóm hàng loạt */}
-                      <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 h-8 text-xs">
+                      <div className="flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs">
                         <FolderInput className="h-3.5 w-3.5 text-slate-400" />
-                        <span className="text-slate-500 font-medium hidden sm:inline">
+                        <span className="hidden font-medium text-slate-500 sm:inline">
                           Chuyển sang:
                         </span>
                         <select
@@ -844,7 +844,7 @@ export const App: React.FC = () => {
                               e.target.value = "";
                             }
                           }}
-                          className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer text-xs disabled:opacity-50"
+                          className="cursor-pointer bg-transparent text-xs font-bold text-slate-800 focus:outline-none disabled:opacity-50"
                         >
                           <option value="" disabled>
                             Nhóm...
@@ -864,9 +864,9 @@ export const App: React.FC = () => {
                         disabled={isProcessing}
                         onClick={() => setIsFollowersModalOpen(true)}
                         title="Xem bảng thống kê số lượng Followers, mốc 1K và cập nhật số liệu từ TikTok"
-                        className="h-8 text-xs border-indigo-300 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 font-semibold px-2.5 disabled:opacity-50"
+                        className="h-8 border-indigo-300 bg-indigo-50/70 px-2.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
                       >
-                        <Users className="h-3.5 w-3.5 mr-1 text-indigo-600" />
+                        <Users className="mr-1 h-3.5 w-3.5 text-indigo-600" />
                         Xem Followers ({selectedProfileIds.size})
                       </Button>
 
@@ -883,9 +883,9 @@ export const App: React.FC = () => {
                           )
                         }
                         title="Xuất file JSON an toàn các kênh đang chọn"
-                        className="h-8 text-xs border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80 px-2.5 disabled:opacity-50"
+                        className="h-8 border-emerald-300 bg-emerald-50/60 px-2.5 text-xs text-emerald-700 hover:bg-emerald-100/80 disabled:opacity-50"
                       >
-                        <FileJson className="h-3.5 w-3.5 mr-1 text-emerald-600" />{" "}
+                        <FileJson className="mr-1 h-3.5 w-3.5 text-emerald-600" />{" "}
                         Xuất Đã Chọn ({selectedProfileIds.size})
                       </Button>
 
@@ -896,24 +896,24 @@ export const App: React.FC = () => {
                         onClick={handleBulkDelete}
                         disabled={isProcessing}
                         title="Xóa các profile đang chọn"
-                        className="h-8 text-xs border-rose-300 text-rose-700 bg-rose-50/60 hover:bg-rose-100/80 px-2.5 disabled:opacity-50"
+                        className="h-8 border-rose-300 bg-rose-50/60 px-2.5 text-xs text-rose-700 hover:bg-rose-100/80 disabled:opacity-50"
                       >
                         {isProcessing ? (
-                          <Loader2 className="h-3.5 w-3.5 mr-1 text-rose-600 animate-spin" />
+                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin text-rose-600" />
                         ) : (
-                          <Trash2 className="h-3.5 w-3.5 mr-1 text-rose-600" />
+                          <Trash2 className="mr-1 h-3.5 w-3.5 text-rose-600" />
                         )}
                         {isProcessing ? "Đang xóa..." : "Xóa"}
                       </Button>
 
-                      <div className="h-4 w-[1px] bg-slate-200 mx-1" />
+                      <div className="mx-1 h-4 w-[1px] bg-slate-200" />
 
                       {/* Ô chỉnh giới hạn upload tối đa */}
                       <div
-                        className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200/90 px-2 py-1 rounded-lg"
+                        className="flex items-center gap-1.5 rounded-lg border border-slate-200/90 bg-slate-50 px-2 py-1 text-xs text-slate-600"
                         title="Số video tối đa upload mỗi kênh trong đợt chạy này. Nhập 0 nếu muốn upload toàn bộ video có trong folder."
                       >
-                        <span className="font-medium text-[11px] text-slate-500">
+                        <span className="text-[11px] font-medium text-slate-500">
                           Tối đa:
                         </span>
                         <input
@@ -927,7 +927,7 @@ export const App: React.FC = () => {
                               Math.max(0, parseInt(e.target.value) || 0),
                             )
                           }
-                          className="w-10 h-6 text-center text-xs font-bold text-sky-700 bg-white border border-slate-200 rounded focus:outline-none focus:border-sky-500 disabled:opacity-50"
+                          className="h-6 w-10 rounded border border-slate-200 bg-white text-center text-xs font-bold text-sky-700 focus:border-sky-500 focus:outline-none disabled:opacity-50"
                         />
                         <span className="text-[11px] text-slate-400">
                           vid/kênh
@@ -937,7 +937,7 @@ export const App: React.FC = () => {
                       <button
                         onClick={handleClearSelection}
                         disabled={isProcessing}
-                        className="text-xs text-slate-500 hover:text-slate-700 px-1.5 py-1 disabled:opacity-50"
+                        className="px-1.5 py-1 text-xs text-slate-500 hover:text-slate-700 disabled:opacity-50"
                       >
                         Hủy chọn
                       </button>
@@ -950,9 +950,9 @@ export const App: React.FC = () => {
                         className="h-8 text-xs shadow-sm shadow-sky-500/30 disabled:opacity-50"
                       >
                         {isProcessing ? (
-                          <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                         ) : (
-                          <Play className="h-3.5 w-3.5 mr-1 fill-current" />
+                          <Play className="mr-1 h-3.5 w-3.5 fill-current" />
                         )}
                         Chạy {selectedProfileIds.size} Kênh
                       </Button>
@@ -961,10 +961,10 @@ export const App: React.FC = () => {
                     /* Nếu chưa chọn profile nào: Nút chạy toàn bộ nhóm */
                     <>
                       <div
-                        className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200/90 px-2 py-1 rounded-lg"
+                        className="flex items-center gap-1.5 rounded-lg border border-slate-200/90 bg-slate-50 px-2 py-1 text-xs text-slate-600"
                         title="Số video tối đa upload mỗi kênh trong đợt chạy này. Nhập 0 nếu muốn upload toàn bộ video có trong folder."
                       >
-                        <span className="font-medium text-[11px] text-slate-500">
+                        <span className="text-[11px] font-medium text-slate-500">
                           Tối đa:
                         </span>
                         <input
@@ -978,7 +978,7 @@ export const App: React.FC = () => {
                               Math.max(0, parseInt(e.target.value) || 0),
                             )
                           }
-                          className="w-10 h-6 text-center text-xs font-bold text-sky-700 bg-white border border-slate-200 rounded focus:outline-none focus:border-sky-500 disabled:opacity-50"
+                          className="h-6 w-10 rounded border border-slate-200 bg-white text-center text-xs font-bold text-sky-700 focus:border-sky-500 focus:outline-none disabled:opacity-50"
                         />
                         <span className="text-[11px] text-slate-400">
                           vid/kênh
@@ -994,12 +994,12 @@ export const App: React.FC = () => {
                           runningCount > 0 ||
                           isProcessing
                         }
-                        className="h-8 text-xs border-sky-300 text-sky-700 hover:bg-sky-50 font-medium disabled:opacity-50"
+                        className="h-8 border-sky-300 text-xs font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50"
                       >
                         {isProcessing ? (
-                          <Loader2 className="h-3.5 w-3.5 mr-1 text-sky-500 animate-spin" />
+                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin text-sky-500" />
                         ) : (
-                          <Play className="h-3.5 w-3.5 mr-1 fill-current text-sky-500" />
+                          <Play className="mr-1 h-3.5 w-3.5 fill-current text-sky-500" />
                         )}
                         Chạy Toàn Bộ{" "}
                         {selectedGroup === "all"
@@ -1014,14 +1014,14 @@ export const App: React.FC = () => {
 
             {/* Profile Grid */}
             {profiles.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 border border-dashed border-slate-200 rounded-3xl bg-white text-center px-4 shadow-sm">
-                <div className="h-16 w-16 rounded-2xl bg-sky-50 flex items-center justify-center border border-sky-100 mb-4 shadow-inner">
+              <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-white px-4 py-20 text-center shadow-sm">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-sky-100 bg-sky-50 shadow-inner">
                   <Sparkles className="h-8 w-8 text-sky-500" />
                 </div>
                 <h3 className="text-base font-bold text-slate-800">
                   Chưa có Profile TikTok nào
                 </h3>
-                <p className="text-xs text-slate-500 max-w-md mt-1 mb-5">
+                <p className="mb-5 mt-1 max-w-md text-xs text-slate-500">
                   Bắt đầu ngay bằng cách nhập danh sách profiles từ file JSON
                   hoặc tạo từng profile.
                 </p>
@@ -1030,9 +1030,9 @@ export const App: React.FC = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => setIsBulkImportOpen(true)}
-                    className="border-sky-300 bg-sky-50/60 hover:bg-sky-100 text-sky-700 text-xs font-semibold"
+                    className="border-sky-300 bg-sky-50/60 text-xs font-semibold text-sky-700 hover:bg-sky-100"
                   >
-                    <FileJson className="h-3.5 w-3.5 mr-1" /> Nhập Profiles
+                    <FileJson className="mr-1 h-3.5 w-3.5" /> Nhập Profiles
                     (JSON)
                   </Button>
                   <Button
@@ -1049,12 +1049,12 @@ export const App: React.FC = () => {
                 </div>
               </div>
             ) : filteredProfiles.length === 0 ? (
-              <div className="py-16 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">
+              <div className="rounded-2xl border border-slate-200 bg-white py-16 text-center text-sm text-slate-400">
                 Không tìm thấy profile nào phù hợp với bộ lọc hoặc từ khóa tìm
                 kiếm.
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
                 {filteredProfiles.map((profile) => (
                   <ProfileCard
                     key={profile.id}
@@ -1214,8 +1214,8 @@ export const App: React.FC = () => {
 
       {/* Floating Processing Banner - Phản hồi tức thì khi thực hiện tác vụ nặng */}
       {isProcessing && (
-        <div className="fixed bottom-5 right-5 z-50 bg-slate-900/90 text-white px-4 py-2.5 rounded-xl shadow-2xl border border-slate-700/80 backdrop-blur-md flex items-center gap-2.5 text-xs animate-in fade-in slide-in-from-bottom-2">
-          <Loader2 className="h-4 w-4 text-sky-400 animate-spin shrink-0" />
+        <div className="animate-in fade-in slide-in-from-bottom-2 fixed bottom-5 right-5 z-50 flex items-center gap-2.5 rounded-xl border border-slate-700/80 bg-slate-900/90 px-4 py-2.5 text-xs text-white shadow-2xl backdrop-blur-md">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-400" />
           <span className="font-semibold text-slate-100">
             {processingMessage || "Đang xử lý dữ liệu..."}
           </span>
