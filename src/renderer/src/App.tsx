@@ -7,9 +7,11 @@ import { LogsDrawer } from './components/LogsDrawer';
 import { QueueScreen } from './components/QueueScreen';
 import { LogsScreen } from './components/LogsScreen';
 import { SettingsScreen } from './components/SettingsScreen';
+import { FollowersModal } from './components/FollowersModal';
 import { DistributeVideosModal } from './components/DistributeVideosModal';
 import { ManageGroupsModal } from './components/ManageGroupsModal';
 import { BulkImportModal } from './components/BulkImportModal';
+import { getCooldownStatus } from './utils/cooldown';
 import { 
   Sparkles, 
   Search, 
@@ -22,7 +24,6 @@ import {
   Folder, 
   X,
   Shuffle,
-  Copy,
   Trash2,
   FolderInput,
   FileJson,
@@ -46,6 +47,7 @@ export const App: React.FC = () => {
   const [openingBrowserProfileId, setOpeningBrowserProfileId] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [isDistributeModalOpen, setIsDistributeModalOpen] = useState(false);
   const [isManageGroupsOpen, setIsManageGroupsOpen] = useState(false);
@@ -203,6 +205,15 @@ export const App: React.FC = () => {
       toast.error(`Vui lòng chọn thư mục video cho profile [${profile.name}] trước khi chạy!`);
       return;
     }
+
+    const cd = getCooldownStatus(profile.last_run, profile.group_name);
+    if (cd.isUnderCooldown) {
+      const proceed = window.confirm(
+        `⚠️ CẢNH BÁO KÊNH ĐANG NUÔI:\n\nKênh "${profile.name}" mới đăng video cách đây ${cd.elapsedHours} giờ (còn ${cd.remainingText} nữa mới đủ 24h an toàn).\n\nĐăng sớm có thể bị thuật toán TikTok giảm tương tác hoặc dính lỗi spam.\n\nBạn có chắc chắn muốn TIẾP TỤC ĐĂNG ngay không?`
+      );
+      if (!proceed) return;
+    }
+
     const maxLimit = profile.max_videos !== undefined && profile.max_videos !== null ? profile.max_videos : 50;
     const limitText = maxLimit > 0 ? ` (Tối đa ${maxLimit} video)` : ' (Upload toàn bộ video)';
     toast.info(`Đã đưa [${profile.name}] vào hàng đợi upload${limitText}.`);
@@ -214,7 +225,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // Chạy các profile được tích chọn
+  // Chạy các profile được tích chọn (Có kiểm tra Cooldown 24h)
   const handleRunSelected = async () => {
     if (selectedProfileIds.size === 0 || isProcessing) {
       toast.error('Vui lòng tích chọn ít nhất 1 profile để chạy!');
@@ -238,7 +249,39 @@ export const App: React.FC = () => {
       );
     }
 
-    const ids = readyProfiles.map((p) => p.id);
+    // Kiểm tra Cooldown 24h cho các kênh đang nuôi
+    const nurturingUnderCooldown = readyProfiles.filter((p) => {
+      const cd = getCooldownStatus(p.last_run, p.group_name);
+      return cd.isUnderCooldown;
+    });
+
+    let effectiveProfiles = readyProfiles;
+    if (nurturingUnderCooldown.length > 0) {
+      const names = nurturingUnderCooldown
+        .map((p) => {
+          const cd = getCooldownStatus(p.last_run, p.group_name);
+          return `• ${p.name} (còn ${cd.remainingText})`;
+        })
+        .join('\n');
+
+      const proceed = window.confirm(
+        `⚠️ PHÁT HIỆN ${nurturingUnderCooldown.length} KÊNH ĐANG NUÔI CHƯA ĐỦ 24H:\n\n${names}\n\n👉 Bấm [OK] để TỰ ĐỘNG BỎ QUA ${nurturingUnderCooldown.length} kênh này và chỉ chạy các kênh đã an toàn (Khuyên dùng để bảo vệ kênh).\n👉 Bấm [Cancel] nếu muốn HỦY để kiểm tra lại.`
+      );
+
+      if (!proceed) return;
+
+      effectiveProfiles = readyProfiles.filter((p) => {
+        const cd = getCooldownStatus(p.last_run, p.group_name);
+        return !cd.isUnderCooldown;
+      });
+
+      if (effectiveProfiles.length === 0) {
+        toast.info('Tất cả các kênh nuôi được chọn đều chưa đủ 24h. Đã hủy đợt chạy để bảo vệ kênh.');
+        return;
+      }
+    }
+
+    const ids = effectiveProfiles.map((p) => p.id);
     const limitInfo = batchMaxVideos > 0 ? ` (Tối đa ${batchMaxVideos} video/kênh)` : ' (Upload toàn bộ video)';
     toast.info(`Bắt đầu chạy cho ${ids.length} kênh đã chọn${limitInfo}...`);
     setIsProcessing(true);
@@ -254,7 +297,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // Chạy toàn bộ nhóm hiện tại (hoặc tất cả)
+  // Chạy toàn bộ nhóm hiện tại (Có kiểm tra Cooldown 24h)
   const handleRunBatch = async () => {
     if (isProcessing) return;
     const pool = selectedGroup === 'all' 
@@ -275,7 +318,39 @@ export const App: React.FC = () => {
       );
     }
 
-    const ids = readyProfiles.map((p) => p.id);
+    // Kiểm tra Cooldown 24h cho các kênh đang nuôi
+    const nurturingUnderCooldown = readyProfiles.filter((p) => {
+      const cd = getCooldownStatus(p.last_run, p.group_name);
+      return cd.isUnderCooldown;
+    });
+
+    let effectiveProfiles = readyProfiles;
+    if (nurturingUnderCooldown.length > 0) {
+      const names = nurturingUnderCooldown
+        .map((p) => {
+          const cd = getCooldownStatus(p.last_run, p.group_name);
+          return `• ${p.name} (còn ${cd.remainingText})`;
+        })
+        .join('\n');
+
+      const proceed = window.confirm(
+        `⚠️ PHÁT HIỆN ${nurturingUnderCooldown.length} KÊNH ĐANG NUÔI CHƯA ĐỦ 24H:\n\n${names}\n\n👉 Bấm [OK] để TỰ ĐỘNG BỎ QUA ${nurturingUnderCooldown.length} kênh này và chỉ chạy các kênh đã an toàn (Khuyên dùng để bảo vệ kênh).\n👉 Bấm [Cancel] nếu muốn HỦY để kiểm tra lại.`
+      );
+
+      if (!proceed) return;
+
+      effectiveProfiles = readyProfiles.filter((p) => {
+        const cd = getCooldownStatus(p.last_run, p.group_name);
+        return !cd.isUnderCooldown;
+      });
+
+      if (effectiveProfiles.length === 0) {
+        toast.info('Tất cả các kênh nuôi trong nhóm đều chưa đủ 24h. Đã hủy đợt chạy để bảo vệ kênh.');
+        return;
+      }
+    }
+
+    const ids = effectiveProfiles.map((p) => p.id);
     const limitInfo = batchMaxVideos > 0 ? ` (Tối đa ${batchMaxVideos} video/kênh)` : ' (Upload toàn bộ video)';
     toast.info(`Bắt đầu chạy cho ${ids.length} kênh ${selectedGroup !== 'all' ? `(Nhóm: ${selectedGroup})` : ''}${limitInfo}...`);
     setIsProcessing(true);
@@ -645,6 +720,19 @@ export const App: React.FC = () => {
                         </select>
                       </div>
 
+                      {/* Xem Followers & 1K Milestone của các kênh đã chọn */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isProcessing}
+                        onClick={() => setIsFollowersModalOpen(true)}
+                        title="Xem bảng thống kê số lượng Followers, mốc 1K và cập nhật số liệu từ TikTok"
+                        className="h-8 text-xs border-indigo-300 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 font-semibold px-2.5 disabled:opacity-50"
+                      >
+                        <Users className="h-3.5 w-3.5 mr-1 text-indigo-600" />
+                        Xem Followers ({selectedProfileIds.size})
+                      </Button>
+
                       {/* Xuất JSON các kênh đang chọn */}
                       <Button
                         variant="outline"
@@ -921,6 +1009,14 @@ export const App: React.FC = () => {
           }
           loadGroupsList();
         }}
+      />
+
+      {/* Followers & 1K Milestone Modal */}
+      <FollowersModal
+        isOpen={isFollowersModalOpen}
+        onClose={() => setIsFollowersModalOpen(false)}
+        selectedProfiles={profiles.filter((p) => selectedProfileIds.has(p.id))}
+        onRefreshData={loadProfiles}
       />
 
       {/* Floating Processing Banner - Phản hồi tức thì khi thực hiện tác vụ nặng */}

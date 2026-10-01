@@ -126,7 +126,10 @@ export function exportProfilesToJson(targetFilePath: string, specificProfiles?: 
       schedule_interval: p.schedule_interval || 10,
       golden_hours: p.golden_hours || '11:30,17:30,20:00',
       caption_mode: p.caption_mode || 'remove_title',
-      max_videos: p.max_videos || 50
+      max_videos: p.max_videos || 50,
+      followers_count: p.followers_count || 0,
+      stats_updated_at: p.stats_updated_at || null,
+      last_run: p.last_run || null
     };
   });
   fs.writeFileSync(targetFilePath, JSON.stringify(formatted, null, 2), 'utf-8');

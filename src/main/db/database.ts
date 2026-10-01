@@ -27,6 +27,8 @@ export interface ProfileRecord {
   pass_email?: string | null;
   mail_ao?: string | null;
   last_run: string | null;
+  followers_count?: number;
+  stats_updated_at?: string | null;
   created_at?: string;
 }
 
@@ -85,6 +87,8 @@ db.exec(`
     pass_email TEXT DEFAULT NULL,
     mail_ao TEXT DEFAULT NULL,
     last_run TEXT DEFAULT NULL,
+    followers_count INTEGER DEFAULT 0,
+    stats_updated_at TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -141,6 +145,14 @@ try {
     if (!cols.has(c)) {
       db.exec(`ALTER TABLE profiles ADD COLUMN ${c} TEXT DEFAULT NULL;`);
     }
+  }
+
+  // Thêm cột theo dõi Followers
+  if (!cols.has('followers_count')) {
+    db.exec('ALTER TABLE profiles ADD COLUMN followers_count INTEGER DEFAULT 0;');
+  }
+  if (!cols.has('stats_updated_at')) {
+    db.exec('ALTER TABLE profiles ADD COLUMN stats_updated_at TEXT DEFAULT NULL;');
   }
 
   // Dọn sạch cookies ẩn danh rác (không chứa sessionid) lưu nhầm từ các phiên trước
@@ -261,18 +273,22 @@ export const profileRepo = {
       email: profile.email || null,
       pass_email: profile.pass_email || null,
       mail_ao: profile.mail_ao || null,
-      last_run: profile.last_run || null
+      last_run: profile.last_run || null,
+      followers_count: Number(profile.followers_count) || 0,
+      stats_updated_at: profile.stats_updated_at || null
     };
 
     db.prepare(`
       INSERT INTO profiles (
         id, name, group_name, status, video_folder, enable_music, music_mode, favorite_index,
         music_volume, schedule_mode, schedule_interval, golden_hours,
-        caption_mode, proxy, cookies, max_videos, account_id, pass, two_factor, email, pass_email, mail_ao, last_run
+        caption_mode, proxy, cookies, max_videos, account_id, pass, two_factor, email, pass_email, mail_ao, last_run,
+        followers_count, stats_updated_at
       ) VALUES (
         @id, @name, @group_name, @status, @video_folder, @enable_music, @music_mode, @favorite_index,
         @music_volume, @schedule_mode, @schedule_interval, @golden_hours,
-        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run
+        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run,
+        @followers_count, @stats_updated_at
       )
     `).run(normalized);
   },
@@ -282,6 +298,19 @@ export const profileRepo = {
     if (fields.length === 0) return;
     const setClause = fields.map((f) => `${f} = @${f}`).join(', ');
     db.prepare(`UPDATE profiles SET ${setClause} WHERE id = @id`).run(profile);
+  },
+
+  updateStats: (
+    id: string,
+    stats: {
+      followers_count?: number;
+      stats_updated_at?: string;
+    }
+  ): void => {
+    const fields = Object.keys(stats);
+    if (fields.length === 0) return;
+    const setClause = fields.map((f) => `${f} = @${f}`).join(', ');
+    db.prepare(`UPDATE profiles SET ${setClause} WHERE id = @id`).run({ ...stats, id });
   },
 
   updateStatus: (id: string, status: string): void => {
@@ -297,11 +326,13 @@ export const profileRepo = {
       INSERT INTO profiles (
         id, name, group_name, status, video_folder, enable_music, music_mode, favorite_index,
         music_volume, schedule_mode, schedule_interval, golden_hours,
-        caption_mode, proxy, cookies, max_videos, account_id, pass, two_factor, email, pass_email, mail_ao, last_run
+        caption_mode, proxy, cookies, max_videos, account_id, pass, two_factor, email, pass_email, mail_ao, last_run,
+        followers_count, stats_updated_at
       ) VALUES (
         @id, @name, @group_name, @status, @video_folder, @enable_music, @music_mode, @favorite_index,
         @music_volume, @schedule_mode, @schedule_interval, @golden_hours,
-        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run
+        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run,
+        @followers_count, @stats_updated_at
       )
       ON CONFLICT(name) DO UPDATE SET
         group_name = CASE WHEN excluded.group_name != 'Mặc định' THEN excluded.group_name ELSE profiles.group_name END,
@@ -312,7 +343,9 @@ export const profileRepo = {
         pass_email = COALESCE(excluded.pass_email, profiles.pass_email),
         mail_ao = COALESCE(excluded.mail_ao, profiles.mail_ao),
         proxy = COALESCE(excluded.proxy, profiles.proxy),
-        cookies = COALESCE(excluded.cookies, profiles.cookies)
+        cookies = COALESCE(excluded.cookies, profiles.cookies),
+        followers_count = CASE WHEN excluded.followers_count > 0 THEN excluded.followers_count ELSE profiles.followers_count END,
+        stats_updated_at = COALESCE(excluded.stats_updated_at, profiles.stats_updated_at)
     `);
 
     const tx = db.transaction((items: any[]) => {
@@ -342,7 +375,9 @@ export const profileRepo = {
           email: p.email || null,
           pass_email: p.pass_email || null,
           mail_ao: p.mail_ao || null,
-          last_run: p.last_run || null
+          last_run: p.last_run || null,
+          followers_count: Number(p.followers_count) || 0,
+          stats_updated_at: p.stats_updated_at || null
         };
         const info = insertStmt.run(normalized);
         if (info.changes > 0) {

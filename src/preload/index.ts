@@ -49,6 +49,10 @@ export const api = {
   renameGroup: (id: string, newName: string) => ipcRenderer.invoke('groups:rename', { id, newName }),
   deleteGroup: (id: string) => ipcRenderer.invoke('groups:delete', id),
 
+  // Followers Stats
+  fetchStats: (profileId: string) => ipcRenderer.invoke('profiles:fetchStats', profileId),
+  fetchBulkStats: (profileIds: string[]) => ipcRenderer.invoke('profiles:fetchBulkStats', profileIds),
+
   // Events from Main process
   onUploadProgress: (callback: (event: any) => void) => {
     const handler = (_: any, data: any) => callback(data);
@@ -59,6 +63,11 @@ export const api = {
     const handler = (_: any, data: any) => callback(data);
     ipcRenderer.on('profiles:updated', handler);
     return () => ipcRenderer.removeListener('profiles:updated', handler);
+  },
+  onStatsProgress: (callback: (progress: any) => void) => {
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on('stats:progress', handler);
+    return () => ipcRenderer.removeListener('stats:progress', handler);
   }
 };
 

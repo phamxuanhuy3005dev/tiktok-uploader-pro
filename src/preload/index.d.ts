@@ -51,8 +51,11 @@ export interface IElectronAPI {
   createGroup: (name: string) => Promise<{ id: string; name: string; profile_count?: number; created_at: string }>;
   renameGroup: (id: string, newName: string) => Promise<{ success: boolean; updatedProfilesCount: number; updatedProfiles: any[]; updatedGroups: any[] }>;
   deleteGroup: (id: string) => Promise<{ success: boolean; updatedProfiles: any[]; updatedGroups: any[] }>;
+  fetchStats: (profileId: string) => Promise<{ success: boolean; profile: any; stats: { followers: number }; error?: string }>;
+  fetchBulkStats: (profileIds?: string[]) => Promise<{ success: boolean; count: number; profiles: any[] }>;
   onUploadProgress: (callback: (event: any) => void) => () => void;
   onProfilesUpdated: (callback: (profiles: any[]) => void) => () => void;
+  onStatsProgress: (callback: (progress: { current: number; total: number; profileName: string }) => void) => () => void;
 }
 
 declare global {

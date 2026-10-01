@@ -13,11 +13,13 @@ import {
   KeyRound,
   ShieldCheck,
   Loader2,
-  X
+  X,
+  Clock
 } from 'lucide-react';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { toast } from 'sonner';
+import { getCooldownStatus } from '../utils/cooldown';
 
 interface ProfileCardProps {
   profile: any;
@@ -51,9 +53,21 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   isProcessing = false
 }) => {
   const [isGettingOtp, setIsGettingOtp] = useState(false);
+  const cooldown = getCooldownStatus(profile.last_run, profile.group_name);
+
   const isLoggedIn = Boolean(
     profile.cookies && /sessionid|sessionid_ss|sid_tt/i.test(profile.cookies)
   );
+
+  const handleUploadWithCooldownCheck = () => {
+    if (cooldown.isUnderCooldown) {
+      const confirmed = window.confirm(
+        `⚠️ CẢNH BÁO KÊNH ĐANG NUÔI:\n\nKênh "${profile.name}" mới đăng video cách đây ${cooldown.elapsedHours} giờ (còn ${cooldown.remainingText} nữa mới đủ 24h an toàn).\n\nĐăng sớm có thể bị thuật toán TikTok giảm tương tác hoặc dính lỗi spam.\n\nBạn có chắc chắn muốn TIẾP TỤC ĐĂNG ngay không?`
+      );
+      if (!confirmed) return;
+    }
+    onRunUpload();
+  };
 
   const handleCopyOtp = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -165,6 +179,27 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 rounded-full font-medium shrink-0">
               <AlertCircle className="h-3 w-3 text-amber-500" /> Chưa login
             </span>
+          )}
+
+          {/* Huy hiệu 24h Cooldown cho Kênh Nuôi */}
+          {cooldown.isNurturing && (
+            cooldown.isUnderCooldown ? (
+              <span 
+                className="inline-flex items-center gap-1 text-[10px] text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded-full font-semibold shrink-0" 
+                title={`Kênh nuôi cần cách nhau 24h. Lần chạy cuối: ${cooldown.lastRunFormatted}. Còn ${cooldown.remainingText}`}
+              >
+                <Clock className="h-2.5 w-2.5 text-amber-600 animate-pulse" />
+                <span>Chờ 24h: Còn {cooldown.remainingText}</span>
+              </span>
+            ) : (
+              <span 
+                className="inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded-full font-semibold shrink-0" 
+                title={`Đã đủ 24h kể từ lần chạy trước (${cooldown.lastRunFormatted}). Kênh sẵn sàng đăng an toàn!`}
+              >
+                <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600" />
+                <span>Đã đủ 24h</span>
+              </span>
+            )
           )}
 
           {profile.two_factor && (
@@ -282,7 +317,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             <Button
               variant="tiktok"
               size="sm"
-              onClick={onRunUpload}
+              onClick={handleUploadWithCooldownCheck}
               disabled={isRunning || isProcessing || !profile.video_folder}
               className="flex-1 h-7 text-xs font-semibold bg-sky-500 hover:bg-sky-600 shadow-sm shadow-sky-500/20 text-white rounded-lg disabled:opacity-50 truncate"
             >

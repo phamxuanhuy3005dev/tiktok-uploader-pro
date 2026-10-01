@@ -13,6 +13,7 @@ import {
 import { uploadQueue } from '../queue/task-queue';
 import { importFromOldTool, exportProfilesToJson, importProfilesFromJson, importProfilesFromJsonString } from '../db/migration';
 import { generateTotp } from '../engine/totp';
+import { fetchAndSaveProfileStats } from '../engine/stats-fetcher';
 
 let currentMainWindow: BrowserWindow | null = null;
 let isIpcRegistered = false;
@@ -682,5 +683,60 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       activeWin.webContents.send('profiles:updated', updatedProfiles);
     }
     return { success: res, updatedProfiles, updatedGroups };
+  });
+
+  // Lấy chỉ số lượt theo dõi (Followers) và Lượt xem (Views) theo yêu cầu (On-demand)
+  ipcMain.handle('profiles:fetchStats', async (_, profileId: string) => {
+    const profile = profileRepo.getById(profileId);
+    if (!profile) {
+      throw new Error('Không tìm thấy kênh hợp lệ.');
+    }
+    const res = await fetchAndSaveProfileStats(profile);
+    const updatedProfiles = profileRepo.getAll();
+    const activeWin = getValidWindow();
+    if (activeWin && !activeWin.isDestroyed()) {
+      activeWin.webContents.send('profiles:updated', updatedProfiles);
+    }
+    return res;
+  });
+
+  ipcMain.handle('profiles:fetchBulkStats', async (_, profileIds: string[]) => {
+    const all = profileRepo.getAll();
+    const ids = Array.isArray(profileIds) && profileIds.length > 0 
+      ? profileIds 
+      : all.map((p) => p.id);
+
+    let successCount = 0;
+    const activeWin = getValidWindow();
+
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const p = profileRepo.getById(id);
+      if (!p) continue;
+
+      if (activeWin && !activeWin.isDestroyed()) {
+        activeWin.webContents.send('stats:progress', {
+          current: i + 1,
+          total: ids.length,
+          profileName: p.name
+        });
+      }
+
+      try {
+        const res = await fetchAndSaveProfileStats(p);
+        if (res.success) successCount++;
+      } catch (_) {}
+
+      // Giãn cách nhẹ giữa các request tránh bị TikTok rate limit
+      if (i < ids.length - 1) {
+        await new Promise((r) => setTimeout(r, 600));
+      }
+    }
+
+    const updatedProfiles = profileRepo.getAll();
+    if (activeWin && !activeWin.isDestroyed()) {
+      activeWin.webContents.send('profiles:updated', updatedProfiles);
+    }
+    return { success: true, count: successCount, profiles: updatedProfiles };
   });
 }

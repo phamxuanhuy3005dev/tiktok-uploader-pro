@@ -6,7 +6,7 @@ import {
   Activity, 
   Terminal, 
   Settings,
-  FileJson 
+  FileJson
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import appIcon from '../assets/icon.png';
