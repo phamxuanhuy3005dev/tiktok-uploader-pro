@@ -277,6 +277,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 <option value="__NEW__">+ Nhập nhóm mới khác...</option>
               </select>
             )}
+            <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+              <span className="text-amber-600 font-bold">💡 Mẹo:</span> Nhóm có từ <code className="bg-amber-50 text-amber-800 font-semibold px-1 rounded">nuôi</code>, <code className="bg-amber-50 text-amber-800 font-semibold px-1 rounded">warmup</code> hoặc <code className="bg-amber-50 text-amber-800 font-semibold px-1 rounded">mới</code> sẽ tự động bật bảo vệ Cooldown 24h.
+            </p>
           </div>
         </div>
 

@@ -11,7 +11,9 @@ import { FollowersModal } from './components/FollowersModal';
 import { DistributeVideosModal } from './components/DistributeVideosModal';
 import { ManageGroupsModal } from './components/ManageGroupsModal';
 import { BulkImportModal } from './components/BulkImportModal';
-import { getCooldownStatus } from './utils/cooldown';
+import { CooldownBatchModal, CooldownBatchItem } from './components/CooldownBatchModal';
+import { CooldownGuideModal } from './components/CooldownGuideModal';
+import { getCooldownStatus, isNurturingGroup } from './utils/cooldown';
 import { 
   Sparkles, 
   Search, 
@@ -27,7 +29,11 @@ import {
   Trash2,
   FolderInput,
   FileJson,
-  Loader2
+  Loader2,
+  Clock,
+  ShieldAlert,
+  ShieldCheck,
+  HelpCircle
 } from 'lucide-react';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
@@ -51,6 +57,24 @@ export const App: React.FC = () => {
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [isDistributeModalOpen, setIsDistributeModalOpen] = useState(false);
   const [isManageGroupsOpen, setIsManageGroupsOpen] = useState(false);
+  const [isCooldownGuideOpen, setIsCooldownGuideOpen] = useState(false);
+  const [cooldownBatchData, setCooldownBatchData] = useState<{
+    isOpen: boolean;
+    cooldownProfiles: CooldownBatchItem[];
+    safeCount: number;
+    totalCount: number;
+    pendingIdsAll: string[];
+    pendingIdsSafeOnly: string[];
+    contextTitle: string;
+  }>({
+    isOpen: false,
+    cooldownProfiles: [],
+    safeCount: 0,
+    totalCount: 0,
+    pendingIdsAll: [],
+    pendingIdsSafeOnly: [],
+    contextTitle: ''
+  });
   const [dbGroups, setDbGroups] = useState<string[]>([]);
   const [editingProfile, setEditingProfile] = useState<any | null>(null);
   const [viewingLogsProfile, setViewingLogsProfile] = useState<any | null>(null);
@@ -225,10 +249,48 @@ export const App: React.FC = () => {
     }
   };
 
-  // Chạy các profile được tích chọn (Có kiểm tra Cooldown 24h)
+  // Helper thực thi startQueue dùng chung
+  const startQueueExecution = async (ids: string[], titleContext: string) => {
+    if (ids.length === 0) {
+      toast.info('Không có kênh nào để chạy.');
+      return;
+    }
+    const limitInfo = batchMaxVideos > 0 ? ` (Tối đa ${batchMaxVideos} video/kênh)` : ' (Upload toàn bộ video)';
+    toast.info(`Bắt đầu chạy cho ${ids.length} kênh ${titleContext}${limitInfo}...`);
+    setIsProcessing(true);
+    setProcessingMessage(`Đang chuẩn bị chạy ${ids.length} kênh...`);
+    try {
+      await window.api.startQueue(ids, { maxVideos: batchMaxVideos });
+      setActiveTab('queue');
+    } catch (err: any) {
+      toast.error(`Lỗi khởi chạy: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+      setProcessingMessage('');
+    }
+  };
+
+  // Callback xác nhận từ CooldownBatchModal: Vẫn chạy tất cả
+  const handleConfirmRunAllFromCooldown = () => {
+    const ids = cooldownBatchData.pendingIdsAll;
+    const title = cooldownBatchData.contextTitle;
+    setCooldownBatchData((prev) => ({ ...prev, isOpen: false }));
+    startQueueExecution(ids, `${title} (vượt qua cảnh báo 24h)`);
+  };
+
+  // Callback xác nhận từ CooldownBatchModal: Chỉ chạy kênh an toàn
+  const handleConfirmRunSafeOnlyFromCooldown = () => {
+    const ids = cooldownBatchData.pendingIdsSafeOnly;
+    const title = cooldownBatchData.contextTitle;
+    setCooldownBatchData((prev) => ({ ...prev, isOpen: false }));
+    startQueueExecution(ids, `${title} (chỉ các kênh đã đủ 24h)`);
+  };
+
+  // Chạy hàng loạt các profile được tick chọn
   const handleRunSelected = async () => {
-    if (selectedProfileIds.size === 0 || isProcessing) {
-      toast.error('Vui lòng tích chọn ít nhất 1 profile để chạy!');
+    if (isProcessing) return;
+    if (selectedProfileIds.size === 0) {
+      toast.warning('Vui lòng chọn ít nhất 1 profile để chạy hàng loạt!');
       return;
     }
 
@@ -255,46 +317,33 @@ export const App: React.FC = () => {
       return cd.isUnderCooldown;
     });
 
-    let effectiveProfiles = readyProfiles;
+    const safeProfiles = readyProfiles.filter((p) => {
+      const cd = getCooldownStatus(p.last_run, p.group_name);
+      return !cd.isUnderCooldown;
+    });
+
     if (nurturingUnderCooldown.length > 0) {
-      const names = nurturingUnderCooldown
-        .map((p) => {
+      setCooldownBatchData({
+        isOpen: true,
+        cooldownProfiles: nurturingUnderCooldown.map((p) => {
           const cd = getCooldownStatus(p.last_run, p.group_name);
-          return `• ${p.name} (còn ${cd.remainingText})`;
-        })
-        .join('\n');
-
-      const proceed = window.confirm(
-        `⚠️ PHÁT HIỆN ${nurturingUnderCooldown.length} KÊNH ĐANG NUÔI CHƯA ĐỦ 24H:\n\n${names}\n\n👉 Bấm [OK] để TỰ ĐỘNG BỎ QUA ${nurturingUnderCooldown.length} kênh này và chỉ chạy các kênh đã an toàn (Khuyên dùng để bảo vệ kênh).\n👉 Bấm [Cancel] nếu muốn HỦY để kiểm tra lại.`
-      );
-
-      if (!proceed) return;
-
-      effectiveProfiles = readyProfiles.filter((p) => {
-        const cd = getCooldownStatus(p.last_run, p.group_name);
-        return !cd.isUnderCooldown;
+          return {
+            name: p.name,
+            groupName: p.group_name,
+            remainingText: cd.remainingText,
+            elapsedHours: cd.elapsedHours
+          };
+        }),
+        safeCount: safeProfiles.length,
+        totalCount: readyProfiles.length,
+        pendingIdsAll: readyProfiles.map((p) => p.id),
+        pendingIdsSafeOnly: safeProfiles.map((p) => p.id),
+        contextTitle: 'đã chọn'
       });
-
-      if (effectiveProfiles.length === 0) {
-        toast.info('Tất cả các kênh nuôi được chọn đều chưa đủ 24h. Đã hủy đợt chạy để bảo vệ kênh.');
-        return;
-      }
+      return;
     }
 
-    const ids = effectiveProfiles.map((p) => p.id);
-    const limitInfo = batchMaxVideos > 0 ? ` (Tối đa ${batchMaxVideos} video/kênh)` : ' (Upload toàn bộ video)';
-    toast.info(`Bắt đầu chạy cho ${ids.length} kênh đã chọn${limitInfo}...`);
-    setIsProcessing(true);
-    setProcessingMessage(`Đang chuẩn bị khởi chạy ${ids.length} kênh...`);
-    try {
-      await window.api.startQueue(ids, { maxVideos: batchMaxVideos });
-      setActiveTab('queue');
-    } catch (err: any) {
-      toast.error(`Lỗi khởi chạy: ${err.message}`);
-    } finally {
-      setIsProcessing(false);
-      setProcessingMessage('');
-    }
+    await startQueueExecution(readyProfiles.map((p) => p.id), 'đã chọn');
   };
 
   // Chạy toàn bộ nhóm hiện tại (Có kiểm tra Cooldown 24h)
@@ -324,46 +373,35 @@ export const App: React.FC = () => {
       return cd.isUnderCooldown;
     });
 
-    let effectiveProfiles = readyProfiles;
+    const safeProfiles = readyProfiles.filter((p) => {
+      const cd = getCooldownStatus(p.last_run, p.group_name);
+      return !cd.isUnderCooldown;
+    });
+
+    const groupContextTitle = selectedGroup !== 'all' ? `(Nhóm: ${selectedGroup})` : 'toàn bộ';
+
     if (nurturingUnderCooldown.length > 0) {
-      const names = nurturingUnderCooldown
-        .map((p) => {
+      setCooldownBatchData({
+        isOpen: true,
+        cooldownProfiles: nurturingUnderCooldown.map((p) => {
           const cd = getCooldownStatus(p.last_run, p.group_name);
-          return `• ${p.name} (còn ${cd.remainingText})`;
-        })
-        .join('\n');
-
-      const proceed = window.confirm(
-        `⚠️ PHÁT HIỆN ${nurturingUnderCooldown.length} KÊNH ĐANG NUÔI CHƯA ĐỦ 24H:\n\n${names}\n\n👉 Bấm [OK] để TỰ ĐỘNG BỎ QUA ${nurturingUnderCooldown.length} kênh này và chỉ chạy các kênh đã an toàn (Khuyên dùng để bảo vệ kênh).\n👉 Bấm [Cancel] nếu muốn HỦY để kiểm tra lại.`
-      );
-
-      if (!proceed) return;
-
-      effectiveProfiles = readyProfiles.filter((p) => {
-        const cd = getCooldownStatus(p.last_run, p.group_name);
-        return !cd.isUnderCooldown;
+          return {
+            name: p.name,
+            groupName: p.group_name,
+            remainingText: cd.remainingText,
+            elapsedHours: cd.elapsedHours
+          };
+        }),
+        safeCount: safeProfiles.length,
+        totalCount: readyProfiles.length,
+        pendingIdsAll: readyProfiles.map((p) => p.id),
+        pendingIdsSafeOnly: safeProfiles.map((p) => p.id),
+        contextTitle: groupContextTitle
       });
-
-      if (effectiveProfiles.length === 0) {
-        toast.info('Tất cả các kênh nuôi trong nhóm đều chưa đủ 24h. Đã hủy đợt chạy để bảo vệ kênh.');
-        return;
-      }
+      return;
     }
 
-    const ids = effectiveProfiles.map((p) => p.id);
-    const limitInfo = batchMaxVideos > 0 ? ` (Tối đa ${batchMaxVideos} video/kênh)` : ' (Upload toàn bộ video)';
-    toast.info(`Bắt đầu chạy cho ${ids.length} kênh ${selectedGroup !== 'all' ? `(Nhóm: ${selectedGroup})` : ''}${limitInfo}...`);
-    setIsProcessing(true);
-    setProcessingMessage(`Đang chuẩn bị chạy ${ids.length} kênh...`);
-    try {
-      await window.api.startQueue(ids, { maxVideos: batchMaxVideos });
-      setActiveTab('queue');
-    } catch (err: any) {
-      toast.error(`Lỗi chạy hàng loạt: ${err.message}`);
-    } finally {
-      setIsProcessing(false);
-      setProcessingMessage('');
-    }
+    await startQueueExecution(readyProfiles.map((p) => p.id), groupContextTitle);
   };
 
   const handleBulkChangeGroup = async (targetGroup: string) => {
@@ -611,6 +649,29 @@ export const App: React.FC = () => {
                       })}
                     </select>
                   </div>
+
+                  {/* Huy hiệu cảnh báo nhóm nuôi nếu đang lọc nhóm nuôi */}
+                  {selectedGroup !== 'all' && isNurturingGroup(selectedGroup) && (
+                    <button
+                      onClick={() => setIsCooldownGuideOpen(true)}
+                      className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold hover:bg-amber-100 transition-colors shadow-xs shrink-0 cursor-pointer"
+                      title="Nhóm này được nhận diện là kênh nuôi (Bảo vệ 24h). Nhấn để xem hướng dẫn chi tiết."
+                    >
+                      <Clock className="h-3.5 w-3.5 text-amber-600 animate-pulse" />
+                      <span>Kênh Nuôi (24h)</span>
+                    </button>
+                  )}
+
+                  {/* Nút Hướng Dẫn Cooldown 24h */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsCooldownGuideOpen(true)}
+                    title="Xem hướng dẫn cơ chế tính 24h & cách đặt tên nhóm kênh nuôi"
+                    className="h-8 text-xs border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 shrink-0 px-2.5 font-medium"
+                  >
+                    <Clock className="h-3.5 w-3.5 mr-1 text-amber-600" /> HD Cooldown 24h
+                  </Button>
 
                   {/* Nút Quản lý nhóm */}
                   <Button
@@ -1017,6 +1078,23 @@ export const App: React.FC = () => {
         onClose={() => setIsFollowersModalOpen(false)}
         selectedProfiles={profiles.filter((p) => selectedProfileIds.has(p.id))}
         onRefreshData={loadProfiles}
+      />
+
+      {/* Cooldown 24h Batch Confirmation Modal */}
+      <CooldownBatchModal
+        isOpen={cooldownBatchData.isOpen}
+        cooldownProfiles={cooldownBatchData.cooldownProfiles}
+        safeCount={cooldownBatchData.safeCount}
+        totalCount={cooldownBatchData.totalCount}
+        onConfirmRunAll={handleConfirmRunAllFromCooldown}
+        onConfirmRunSafeOnly={handleConfirmRunSafeOnlyFromCooldown}
+        onClose={() => setCooldownBatchData((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* Cooldown 24h Guide Modal */}
+      <CooldownGuideModal
+        isOpen={isCooldownGuideOpen}
+        onClose={() => setIsCooldownGuideOpen(false)}
       />
 
       {/* Floating Processing Banner - Phản hồi tức thì khi thực hiện tác vụ nặng */}

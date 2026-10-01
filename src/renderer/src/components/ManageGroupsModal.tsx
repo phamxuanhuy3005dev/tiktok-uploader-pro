@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
-import { Users, Plus, Edit2, Trash2, Check, X, ShieldAlert, Loader2 } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, Check, X, ShieldAlert, Loader2, Clock, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
+import { isNurturingGroup } from '../utils/cooldown';
 
 interface GroupItem {
   id: string;
@@ -170,6 +171,17 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
       className="max-w-lg"
     >
       <div className="space-y-4">
+        {/* Banner hướng dẫn tính năng Cooldown 24h cho Kênh Nuôi */}
+        <div className="p-3 bg-amber-50/90 border border-amber-200/80 rounded-xl text-xs text-amber-950 flex items-start gap-2.5">
+          <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <span className="font-bold text-amber-950 block">💡 Chế độ bảo vệ Cooldown 24 Giờ cho Kênh Nuôi:</span>
+            <p className="text-[11px] leading-relaxed text-amber-800">
+              Đặt tên nhóm có chứa từ <code className="bg-amber-100 text-amber-900 font-bold px-1 py-0.5 rounded">nuôi</code>, <code className="bg-amber-100 text-amber-900 font-bold px-1 py-0.5 rounded">warmup</code> hoặc <code className="bg-amber-100 text-amber-900 font-bold px-1 py-0.5 rounded">mới</code> (ví dụ: <i>Nuôi US</i>, <i>nuoi-vo-tri</i>, <i>Warmup Kênh</i>...) để hệ thống tự động kích hoạt bộ đếm <b>24h Cooldown an toàn</b> giữa các lần đăng video cho các kênh trong nhóm.
+            </p>
+          </div>
+        </div>
+
         {/* Form thêm nhóm mới */}
         <form onSubmit={handleCreateGroup} className="flex gap-2">
           <input
@@ -183,7 +195,7 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
               e.stopPropagation();
               e.currentTarget.focus();
             }}
-            placeholder="Nhập tên nhóm mới (ví dụ: Kênh US, Phim Review...)"
+            placeholder="Nhập tên nhóm mới (ví dụ: Nuôi Kênh US, Phim Review...)"
             disabled={isSubmitting}
             className="flex-1 px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 shadow-sm cursor-text transition-all disabled:bg-slate-100 disabled:cursor-not-allowed select-text"
           />
@@ -220,6 +232,7 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
               groups.map((group) => {
                 const isEditing = editingGroupId === group.id;
                 const isDefault = group.name === 'Mặc định';
+                const isNurturing = isNurturingGroup(group.name);
 
                 return (
                   <div
@@ -258,16 +271,31 @@ export const ManageGroupsModal: React.FC<ManageGroupsModalProps> = ({
                       </div>
                     ) : (
                       <>
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
                           <span className="font-semibold text-xs text-slate-800 truncate" title={group.name}>
                             {group.name}
                           </span>
                           <Badge variant="secondary" className="text-[10px] shrink-0 font-normal">
                             {group.profile_count || 0} kênh
                           </Badge>
+                          {isNurturing ? (
+                            <span
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded-full shrink-0"
+                              title="Nhóm này được tự động bảo vệ Cooldown 24h giữa các lần đăng video"
+                            >
+                              <Clock className="h-2.5 w-2.5 text-amber-600 animate-pulse" /> Kênh nuôi (24h)
+                            </span>
+                          ) : (
+                            <span
+                              className="inline-flex items-center gap-1 text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full shrink-0"
+                              title="Kênh thường, không giới hạn khoảng cách 24h giữa các lần đăng"
+                            >
+                              Kênh thường
+                            </span>
+                          )}
                           {isDefault && (
                             <span className="text-[10px] font-medium text-slate-400 italic shrink-0">
-                              (Mặc định hệ thống)
+                              (Mặc định)
                             </span>
                           )}
                         </div>
