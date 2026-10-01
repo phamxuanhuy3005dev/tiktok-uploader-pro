@@ -34,9 +34,9 @@ if exist "C:\nvm4w\nodejs\node.exe" (
     goto :has_node
 )
 
-:: 4. Kiem tra cac phien ban Node trong NVM (uu tien Node 24)
+:: 4. Kiem tra cac phien ban Node trong NVM (uu tien phien ban LTS on dinh 22, 20)
 if defined NVM_HOME (
-    for /d %%d in ("%NVM_HOME%\v24*") do (
+    for /d %%d in ("%NVM_HOME%\v22*" "%NVM_HOME%\v20*" "%NVM_HOME%\v24*") do (
         if exist "%%d\node.exe" (
             set "PATH=%%d;%PATH%"
             goto :has_node
@@ -51,7 +51,7 @@ if defined NVM_HOME (
 )
 
 if exist "%LocalAppData%\nvm" (
-    for /d %%d in ("%LocalAppData%\nvm\v24*") do (
+    for /d %%d in ("%LocalAppData%\nvm\v22*" "%LocalAppData%\nvm\v20*" "%LocalAppData%\nvm\v24*") do (
         if exist "%%d\node.exe" (
             set "PATH=%%d;%PATH%"
             goto :has_node
@@ -66,7 +66,7 @@ if exist "%LocalAppData%\nvm" (
 )
 
 if exist "%AppData%\nvm" (
-    for /d %%d in ("%AppData%\nvm\v24*") do (
+    for /d %%d in ("%AppData%\nvm\v22*" "%AppData%\nvm\v20*" "%AppData%\nvm\v24*") do (
         if exist "%%d\node.exe" (
             set "PATH=%%d;%PATH%"
             goto :has_node
@@ -98,10 +98,16 @@ if exist "%LocalAppData%\Programs\node\node.exe" (
 where nvm >nul 2>nul
 if %errorlevel% equ 0 (
     echo [THONG BAO] Dang kich hoat Node.js qua NVM...
-    call nvm use 24 >nul 2>nul
+    call nvm use lts >nul 2>nul
     where node >nul 2>nul
     if %errorlevel% equ 0 goto :has_node
-    call nvm use lts >nul 2>nul
+    call nvm use 22 >nul 2>nul
+    where node >nul 2>nul
+    if %errorlevel% equ 0 goto :has_node
+    call nvm use 20 >nul 2>nul
+    where node >nul 2>nul
+    if %errorlevel% equ 0 goto :has_node
+    call nvm use 24 >nul 2>nul
     where node >nul 2>nul
     if %errorlevel% equ 0 goto :has_node
 )

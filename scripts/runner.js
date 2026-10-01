@@ -141,11 +141,46 @@ async function main() {
   const pkgPath = path.join(ROOT_DIR, 'package.json');
   const pkgHash = hashFile(pkgPath);
   const electronInstalled = fs.existsSync(path.join(ROOT_DIR, 'node_modules', 'electron'));
-  const needsInstall = !electronInstalled || cache.pkgHash !== pkgHash;
+  const betterSqliteInstalled = fs.existsSync(
+    path.join(ROOT_DIR, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node')
+  );
+  const needsInstall = !electronInstalled || !betterSqliteInstalled || cache.pkgHash !== pkgHash;
 
   if (needsInstall) {
     console.log('📦 [2/5] Đang chuẩn bị thư viện (lần đầu hoặc có thư viện mới)...');
-    runCmd('npm', ['install']);
+    const nodeMajor = parseInt(process.versions.node.split('.')[0], 10);
+    // Node >= 24 chưa có prebuilt binary cho native addon better-sqlite3 trên host,
+    // nên dùng --ignore-scripts trực tiếp để tránh lỗi node-gyp thiếu Visual Studio C++ trên Windows
+    const useIgnoreScripts = nodeMajor >= 24;
+
+    if (useIgnoreScripts) {
+      console.log(`⚡ Phát hiện Node.js ${process.versions.node} (Tối ưu cài đặt native addon cho Electron)...`);
+      runCmd('npm', ['install', '--ignore-scripts']);
+    } else {
+      try {
+        runCmd('npm', ['install']);
+      } catch (installErr) {
+        console.warn('⚠️  npm install thông thường gặp lỗi build C++ của máy host, chuyển sang chế độ cài đặt an toàn (--ignore-scripts)...');
+        runCmd('npm', ['install', '--ignore-scripts']);
+      }
+    }
+
+    // Đảm bảo binary của Electron được tải về đầy đủ
+    const electronInstallScript = path.join(ROOT_DIR, 'node_modules', 'electron', 'install.js');
+    if (fs.existsSync(electronInstallScript)) {
+      try {
+        runCmd('node', [electronInstallScript]);
+      } catch (_) {}
+    }
+
+    // Luôn đảm bảo binary của better-sqlite3 được cấu hình chuẩn cho Electron 34
+    console.log('⚡ [2/5] Đang cấu hình prebuilt binary cho better-sqlite3 (Electron 34)...');
+    try {
+      runCmd('npx', ['electron-builder', 'install-app-deps']);
+    } catch (e) {
+      console.warn('⚠️  Cảnh báo install-app-deps:', e.message);
+    }
+
     cache.pkgHash = pkgHash;
     writeCache(cache);
     console.log('✅ Thư viện npm đã sẵn sàng!\n');
