@@ -23,10 +23,15 @@ const CLEAN_CHROME_ARGS = [
   '--disable-sync',
   '--disable-default-apps',
   '--disable-component-update',
-  '--lang=en-US'
+  '--lang=en-US',
 ];
 
-const LOCK_FILES = ['SingletonLock', 'SingletonCookie', 'SingletonSocket', 'lockfile'];
+const LOCK_FILES = [
+  'SingletonLock',
+  'SingletonCookie',
+  'SingletonSocket',
+  'lockfile',
+];
 
 /**
  * Quét danh sách PID của Chromium/Chrome đang chạy trên thư mục UserDataDir này
@@ -45,12 +50,16 @@ export async function getProfilePids(userDataDir: string): Promise<number[]> {
         .filter((pid) => pid && !isNaN(pid) && pid > 0);
     } else {
       // macOS và Linux
-      const { stdout } = await execAsync('ps -Ao pid,args').catch(() => ({ stdout: '' }));
+      const { stdout } = await execAsync('ps -Ao pid,args').catch(() => ({
+        stdout: '',
+      }));
       const pids: number[] = [];
       for (const line of stdout.split('\n')) {
         if (
           line.includes(userDataDir) &&
-          (line.includes('chrome') || line.includes('Chromium') || line.includes('Google Chrome'))
+          (line.includes('chrome') ||
+            line.includes('Chromium') ||
+            line.includes('Google Chrome'))
         ) {
           const parts = line.trim().split(/\s+/);
           const pid = parseInt(parts[0], 10);
@@ -70,7 +79,10 @@ export async function getProfilePids(userDataDir: string): Promise<number[]> {
  * Dọn sạch triệt để các tiến trình Chromium chạy ngầm và file lock trên macOS/Win
  * Giải quyết 100% lỗi nhấp nháy, kẹt process khi bấm X đóng rồi mở lại
  */
-export async function releaseProfileLocks(userDataDir: string, profileName: string): Promise<void> {
+export async function releaseProfileLocks(
+  userDataDir: string,
+  profileName: string,
+): Promise<void> {
   if (!userDataDir || !fs.existsSync(userDataDir)) return;
 
   let foundLocks: string[] = [];
@@ -90,7 +102,9 @@ export async function releaseProfileLocks(userDataDir: string, profileName: stri
   // 1. Kill toàn bộ process Chrome cũ đang giữ thư mục này
   const pids = await getProfilePids(userDataDir);
   if (pids.length > 0) {
-    console.log(`[${profileName}] Phát hiện ${pids.length} tiến trình Chrome cũ còn chạy ngầm. Đang dọn sạch...`);
+    console.log(
+      `[${profileName}] Phát hiện ${pids.length} tiến trình Chrome cũ còn chạy ngầm. Đang dọn sạch...`,
+    );
     for (const pid of pids) {
       try {
         if (process.platform === 'win32') {
@@ -123,7 +137,7 @@ export function cleanProfileGpuCache(userDataDir: string): void {
     path.join(userDataDir, 'Default', 'DawnGraphiteCache'),
     path.join(userDataDir, 'Default', 'DawnWebGPUCache'),
     path.join(userDataDir, 'GrShaderCache'),
-    path.join(userDataDir, 'ShaderCache')
+    path.join(userDataDir, 'ShaderCache'),
   ];
   for (const dir of staleDirs) {
     try {
@@ -138,17 +152,24 @@ export function cleanProfileGpuCache(userDataDir: string): void {
  * Xóa sạch dữ liệu profile trên đĩa (thư mục userDataDir trong profiles/)
  * Dọn dẹp triệt để lock, processes, và toàn bộ thư mục dữ liệu browser
  */
-export async function deleteProfileDiskData(profileName: string): Promise<void> {
+export async function deleteProfileDiskData(
+  profileName: string,
+): Promise<void> {
   if (!profileName) return;
   const userDataDir = path.join(PROFILES_DIR, profileName);
   try {
     await releaseProfileLocks(userDataDir, profileName).catch(() => {});
     if (fs.existsSync(userDataDir)) {
       fs.rmSync(userDataDir, { recursive: true, force: true });
-      console.log(`[deleteProfileDiskData] Đã xóa vĩnh viễn dữ liệu trình duyệt: ${userDataDir}`);
+      console.log(
+        `[deleteProfileDiskData] Đã xóa vĩnh viễn dữ liệu trình duyệt: ${userDataDir}`,
+      );
     }
   } catch (err: any) {
-    console.warn(`[deleteProfileDiskData] Lỗi khi xóa thư mục ${userDataDir}:`, err.message);
+    console.warn(
+      `[deleteProfileDiskData] Lỗi khi xóa thư mục ${userDataDir}:`,
+      err.message,
+    );
   }
 }
 
@@ -188,7 +209,10 @@ export function parseProxy(rawProxy?: string | null): ParsedProxy | undefined {
     str.startsWith('{') ||
     str.length > 250
   ) {
-    console.warn(`[parseProxy] Bỏ qua proxy không hợp lệ (chuỗi cookie hoặc dữ liệu lỗi):`, str.slice(0, 40));
+    console.warn(
+      `[parseProxy] Bỏ qua proxy không hợp lệ (chuỗi cookie hoặc dữ liệu lỗi):`,
+      str.slice(0, 40),
+    );
     return undefined;
   }
 
@@ -200,7 +224,7 @@ export function parseProxy(rawProxy?: string | null): ParsedProxy | undefined {
       return {
         server: `http://${colonParts[0]}:${colonParts[1]}`,
         username: colonParts[2],
-        password: colonParts[3]
+        password: colonParts[3],
       };
     }
   }
@@ -210,7 +234,7 @@ export function parseProxy(rawProxy?: string | null): ParsedProxy | undefined {
     const port = Number(colonParts[1]);
     if (!isNaN(port) && port > 0 && port <= 65535) {
       return {
-        server: `http://${colonParts[0]}:${colonParts[1]}`
+        server: `http://${colonParts[0]}:${colonParts[1]}`,
       };
     }
   }
@@ -246,7 +270,10 @@ export function parseProxy(rawProxy?: string | null): ParsedProxy | undefined {
  * Tự động chọn engine trình duyệt:
  * Ưu tiên Chromium Playwright nội bộ -> Fallback sang Google Chrome / Edge có sẵn trên máy người dùng
  */
-export function resolveBrowserLaunchOptions(): { channel?: string; executablePath?: string } {
+export function resolveBrowserLaunchOptions(): {
+  channel?: string;
+  executablePath?: string;
+} {
   try {
     const pwPath = chromium.executablePath();
     if (pwPath && fs.existsSync(pwPath)) {
@@ -255,21 +282,28 @@ export function resolveBrowserLaunchOptions(): { channel?: string; executablePat
   } catch (_) {}
 
   if (process.platform === 'darwin') {
-    if (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')) {
+    if (
+      fs.existsSync(
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      )
+    ) {
       return { channel: 'chrome' };
     }
   } else if (process.platform === 'win32') {
     const winPaths = [
       'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
       'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-      path.join(process.env.LOCALAPPDATA || '', 'Google\\Chrome\\Application\\chrome.exe')
+      path.join(
+        process.env.LOCALAPPDATA || '',
+        'Google\\Chrome\\Application\\chrome.exe',
+      ),
     ];
     if (winPaths.some((p) => fs.existsSync(p))) {
       return { channel: 'chrome' };
     }
     const edgePaths = [
       'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-      'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+      'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
     ];
     if (edgePaths.some((p) => fs.existsSync(p))) {
       return { channel: 'msedge' };
@@ -282,10 +316,15 @@ export function resolveBrowserLaunchOptions(): { channel?: string; executablePat
 /**
  * Kiểm tra kết nối thực tế qua Proxy bằng Playwright Chromium
  */
-export async function testProxyConnection(rawProxy?: string | null): Promise<ProxyTestResult> {
+export async function testProxyConnection(
+  rawProxy?: string | null,
+): Promise<ProxyTestResult> {
   const proxyConfig = parseProxy(rawProxy);
   if (!proxyConfig) {
-    return { success: false, error: 'Chưa nhập địa chỉ proxy hoặc định dạng không hợp lệ.' };
+    return {
+      success: false,
+      error: 'Chưa nhập địa chỉ proxy hoặc định dạng không hợp lệ.',
+    };
   }
 
   const startTime = Date.now();
@@ -295,18 +334,18 @@ export async function testProxyConnection(rawProxy?: string | null): Promise<Pro
       headless: true,
       proxy: proxyConfig,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      ...resolveBrowserLaunchOptions()
+      ...resolveBrowserLaunchOptions(),
     };
     testBrowser = await chromium.launch(browserOpts);
 
     const context = await testBrowser.newContext({
-      locale: 'en-US'
+      locale: 'en-US',
     });
     const page = await context.newPage();
 
     const response = await page.goto('https://api.ipify.org?format=json', {
       timeout: 15000,
-      waitUntil: 'commit'
+      waitUntil: 'commit',
     });
 
     if (!response || !response.ok()) {
@@ -320,22 +359,32 @@ export async function testProxyConnection(rawProxy?: string | null): Promise<Pro
     return {
       success: true,
       ip: json.ip || 'Unknown IP',
-      latencyMs: elapsed
+      latencyMs: elapsed,
     };
   } catch (err: any) {
     const elapsed = Date.now() - startTime;
     let errMsg = err.message || 'Lỗi không xác định';
-    if (errMsg.includes('ERR_TIMED_OUT') || errMsg.includes('Timeout') || errMsg.includes('timeout')) {
-      errMsg = 'Quá thời gian chờ (Proxy Timeout - Kiểm tra lại server proxy hoặc whitelist IP mạng nhà).';
+    if (
+      errMsg.includes('ERR_TIMED_OUT') ||
+      errMsg.includes('Timeout') ||
+      errMsg.includes('timeout')
+    ) {
+      errMsg =
+        'Quá thời gian chờ (Proxy Timeout - Kiểm tra lại server proxy hoặc whitelist IP mạng nhà).';
     } else if (errMsg.includes('ERR_PROXY_CONNECTION_FAILED')) {
-      errMsg = 'Không kết nối được tới Proxy (Sai IP/Port hoặc máy chủ proxy offline).';
-    } else if (errMsg.includes('ERR_PROXY_AUTH_REQUESTED') || errMsg.includes('407')) {
-      errMsg = 'Proxy yêu cầu tài khoản/mật khẩu xác thực (407 Proxy Authentication Required).';
+      errMsg =
+        'Không kết nối được tới Proxy (Sai IP/Port hoặc máy chủ proxy offline).';
+    } else if (
+      errMsg.includes('ERR_PROXY_AUTH_REQUESTED') ||
+      errMsg.includes('407')
+    ) {
+      errMsg =
+        'Proxy yêu cầu tài khoản/mật khẩu xác thực (407 Proxy Authentication Required).';
     }
     return {
       success: false,
       latencyMs: elapsed,
-      error: errMsg
+      error: errMsg,
     };
   } finally {
     if (testBrowser) {
@@ -363,7 +412,9 @@ export interface TikTokCookieObject {
  * 3. Base64 encoded JSON hoặc chuỗi cookie
  * 4. Netscape format (tab-separated)
  */
-export function normalizeTikTokCookies(rawCookies?: string | any[] | null): TikTokCookieObject[] {
+export function normalizeTikTokCookies(
+  rawCookies?: string | any[] | null,
+): TikTokCookieObject[] {
   if (!rawCookies) return [];
 
   let data: any = rawCookies;
@@ -373,10 +424,19 @@ export function normalizeTikTokCookies(rawCookies?: string | any[] | null): TikT
     if (!str) return [];
 
     // 1. Thử giải mã nếu là chuỗi Base64
-    if (!str.startsWith('[') && !str.startsWith('{') && !str.includes(';') && str.length > 30) {
+    if (
+      !str.startsWith('[') &&
+      !str.startsWith('{') &&
+      !str.includes(';') &&
+      str.length > 30
+    ) {
       try {
         const decoded = Buffer.from(str, 'base64').toString('utf-8');
-        if (decoded.startsWith('[') || decoded.startsWith('{') || decoded.includes('=')) {
+        if (
+          decoded.startsWith('[') ||
+          decoded.startsWith('{') ||
+          decoded.includes('=')
+        ) {
           str = decoded.trim();
         }
       } catch (_) {}
@@ -409,7 +469,7 @@ export function normalizeTikTokCookies(rawCookies?: string | any[] | null): TikT
               secure: cols[3].toUpperCase() === 'TRUE',
               expires: parseInt(cols[4], 10) || undefined,
               name: cols[5].trim(),
-              value: cols[6].trim()
+              value: cols[6].trim(),
             });
           }
         }
@@ -433,7 +493,9 @@ export function normalizeTikTokCookies(rawCookies?: string | any[] | null): TikT
               name,
               value,
               domain: '.tiktok.com',
-              path: '/'
+              path: '/',
+              secure: true,
+              sameSite: name === 'sessionid_ss' ? 'None' : 'Lax',
             });
           }
         }
@@ -454,15 +516,29 @@ export function normalizeTikTokCookies(rawCookies?: string | any[] | null): TikT
         // Bỏ qua các cookie prefix __Host- ngoại lai để tránh lỗi CDP Protocol error
         if (name.startsWith('__Host-')) return null;
 
-        // Giữ nguyên domain gốc của cookie (không ép đổi domain nếu là cookie phụ trợ)
-        const domain = item.domain ? String(item.domain).trim() : '.tiktok.com';
+        // Chuẩn hóa domain: nếu thuộc tiktok.com thì bắt buộc có dấu chấm đi đầu (.tiktok.com)
+        // để Chromium gửi cookie cho cả www.tiktok.com và các subdomain (tránh lỗi host-only cookie)
+        let domain = item.domain ? String(item.domain).trim() : '.tiktok.com';
+        if (domain.includes('tiktok.com') && !domain.startsWith('.')) {
+          domain = `.${domain}`;
+        }
 
         let expires: number | undefined;
         if (typeof item.expires === 'number' && item.expires > 0) {
           expires = Math.floor(item.expires);
-        } else if (typeof item.expirationDate === 'number' && item.expirationDate > 0) {
+        } else if (
+          typeof item.expirationDate === 'number' &&
+          item.expirationDate > 0
+        ) {
           expires = Math.floor(item.expirationDate);
         }
+
+        const isSameSiteNone =
+          item.sameSite === 'None' || name === 'sessionid_ss';
+        const secure =
+          item.secure !== undefined
+            ? Boolean(item.secure)
+            : domain.includes('tiktok.com') || isSameSiteNone;
 
         const res: TikTokCookieObject = {
           name,
@@ -470,12 +546,23 @@ export function normalizeTikTokCookies(rawCookies?: string | any[] | null): TikT
           domain,
           path: item.path || '/',
           expires,
-          httpOnly: item.httpOnly !== undefined ? Boolean(item.httpOnly) : undefined,
-          secure: item.secure !== undefined ? Boolean(item.secure) : true
+          httpOnly:
+            item.httpOnly !== undefined
+              ? Boolean(item.httpOnly)
+              : name.includes('sessionid') || name.includes('sid_tt')
+                ? true
+                : undefined,
+          secure: isSameSiteNone ? true : secure,
         };
 
-        if (item.sameSite === 'Strict' || item.sameSite === 'Lax' || item.sameSite === 'None') {
+        if (
+          item.sameSite === 'Strict' ||
+          item.sameSite === 'Lax' ||
+          item.sameSite === 'None'
+        ) {
           res.sameSite = item.sameSite;
+        } else if (name === 'sessionid_ss') {
+          res.sameSite = 'None';
         }
 
         return res;
@@ -497,9 +584,11 @@ export function isTikTokLoggedIn(rawCookies?: string | any[] | null): boolean {
     const list = normalizeTikTokCookies(rawCookies);
     return list.some(
       (c) =>
-        (c.name === 'sessionid' || c.name === 'sessionid_ss' || c.name === 'sid_tt') &&
+        (c.name === 'sessionid' ||
+          c.name === 'sessionid_ss' ||
+          c.name === 'sid_tt') &&
         c.value &&
-        String(c.value).trim().length > 5
+        String(c.value).trim().length > 5,
     );
   } catch {
     return false;
@@ -511,7 +600,7 @@ export function isTikTokLoggedIn(rawCookies?: string | any[] | null): boolean {
  */
 export async function launchProfileContext(
   profile: ProfileRecord,
-  headless = false
+  headless = false,
 ): Promise<{ context: BrowserContext; page: Page }> {
   const userDataDir = path.join(PROFILES_DIR, profile.name);
   if (!fs.existsSync(userDataDir)) {
@@ -538,9 +627,9 @@ export async function launchProfileContext(
     ignoreDefaultArgs: ['--no-sandbox'],
     locale: 'en-US',
     extraHTTPHeaders: {
-      'Accept-Language': 'en-US,en;q=0.9'
+      'Accept-Language': 'en-US,en;q=0.9',
     },
-    ...resolveBrowserLaunchOptions()
+    ...resolveBrowserLaunchOptions(),
   };
 
   // Cấu hình Proxy nếu có
@@ -549,12 +638,17 @@ export async function launchProfileContext(
     launchOptions.proxy = proxyConfig;
     console.log(
       `[${profile.name}] 🌐 Kích hoạt Proxy: ${proxyConfig.server} ${
-        proxyConfig.username ? `(User: ${proxyConfig.username})` : '(Direct Auth)'
-      }`
+        proxyConfig.username
+          ? `(User: ${proxyConfig.username})`
+          : '(Direct Auth)'
+      }`,
     );
   }
 
-  const context = await chromium.launchPersistentContext(userDataDir, launchOptions);
+  const context = await chromium.launchPersistentContext(
+    userDataDir,
+    launchOptions,
+  );
 
   // Nạp cookies thông minh nếu có (hỗ trợ JSON, Base64, string header sessionid=...)
   if (profile.cookies) {
@@ -567,7 +661,10 @@ export async function launchProfileContext(
           await context.addCookies(parsedCookies as any);
           loadedCount = parsedCookies.length;
         } catch (batchErr: any) {
-          console.warn(`[${profile.name}] Nạp batch cookies thất bại, đang nạp từng cookie:`, batchErr.message);
+          console.warn(
+            `[${profile.name}] Nạp batch cookies thất bại, đang nạp từng cookie:`,
+            batchErr.message,
+          );
           // Fallback nạp từng cookie riêng lẻ để 1 cookie lạ không làm mất sessionid
           for (const c of parsedCookies) {
             try {
@@ -577,11 +674,17 @@ export async function launchProfileContext(
           }
         }
 
-        const hasSession = parsedCookies.some((c) => c.name === 'sessionid' || c.name === 'sessionid_ss');
+        // Đồng bộ cookie jar với CDP Network Process để đảm bảo Chromium commit cookie vào store trước khi navigate
+        await context.cookies('https://www.tiktok.com').catch(() => []);
+        await new Promise((r) => setTimeout(r, 150));
+
+        const hasSession = parsedCookies.some(
+          (c) => c.name === 'sessionid' || c.name === 'sessionid_ss',
+        );
         console.log(
           `[${profile.name}] 🍪 Đã nạp thành công ${loadedCount}/${parsedCookies.length} cookies vào trình duyệt ${
             hasSession ? '(Có sessionid login)' : ''
-          }.`
+          }.`,
         );
       }
     } catch (e: any) {
@@ -633,7 +736,7 @@ export async function focusProfileBrowser(profileId: string): Promise<boolean> {
         const pids = await getProfilePids(userDataDir);
         for (const pid of pids) {
           execAsync(
-            `osascript -e 'tell application "System Events" to set frontmost of first process whose unix id is ${pid} to true'`
+            `osascript -e 'tell application "System Events" to set frontmost of first process whose unix id is ${pid} to true'`,
           ).catch(() => {});
         }
       }
@@ -652,10 +755,13 @@ export function hasSessionInCookieDb(userDataDir: string): boolean {
   const cookieDb = path.join(userDataDir, 'Default', 'Cookies');
   if (!fs.existsSync(cookieDb)) return false;
   try {
-    const tempDb = new Database(cookieDb, { readonly: true, fileMustExist: true });
+    const tempDb = new Database(cookieDb, {
+      readonly: true,
+      fileMustExist: true,
+    });
     const row = tempDb
       .prepare(
-        "SELECT 1 FROM cookies WHERE (name = 'sessionid' OR name = 'sessionid_ss' OR name = 'sid_tt') LIMIT 1"
+        "SELECT 1 FROM cookies WHERE (name = 'sessionid' OR name = 'sessionid_ss' OR name = 'sid_tt') LIMIT 1",
       )
       .get();
     tempDb.close();
@@ -668,19 +774,24 @@ export function hasSessionInCookieDb(userDataDir: string): boolean {
 /**
  * Trích xuất an toàn mảng cookies đầy đủ từ thư mục userDataDir bằng Chromium headless (< 150ms)
  */
-export async function extractProfileCookies(userDataDir: string): Promise<any[]> {
+export async function extractProfileCookies(
+  userDataDir: string,
+): Promise<any[]> {
   if (!userDataDir || !fs.existsSync(userDataDir)) return [];
   try {
     const headlessCtx = await chromium.launchPersistentContext(userDataDir, {
       headless: true,
       args: [...CLEAN_CHROME_ARGS],
-      ...resolveBrowserLaunchOptions()
+      ...resolveBrowserLaunchOptions(),
     });
     const cookies = await headlessCtx.cookies().catch(() => []);
     await headlessCtx.close().catch(() => {});
     return cookies;
   } catch (e: any) {
-    console.warn(`[extractProfileCookies] Lỗi khi trích xuất cookies:`, e.message);
+    console.warn(
+      `[extractProfileCookies] Lỗi khi trích xuất cookies:`,
+      e.message,
+    );
     return [];
   }
 }
@@ -691,12 +802,14 @@ export async function extractProfileCookies(userDataDir: string): Promise<any[]>
 export async function openManualBrowser(
   profile: ProfileRecord,
   onClosed?: () => void,
-  onUpdated?: () => void
+  onUpdated?: () => void,
 ): Promise<void> {
   const { context, page } = await launchProfileContext(profile, false);
   profileRepo.updateStatus(profile.id, 'manual_session');
 
-  await page.goto('https://www.tiktok.com/', { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await page
+    .goto('https://www.tiktok.com/', { waitUntil: 'domcontentloaded' })
+    .catch(() => {});
 
   const userDataDir = path.join(PROFILES_DIR, profile.name);
   let isCleanedUp = false;
@@ -716,9 +829,11 @@ export async function openManualBrowser(
           isSynced = true;
           profileRepo.update({
             id: profile.id,
-            cookies: JSON.stringify(cookies)
+            cookies: JSON.stringify(cookies),
           });
-          console.log(`[${profile.name}] 🟢 Phát hiện đăng nhập TikTok thành công trong lúc duyệt web!`);
+          console.log(
+            `[${profile.name}] 🟢 Phát hiện đăng nhập TikTok thành công trong lúc duyệt web!`,
+          );
           if (onUpdated) onUpdated();
         }
       }
@@ -738,7 +853,9 @@ export async function openManualBrowser(
 
       // Nếu context đã đóng trước đó -> trích xuất trực tiếp từ userDataDir trên đĩa
       if (cookies.length === 0 && hasSessionInCookieDb(userDataDir)) {
-        console.log(`[${profile.name}] 🔍 Tìm thấy sessionid trên disk, đang đồng bộ cookies...`);
+        console.log(
+          `[${profile.name}] 🔍 Tìm thấy sessionid trên disk, đang đồng bộ cookies...`,
+        );
         cookies = await extractProfileCookies(userDataDir);
       }
 
@@ -747,9 +864,11 @@ export async function openManualBrowser(
         profileRepo.update({
           id: profile.id,
           cookies: JSON.stringify(cookies),
-          status: 'idle'
+          status: 'idle',
         });
-        console.log(`[${profile.name}] ✅ Đã xác nhận đăng nhập TikTok thành công (Có sessionid)!`);
+        console.log(
+          `[${profile.name}] ✅ Đã xác nhận đăng nhập TikTok thành công (Có sessionid)!`,
+        );
       } else {
         const wasPreviouslyLoggedIn = isTikTokLoggedIn(profile.cookies);
         if (cookies.length > 0) {
@@ -757,20 +876,24 @@ export async function openManualBrowser(
           profileRepo.update({
             id: profile.id,
             cookies: null,
-            status: 'idle'
+            status: 'idle',
           });
-          console.log(`[${profile.name}] ⚠️ Đóng trình duyệt: Đã đăng xuất khỏi TikTok.`);
+          console.log(
+            `[${profile.name}] ⚠️ Đóng trình duyệt: Đã đăng xuất khỏi TikTok.`,
+          );
         } else if (!wasPreviouslyLoggedIn) {
           profileRepo.update({
             id: profile.id,
             cookies: null,
-            status: 'idle'
+            status: 'idle',
           });
           console.log(`[${profile.name}] ℹ️ Đóng trình duyệt: Chưa đăng nhập.`);
         } else {
           // cookies.length === 0 nhưng trước đó đã login -> Giữ nguyên session cũ, không xóa!
           profileRepo.updateStatus(profile.id, 'idle');
-          console.log(`[${profile.name}] 🛡️ Giữ nguyên phiên đăng nhập cũ (trình duyệt đóng trước khi nạp cookies hoặc mất mạng).`);
+          console.log(
+            `[${profile.name}] 🛡️ Giữ nguyên phiên đăng nhập cũ (trình duyệt đóng trước khi nạp cookies hoặc mất mạng).`,
+          );
         }
       }
     } catch (_) {
@@ -810,7 +933,7 @@ export async function closeProfileContext(profileId: string): Promise<void> {
       if (isTikTokLoggedIn(cookies)) {
         profileRepo.update({
           id: profileId,
-          cookies: JSON.stringify(cookies)
+          cookies: JSON.stringify(cookies),
         });
       }
       await ctx.close().catch(() => {});
@@ -834,4 +957,3 @@ export async function closeAllActiveContexts(): Promise<void> {
   }
   activeContexts.clear();
 }
-
