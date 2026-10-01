@@ -1,56 +1,58 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { toast, Toaster } from 'sonner';
-import { AppHeader, TabType } from './components/AppHeader';
-import { ProfileCard } from './components/ProfileCard';
-import { ProfileModal } from './components/ProfileModal';
-import { LogsDrawer } from './components/LogsDrawer';
-import { QueueScreen } from './components/QueueScreen';
-import { LogsScreen } from './components/LogsScreen';
-import { SettingsScreen } from './components/SettingsScreen';
-import { FollowersModal } from './components/FollowersModal';
-import { DistributeVideosModal } from './components/DistributeVideosModal';
-import { ManageGroupsModal } from './components/ManageGroupsModal';
-import { BulkImportModal } from './components/BulkImportModal';
-import { CooldownBatchModal, CooldownBatchItem } from './components/CooldownBatchModal';
-import { CooldownGuideModal } from './components/CooldownGuideModal';
-import { getCooldownStatus, isNurturingGroup } from './utils/cooldown';
-import { 
-  Sparkles, 
-  Search, 
-  Filter, 
-  CheckSquare, 
-  Square, 
-  Play, 
-  Plus, 
-  Users, 
-  Folder, 
-  X,
-  Shuffle,
-  Trash2,
-  FolderInput,
-  FileJson,
-  Loader2,
+import {
+  CheckSquare,
   Clock,
-  ShieldAlert,
-  ShieldCheck,
-  HelpCircle
-} from 'lucide-react';
-import { Button } from './components/ui/Button';
-import { Badge } from './components/ui/Badge';
+  FileJson,
+  Filter,
+  FolderInput,
+  Loader2,
+  Play,
+  Search,
+  Shuffle,
+  Sparkles,
+  Square,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { toast, Toaster } from "sonner";
+import { AppHeader, TabType } from "./components/AppHeader";
+import { BulkImportModal } from "./components/BulkImportModal";
+import {
+  CooldownBatchItem,
+  CooldownBatchModal,
+} from "./components/CooldownBatchModal";
+import { CooldownGuideModal } from "./components/CooldownGuideModal";
+import { DistributeVideosModal } from "./components/DistributeVideosModal";
+import { FollowersModal } from "./components/FollowersModal";
+import { LogsDrawer } from "./components/LogsDrawer";
+import { LogsScreen } from "./components/LogsScreen";
+import { ManageGroupsModal } from "./components/ManageGroupsModal";
+import { ProfileCard } from "./components/ProfileCard";
+import { ProfileModal } from "./components/ProfileModal";
+import { QueueScreen } from "./components/QueueScreen";
+import { SettingsScreen } from "./components/SettingsScreen";
+import { Badge } from "./components/ui/Badge";
+import { Button } from "./components/ui/Button";
+import { getCooldownStatus, isNurturingGroup } from "./utils/cooldown";
 
 export const App: React.FC = () => {
   const [profiles, setProfiles] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<TabType>('profiles');
-  const [selectedGroup, setSelectedGroup] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<TabType>("profiles");
+  const [selectedGroup, setSelectedGroup] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [concurrency, setConcurrency] = useState<number>(2);
   const [batchMaxVideos, setBatchMaxVideos] = useState<number>(50);
 
   // Trạng thái xử lý tác vụ (tránh cảm giác đơ/treo ứng dụng)
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [processingMessage, setProcessingMessage] = useState<string>('');
-  const [openingBrowserProfileId, setOpeningBrowserProfileId] = useState<string | null>(null);
+  const [processingMessage, setProcessingMessage] = useState<string>("");
+  const [openingBrowserProfileId, setOpeningBrowserProfileId] = useState<
+    string | null
+  >(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false);
@@ -73,11 +75,13 @@ export const App: React.FC = () => {
     totalCount: 0,
     pendingIdsAll: [],
     pendingIdsSafeOnly: [],
-    contextTitle: ''
+    contextTitle: "",
   });
   const [dbGroups, setDbGroups] = useState<string[]>([]);
   const [editingProfile, setEditingProfile] = useState<any | null>(null);
-  const [viewingLogsProfile, setViewingLogsProfile] = useState<any | null>(null);
+  const [viewingLogsProfile, setViewingLogsProfile] = useState<any | null>(
+    null,
+  );
   const [liveLogs, setLiveLogs] = useState<any[]>([]);
   const [queueStats, setQueueStats] = useState<any>({ runningProfiles: [] });
 
@@ -90,9 +94,9 @@ export const App: React.FC = () => {
     const unsubscribeProgress = window.api.onUploadProgress((event) => {
       setLiveLogs((prev) => [event, ...prev].slice(0, 100));
 
-      if (event.type === 'error') {
-        toast.error(`[${event.step || 'Lỗi'}] ${event.message}`);
-      } else if (event.type === 'success') {
+      if (event.type === "error") {
+        toast.error(`[${event.step || "Lỗi"}] ${event.message}`);
+      } else if (event.type === "success") {
         toast.success(`[Thành công] ${event.message}`);
       }
 
@@ -134,7 +138,9 @@ export const App: React.FC = () => {
       const list = await window.api.getGroups();
       if (Array.isArray(list)) {
         setDbGroups(
-          list.map((g: any) => (typeof g === 'string' ? g : g?.name)).filter(Boolean)
+          list
+            .map((g: any) => (typeof g === "string" ? g : g?.name))
+            .filter(Boolean),
         );
       }
     } catch (_) {}
@@ -143,7 +149,7 @@ export const App: React.FC = () => {
   const loadConcurrency = async () => {
     try {
       const c = await window.api.getConcurrency();
-      if (typeof c === 'number' && c > 0) {
+      if (typeof c === "number" && c > 0) {
         setConcurrency(c);
       }
     } catch (_) {}
@@ -192,7 +198,7 @@ export const App: React.FC = () => {
         toast.error(`Lỗi khi xóa: ${err.message}`);
       } finally {
         setIsProcessing(false);
-        setProcessingMessage('');
+        setProcessingMessage("");
       }
     }
   };
@@ -201,12 +207,17 @@ export const App: React.FC = () => {
     setOpeningBrowserProfileId(profile.id);
     try {
       const res = await window.api.openBrowser(profile.id);
-      if (res && typeof res === 'object' && res.alreadyOpen) {
-        toast.info(`Trình duyệt của "${profile.name}" đang mở sẵn! Đã chuyển cửa sổ lên trước.`, {
-          icon: '🌐'
-        });
+      if (res && typeof res === "object" && res.alreadyOpen) {
+        toast.info(
+          `Trình duyệt của "${profile.name}" đang mở sẵn! Đã chuyển cửa sổ lên trước.`,
+          {
+            icon: "🌐",
+          },
+        );
       } else {
-        toast.info(`Đang mở trình duyệt (en-US) cho profile [${profile.name}]...`);
+        toast.info(
+          `Đang mở trình duyệt (en-US) cho profile [${profile.name}]...`,
+        );
       }
     } catch (err: any) {
       toast.error(`Lỗi mở trình duyệt: ${err.message}`);
@@ -226,24 +237,30 @@ export const App: React.FC = () => {
 
   const handleRunSingle = async (profile: any) => {
     if (!profile.video_folder) {
-      toast.error(`Vui lòng chọn thư mục video cho profile [${profile.name}] trước khi chạy!`);
+      toast.error(
+        `Vui lòng chọn thư mục video cho profile [${profile.name}] trước khi chạy!`,
+      );
       return;
     }
 
     const cd = getCooldownStatus(profile.last_run, profile.group_name);
     if (cd.isUnderCooldown) {
       const proceed = window.confirm(
-        `⚠️ CẢNH BÁO KÊNH ĐANG NUÔI:\n\nKênh "${profile.name}" mới đăng video cách đây ${cd.elapsedHours} giờ (còn ${cd.remainingText} nữa mới đủ 24h an toàn).\n\nĐăng sớm có thể bị thuật toán TikTok giảm tương tác hoặc dính lỗi spam.\n\nBạn có chắc chắn muốn TIẾP TỤC ĐĂNG ngay không?`
+        `⚠️ CẢNH BÁO KÊNH ĐANG NUÔI:\n\nKênh "${profile.name}" mới đăng video cách đây ${cd.elapsedHours} giờ (còn ${cd.remainingText} nữa mới đủ 24h an toàn).\n\nĐăng sớm có thể bị thuật toán TikTok giảm tương tác hoặc dính lỗi spam.\n\nBạn có chắc chắn muốn TIẾP TỤC ĐĂNG ngay không?`,
       );
       if (!proceed) return;
     }
 
-    const maxLimit = profile.max_videos !== undefined && profile.max_videos !== null ? profile.max_videos : 50;
-    const limitText = maxLimit > 0 ? ` (Tối đa ${maxLimit} video)` : ' (Upload toàn bộ video)';
+    const maxLimit =
+      profile.max_videos !== undefined && profile.max_videos !== null
+        ? profile.max_videos
+        : 50;
+    const limitText =
+      maxLimit > 0 ? ` (Tối đa ${maxLimit} video)` : " (Upload toàn bộ video)";
     toast.info(`Đã đưa [${profile.name}] vào hàng đợi upload${limitText}.`);
     try {
       await window.api.startQueue([profile.id]);
-      setActiveTab('queue');
+      setActiveTab("queue");
     } catch (err: any) {
       toast.error(`Lỗi khởi chạy: ${err.message}`);
     }
@@ -252,21 +269,26 @@ export const App: React.FC = () => {
   // Helper thực thi startQueue dùng chung
   const startQueueExecution = async (ids: string[], titleContext: string) => {
     if (ids.length === 0) {
-      toast.info('Không có kênh nào để chạy.');
+      toast.info("Không có kênh nào để chạy.");
       return;
     }
-    const limitInfo = batchMaxVideos > 0 ? ` (Tối đa ${batchMaxVideos} video/kênh)` : ' (Upload toàn bộ video)';
-    toast.info(`Bắt đầu chạy cho ${ids.length} kênh ${titleContext}${limitInfo}...`);
+    const limitInfo =
+      batchMaxVideos > 0
+        ? ` (Tối đa ${batchMaxVideos} video/kênh)`
+        : " (Upload toàn bộ video)";
+    toast.info(
+      `Bắt đầu chạy cho ${ids.length} kênh ${titleContext}${limitInfo}...`,
+    );
     setIsProcessing(true);
     setProcessingMessage(`Đang chuẩn bị chạy ${ids.length} kênh...`);
     try {
       await window.api.startQueue(ids, { maxVideos: batchMaxVideos });
-      setActiveTab('queue');
+      setActiveTab("queue");
     } catch (err: any) {
       toast.error(`Lỗi khởi chạy: ${err.message}`);
     } finally {
       setIsProcessing(false);
-      setProcessingMessage('');
+      setProcessingMessage("");
     }
   };
 
@@ -290,24 +312,26 @@ export const App: React.FC = () => {
   const handleRunSelected = async () => {
     if (isProcessing) return;
     if (selectedProfileIds.size === 0) {
-      toast.warning('Vui lòng chọn ít nhất 1 profile để chạy hàng loạt!');
+      toast.warning("Vui lòng chọn ít nhất 1 profile để chạy hàng loạt!");
       return;
     }
 
-    const selectedProfiles = profiles.filter((p) => selectedProfileIds.has(p.id));
+    const selectedProfiles = profiles.filter((p) =>
+      selectedProfileIds.has(p.id),
+    );
     const readyProfiles = selectedProfiles.filter((p) => p.video_folder);
     const missingProfiles = selectedProfiles.filter((p) => !p.video_folder);
 
     if (readyProfiles.length === 0) {
       toast.error(
-        `Các profiles đã chọn đều chưa có thư mục video: ${selectedProfiles.map((p) => p.name).join(', ')}`
+        `Các profiles đã chọn đều chưa có thư mục video: ${selectedProfiles.map((p) => p.name).join(", ")}`,
       );
       return;
     }
 
     if (missingProfiles.length > 0) {
       toast.warning(
-        `Bỏ qua ${missingProfiles.length} kênh chưa chọn thư mục video: ${missingProfiles.map((p) => p.name).join(', ')}`
+        `Bỏ qua ${missingProfiles.length} kênh chưa chọn thư mục video: ${missingProfiles.map((p) => p.name).join(", ")}`,
       );
     }
 
@@ -331,39 +355,47 @@ export const App: React.FC = () => {
             name: p.name,
             groupName: p.group_name,
             remainingText: cd.remainingText,
-            elapsedHours: cd.elapsedHours
+            elapsedHours: cd.elapsedHours,
           };
         }),
         safeCount: safeProfiles.length,
         totalCount: readyProfiles.length,
         pendingIdsAll: readyProfiles.map((p) => p.id),
         pendingIdsSafeOnly: safeProfiles.map((p) => p.id),
-        contextTitle: 'đã chọn'
+        contextTitle: "đã chọn",
       });
       return;
     }
 
-    await startQueueExecution(readyProfiles.map((p) => p.id), 'đã chọn');
+    await startQueueExecution(
+      readyProfiles.map((p) => p.id),
+      "đã chọn",
+    );
   };
 
   // Chạy toàn bộ nhóm hiện tại (Có kiểm tra Cooldown 24h)
   const handleRunBatch = async () => {
     if (isProcessing) return;
-    const pool = selectedGroup === 'all' 
-      ? profiles 
-      : profiles.filter((p) => (p.group_name || 'Mặc định') === selectedGroup);
+    const pool =
+      selectedGroup === "all"
+        ? profiles
+        : profiles.filter(
+            (p) => (p.group_name || "Mặc định") === selectedGroup,
+          );
 
     const readyProfiles = pool.filter((p) => p.video_folder);
     const missingProfiles = pool.filter((p) => !p.video_folder);
 
     if (readyProfiles.length === 0) {
-      toast.error(`Chưa có profile nào ${selectedGroup !== 'all' ? `trong nhóm [${selectedGroup}]` : ''} được gán thư mục video hợp lệ!`);
+      toast.error(
+        `Chưa có profile nào ${selectedGroup !== "all" ? `trong nhóm [${selectedGroup}]` : ""} được gán thư mục video hợp lệ!`,
+      );
       return;
     }
 
     if (missingProfiles.length > 0) {
       toast.warning(
-        `Bỏ qua ${missingProfiles.length} kênh trong nhóm chưa có thư mục video: ${missingProfiles.map((p) => p.name).join(', ')}`
+        `Bỏ qua ${missingProfiles.length} kênh trong nhóm chưa có thư mục video: ${missingProfiles.map((p) => p.name).join(", ")}`,
       );
     }
 
@@ -378,7 +410,8 @@ export const App: React.FC = () => {
       return !cd.isUnderCooldown;
     });
 
-    const groupContextTitle = selectedGroup !== 'all' ? `(Nhóm: ${selectedGroup})` : 'toàn bộ';
+    const groupContextTitle =
+      selectedGroup !== "all" ? `(Nhóm: ${selectedGroup})` : "toàn bộ";
 
     if (nurturingUnderCooldown.length > 0) {
       setCooldownBatchData({
@@ -389,25 +422,30 @@ export const App: React.FC = () => {
             name: p.name,
             groupName: p.group_name,
             remainingText: cd.remainingText,
-            elapsedHours: cd.elapsedHours
+            elapsedHours: cd.elapsedHours,
           };
         }),
         safeCount: safeProfiles.length,
         totalCount: readyProfiles.length,
         pendingIdsAll: readyProfiles.map((p) => p.id),
         pendingIdsSafeOnly: safeProfiles.map((p) => p.id),
-        contextTitle: groupContextTitle
+        contextTitle: groupContextTitle,
       });
       return;
     }
 
-    await startQueueExecution(readyProfiles.map((p) => p.id), groupContextTitle);
+    await startQueueExecution(
+      readyProfiles.map((p) => p.id),
+      groupContextTitle,
+    );
   };
 
   const handleBulkChangeGroup = async (targetGroup: string) => {
     if (!targetGroup || selectedProfileIds.size === 0 || isProcessing) return;
     setIsProcessing(true);
-    setProcessingMessage(`Đang chuyển ${selectedProfileIds.size} kênh sang nhóm [${targetGroup}]...`);
+    setProcessingMessage(
+      `Đang chuyển ${selectedProfileIds.size} kênh sang nhóm [${targetGroup}]...`,
+    );
     try {
       const ids = Array.from(selectedProfileIds);
       await window.api.bulkUpdateGroup(ids, targetGroup);
@@ -417,13 +455,18 @@ export const App: React.FC = () => {
       toast.error(`Lỗi chuyển nhóm: ${err.message}`);
     } finally {
       setIsProcessing(false);
-      setProcessingMessage('');
+      setProcessingMessage("");
     }
   };
 
   const handleBulkDelete = async () => {
     if (selectedProfileIds.size === 0 || isProcessing) return;
-    if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedProfileIds.size} profile đã chọn không?`)) return;
+    if (
+      !confirm(
+        `Bạn có chắc chắn muốn xóa ${selectedProfileIds.size} profile đã chọn không?`,
+      )
+    )
+      return;
     setIsProcessing(true);
     setProcessingMessage(`Đang xóa ${selectedProfileIds.size} profiles...`);
     try {
@@ -436,43 +479,51 @@ export const App: React.FC = () => {
       toast.error(`Lỗi khi xóa profiles: ${err.message}`);
     } finally {
       setIsProcessing(false);
-      setProcessingMessage('');
+      setProcessingMessage("");
     }
   };
 
   const handleExportJson = async (customProfiles?: any[]) => {
     try {
-      const targetProfiles = customProfiles || (selectedProfileIds.size > 0 
-        ? profiles.filter((p) => selectedProfileIds.has(p.id))
-        : filteredProfiles);
+      const targetProfiles =
+        customProfiles ||
+        (selectedProfileIds.size > 0
+          ? profiles.filter((p) => selectedProfileIds.has(p.id))
+          : filteredProfiles);
 
       if (targetProfiles.length === 0) {
-        toast.error('Không có tài khoản nào để xuất!');
+        toast.error("Không có tài khoản nào để xuất!");
         return;
       }
 
       setIsProcessing(true);
-      setProcessingMessage(`Đang xuất ${targetProfiles.length} profiles ra file JSON...`);
+      setProcessingMessage(
+        `Đang xuất ${targetProfiles.length} profiles ra file JSON...`,
+      );
       const res = await window.api.exportJson(targetProfiles);
       if (res.success && res.filePath) {
         const fileName = res.filePath.split(/[/\\]/).pop();
-        toast.success(`Đã xuất thành công ${targetProfiles.length} profiles ra file JSON [${fileName}]!`);
+        toast.success(
+          `Đã xuất thành công ${targetProfiles.length} profiles ra file JSON [${fileName}]!`,
+        );
       }
     } catch (err: any) {
       toast.error(`Lỗi xuất JSON: ${err.message}`);
     } finally {
       setIsProcessing(false);
-      setProcessingMessage('');
+      setProcessingMessage("");
     }
   };
 
   const handleImportJson = async () => {
     try {
       setIsProcessing(true);
-      setProcessingMessage('Đang nạp danh sách profiles từ file JSON...');
+      setProcessingMessage("Đang nạp danh sách profiles từ file JSON...");
       const res = await window.api.importJson();
       if (res.success) {
-        toast.success(`Đã nạp thành công ${res.count || 0} profiles từ file JSON!`);
+        toast.success(
+          `Đã nạp thành công ${res.count || 0} profiles từ file JSON!`,
+        );
         if (res.profiles) {
           setProfiles(res.profiles);
         } else {
@@ -484,7 +535,7 @@ export const App: React.FC = () => {
       toast.error(`Lỗi nhập JSON: ${err.message}`);
     } finally {
       setIsProcessing(false);
-      setProcessingMessage('');
+      setProcessingMessage("");
     }
   };
 
@@ -504,20 +555,24 @@ export const App: React.FC = () => {
   // Trích xuất danh sách các nhóm duy nhất (luôn đảm bảo là mảng chuỗi)
   const groups = useMemo(() => {
     const rawList: any[] = [
-      'Mặc định',
+      "Mặc định",
       ...dbGroups,
-      ...profiles.map((p) => p.group_name || 'Mặc định')
+      ...profiles.map((p) => p.group_name || "Mặc định"),
     ];
     const stringNames = rawList
-      .map((g) => (typeof g === 'object' && g !== null ? g.name : g))
-      .filter((g): g is string => typeof g === 'string' && g.trim().length > 0);
+      .map((g) => (typeof g === "object" && g !== null ? g.name : g))
+      .filter((g): g is string => typeof g === "string" && g.trim().length > 0);
     return Array.from(new Set(stringNames));
   }, [dbGroups, profiles]);
 
   // Tự động đồng bộ selectedGroup nếu nhóm bị xóa hoặc không còn tồn tại
   useEffect(() => {
-    if (selectedGroup !== 'all' && groups.length > 0 && !groups.includes(selectedGroup)) {
-      setSelectedGroup('all');
+    if (
+      selectedGroup !== "all" &&
+      groups.length > 0 &&
+      !groups.includes(selectedGroup)
+    ) {
+      setSelectedGroup("all");
     }
   }, [groups, selectedGroup]);
 
@@ -525,16 +580,19 @@ export const App: React.FC = () => {
   const filteredProfiles = useMemo(() => {
     return profiles.filter((p) => {
       // Lọc theo nhóm
-      if (selectedGroup !== 'all' && (p.group_name || 'Mặc định') !== selectedGroup) {
+      if (
+        selectedGroup !== "all" &&
+        (p.group_name || "Mặc định") !== selectedGroup
+      ) {
         return false;
       }
       // Lọc theo từ khóa tìm kiếm (tên, email, account_id)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchName = (p.name || '').toLowerCase().includes(q);
-        const matchAccount = (p.account_id || '').toLowerCase().includes(q);
-        const matchEmail = (p.email || '').toLowerCase().includes(q);
-        const matchMailAo = (p.mail_ao || '').toLowerCase().includes(q);
+        const matchName = (p.name || "").toLowerCase().includes(q);
+        const matchAccount = (p.account_id || "").toLowerCase().includes(q);
+        const matchEmail = (p.email || "").toLowerCase().includes(q);
+        const matchMailAo = (p.mail_ao || "").toLowerCase().includes(q);
         if (!matchName && !matchAccount && !matchEmail && !matchMailAo) {
           return false;
         }
@@ -557,7 +615,9 @@ export const App: React.FC = () => {
   };
 
   // Chọn / bỏ chọn tất cả các profile đang hiển thị
-  const isAllFilteredSelected = filteredProfiles.length > 0 && filteredProfiles.every((p) => selectedProfileIds.has(p.id));
+  const isAllFilteredSelected =
+    filteredProfiles.length > 0 &&
+    filteredProfiles.every((p) => selectedProfileIds.has(p.id));
 
   const handleToggleSelectAll = () => {
     if (isAllFilteredSelected) {
@@ -596,6 +656,7 @@ export const App: React.FC = () => {
           setIsModalOpen(true);
         }}
         onBulkImport={() => setIsBulkImportOpen(true)}
+        onCooldownGuide={() => setIsCooldownGuideOpen(true)}
         totalProfiles={profiles.length}
         runningCount={runningCount}
       />
@@ -603,7 +664,7 @@ export const App: React.FC = () => {
       {/* Main Container */}
       <main className="flex-1 p-3 sm:p-5 max-w-[1600px] mx-auto w-full">
         {/* TAB 1: KÊNH & PROFILES */}
-        {activeTab === 'profiles' && (
+        {activeTab === "profiles" && (
           <div className="space-y-3.5">
             {/* Filter & Selection Toolbar */}
             <div className="bg-white p-3 rounded-xl border border-slate-200/90 shadow-sm space-y-2.5">
@@ -620,7 +681,7 @@ export const App: React.FC = () => {
                   />
                   {searchQuery && (
                     <button
-                      onClick={() => setSearchQuery('')}
+                      onClick={() => setSearchQuery("")}
                       className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -640,7 +701,9 @@ export const App: React.FC = () => {
                     >
                       <option value="all">Tất cả ({profiles.length})</option>
                       {groups.map((grp) => {
-                        const count = profiles.filter((p) => (p.group_name || 'Mặc định') === grp).length;
+                        const count = profiles.filter(
+                          (p) => (p.group_name || "Mặc định") === grp,
+                        ).length;
                         return (
                           <option key={grp} value={grp}>
                             {grp} ({count})
@@ -651,27 +714,17 @@ export const App: React.FC = () => {
                   </div>
 
                   {/* Huy hiệu cảnh báo nhóm nuôi nếu đang lọc nhóm nuôi */}
-                  {selectedGroup !== 'all' && isNurturingGroup(selectedGroup) && (
-                    <button
-                      onClick={() => setIsCooldownGuideOpen(true)}
-                      className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold hover:bg-amber-100 transition-colors shadow-xs shrink-0 cursor-pointer"
-                      title="Nhóm này được nhận diện là kênh nuôi (Bảo vệ 24h). Nhấn để xem hướng dẫn chi tiết."
-                    >
-                      <Clock className="h-3.5 w-3.5 text-amber-600 animate-pulse" />
-                      <span>Kênh Nuôi (24h)</span>
-                    </button>
-                  )}
-
-                  {/* Nút Hướng Dẫn Cooldown 24h */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsCooldownGuideOpen(true)}
-                    title="Xem hướng dẫn cơ chế tính 24h & cách đặt tên nhóm kênh nuôi"
-                    className="h-8 text-xs border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 shrink-0 px-2.5 font-medium"
-                  >
-                    <Clock className="h-3.5 w-3.5 mr-1 text-amber-600" /> HD Cooldown 24h
-                  </Button>
+                  {selectedGroup !== "all" &&
+                    isNurturingGroup(selectedGroup) && (
+                      <button
+                        onClick={() => setIsCooldownGuideOpen(true)}
+                        className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold hover:bg-amber-100 transition-colors shadow-xs shrink-0 cursor-pointer"
+                        title="Nhóm này được nhận diện là kênh nuôi (Bảo vệ 24h). Nhấn để xem hướng dẫn chi tiết."
+                      >
+                        <Clock className="h-3.5 w-3.5 text-amber-600 animate-pulse" />
+                        <span>Kênh Nuôi (24h)</span>
+                      </button>
+                    )}
 
                   {/* Nút Quản lý nhóm */}
                   <Button
@@ -681,7 +734,8 @@ export const App: React.FC = () => {
                     title="Quản lý danh sách nhóm, thêm mới hoặc đổi tên nhóm"
                     className="h-8 text-xs border-slate-200 text-slate-700 bg-white hover:bg-slate-50 shrink-0 px-2.5"
                   >
-                    <Users className="h-3.5 w-3.5 mr-1 text-slate-500" /> Quản Lý Nhóm
+                    <Users className="h-3.5 w-3.5 mr-1 text-slate-500" /> Quản
+                    Lý Nhóm
                   </Button>
 
                   {/* Nút Chia Đều Video */}
@@ -692,7 +746,8 @@ export const App: React.FC = () => {
                     title="Tự động chia đều danh sách video từ 1 thư mục cho các kênh"
                     className="h-8 text-xs border-sky-300 text-sky-700 bg-sky-50/60 hover:bg-sky-100/80 shrink-0 px-2.5"
                   >
-                    <Shuffle className="h-3.5 w-3.5 mr-1 text-sky-600" /> Chia Đều Video
+                    <Shuffle className="h-3.5 w-3.5 mr-1 text-sky-600" /> Chia
+                    Đều Video
                   </Button>
 
                   {/* Nút Nhập JSON */}
@@ -704,7 +759,8 @@ export const App: React.FC = () => {
                     title="Nhập danh sách profiles từ file JSON hoặc dán JSON"
                     className="h-8 text-xs border-sky-300 text-sky-700 bg-sky-50/60 hover:bg-sky-100/80 shrink-0 px-2.5"
                   >
-                    <FileJson className="h-3.5 w-3.5 mr-1 text-sky-600" /> Nhập JSON
+                    <FileJson className="h-3.5 w-3.5 mr-1 text-sky-600" /> Nhập
+                    JSON
                   </Button>
 
                   {/* Nút Xuất JSON */}
@@ -716,7 +772,8 @@ export const App: React.FC = () => {
                     title="Xuất danh sách profiles ra file JSON an toàn, đầy đủ cookies"
                     className="h-8 text-xs border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80 shrink-0 px-2.5"
                   >
-                    <FileJson className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Xuất JSON ({filteredProfiles.length})
+                    <FileJson className="h-3.5 w-3.5 mr-1 text-emerald-600" />{" "}
+                    Xuất JSON ({filteredProfiles.length})
                   </Button>
                 </div>
               </div>
@@ -736,19 +793,32 @@ export const App: React.FC = () => {
                       <Square className="h-4 w-4 text-slate-400" />
                     )}
                     <span>
-                      {isAllFilteredSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'} ({filteredProfiles.length})
+                      {isAllFilteredSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"}{" "}
+                      ({filteredProfiles.length})
                     </span>
                   </button>
 
                   {/* Số lượng đã chọn & Cảnh báo kênh thiếu folder */}
                   {selectedProfileIds.size > 0 && (
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <Badge variant="info" className="text-xs bg-sky-50 text-sky-700 border-sky-200">
+                      <Badge
+                        variant="info"
+                        className="text-xs bg-sky-50 text-sky-700 border-sky-200"
+                      >
                         Đã chọn {selectedProfileIds.size} profile
                       </Badge>
-                      {profiles.filter((p) => selectedProfileIds.has(p.id) && !p.video_folder).length > 0 && (
+                      {profiles.filter(
+                        (p) => selectedProfileIds.has(p.id) && !p.video_folder,
+                      ).length > 0 && (
                         <span className="text-[11px] text-amber-600 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                          ⚠️ {profiles.filter((p) => selectedProfileIds.has(p.id) && !p.video_folder).length} kênh chưa gán folder
+                          ⚠️{" "}
+                          {
+                            profiles.filter(
+                              (p) =>
+                                selectedProfileIds.has(p.id) && !p.video_folder,
+                            ).length
+                          }{" "}
+                          kênh chưa gán folder
                         </span>
                       )}
                     </div>
@@ -762,21 +832,27 @@ export const App: React.FC = () => {
                       {/* Chuyển nhóm hàng loạt */}
                       <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 h-8 text-xs">
                         <FolderInput className="h-3.5 w-3.5 text-slate-400" />
-                        <span className="text-slate-500 font-medium hidden sm:inline">Chuyển sang:</span>
+                        <span className="text-slate-500 font-medium hidden sm:inline">
+                          Chuyển sang:
+                        </span>
                         <select
                           defaultValue=""
                           disabled={isProcessing}
                           onChange={(e) => {
                             if (e.target.value) {
                               handleBulkChangeGroup(e.target.value);
-                              e.target.value = '';
+                              e.target.value = "";
                             }
                           }}
                           className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer text-xs disabled:opacity-50"
                         >
-                          <option value="" disabled>Nhóm...</option>
+                          <option value="" disabled>
+                            Nhóm...
+                          </option>
                           {groups.map((g) => (
-                            <option key={g} value={g}>{g}</option>
+                            <option key={g} value={g}>
+                              {g}
+                            </option>
                           ))}
                         </select>
                       </div>
@@ -799,11 +875,18 @@ export const App: React.FC = () => {
                         variant="outline"
                         size="sm"
                         disabled={isProcessing}
-                        onClick={() => handleExportJson(profiles.filter((p) => selectedProfileIds.has(p.id)))}
+                        onClick={() =>
+                          handleExportJson(
+                            profiles.filter((p) =>
+                              selectedProfileIds.has(p.id),
+                            ),
+                          )
+                        }
                         title="Xuất file JSON an toàn các kênh đang chọn"
                         className="h-8 text-xs border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80 px-2.5 disabled:opacity-50"
                       >
-                        <FileJson className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Xuất Đã Chọn ({selectedProfileIds.size})
+                        <FileJson className="h-3.5 w-3.5 mr-1 text-emerald-600" />{" "}
+                        Xuất Đã Chọn ({selectedProfileIds.size})
                       </Button>
 
                       {/* Xóa hàng loạt */}
@@ -820,7 +903,7 @@ export const App: React.FC = () => {
                         ) : (
                           <Trash2 className="h-3.5 w-3.5 mr-1 text-rose-600" />
                         )}
-                        {isProcessing ? 'Đang xóa...' : 'Xóa'}
+                        {isProcessing ? "Đang xóa..." : "Xóa"}
                       </Button>
 
                       <div className="h-4 w-[1px] bg-slate-200 mx-1" />
@@ -830,17 +913,25 @@ export const App: React.FC = () => {
                         className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200/90 px-2 py-1 rounded-lg"
                         title="Số video tối đa upload mỗi kênh trong đợt chạy này. Nhập 0 nếu muốn upload toàn bộ video có trong folder."
                       >
-                        <span className="font-medium text-[11px] text-slate-500">Tối đa:</span>
+                        <span className="font-medium text-[11px] text-slate-500">
+                          Tối đa:
+                        </span>
                         <input
                           type="number"
                           min={0}
                           max={999}
                           value={batchMaxVideos}
                           disabled={isProcessing}
-                          onChange={(e) => setBatchMaxVideos(Math.max(0, parseInt(e.target.value) || 0))}
+                          onChange={(e) =>
+                            setBatchMaxVideos(
+                              Math.max(0, parseInt(e.target.value) || 0),
+                            )
+                          }
                           className="w-10 h-6 text-center text-xs font-bold text-sky-700 bg-white border border-slate-200 rounded focus:outline-none focus:border-sky-500 disabled:opacity-50"
                         />
-                        <span className="text-[11px] text-slate-400">vid/kênh</span>
+                        <span className="text-[11px] text-slate-400">
+                          vid/kênh
+                        </span>
                       </div>
 
                       <button
@@ -873,24 +964,36 @@ export const App: React.FC = () => {
                         className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200/90 px-2 py-1 rounded-lg"
                         title="Số video tối đa upload mỗi kênh trong đợt chạy này. Nhập 0 nếu muốn upload toàn bộ video có trong folder."
                       >
-                        <span className="font-medium text-[11px] text-slate-500">Tối đa:</span>
+                        <span className="font-medium text-[11px] text-slate-500">
+                          Tối đa:
+                        </span>
                         <input
                           type="number"
                           min={0}
                           max={999}
                           value={batchMaxVideos}
                           disabled={isProcessing}
-                          onChange={(e) => setBatchMaxVideos(Math.max(0, parseInt(e.target.value) || 0))}
+                          onChange={(e) =>
+                            setBatchMaxVideos(
+                              Math.max(0, parseInt(e.target.value) || 0),
+                            )
+                          }
                           className="w-10 h-6 text-center text-xs font-bold text-sky-700 bg-white border border-slate-200 rounded focus:outline-none focus:border-sky-500 disabled:opacity-50"
                         />
-                        <span className="text-[11px] text-slate-400">vid/kênh</span>
+                        <span className="text-[11px] text-slate-400">
+                          vid/kênh
+                        </span>
                       </div>
 
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={handleRunBatch}
-                        disabled={filteredProfiles.length === 0 || runningCount > 0 || isProcessing}
+                        disabled={
+                          filteredProfiles.length === 0 ||
+                          runningCount > 0 ||
+                          isProcessing
+                        }
                         className="h-8 text-xs border-sky-300 text-sky-700 hover:bg-sky-50 font-medium disabled:opacity-50"
                       >
                         {isProcessing ? (
@@ -898,7 +1001,10 @@ export const App: React.FC = () => {
                         ) : (
                           <Play className="h-3.5 w-3.5 mr-1 fill-current text-sky-500" />
                         )}
-                        Chạy Toàn Bộ {selectedGroup === 'all' ? 'Tất Cả Kênh' : `Nhóm [${selectedGroup}]`}
+                        Chạy Toàn Bộ{" "}
+                        {selectedGroup === "all"
+                          ? "Tất Cả Kênh"
+                          : `Nhóm [${selectedGroup}]`}
                       </Button>
                     </>
                   )}
@@ -912,9 +1018,12 @@ export const App: React.FC = () => {
                 <div className="h-16 w-16 rounded-2xl bg-sky-50 flex items-center justify-center border border-sky-100 mb-4 shadow-inner">
                   <Sparkles className="h-8 w-8 text-sky-500" />
                 </div>
-                <h3 className="text-base font-bold text-slate-800">Chưa có Profile TikTok nào</h3>
+                <h3 className="text-base font-bold text-slate-800">
+                  Chưa có Profile TikTok nào
+                </h3>
                 <p className="text-xs text-slate-500 max-w-md mt-1 mb-5">
-                  Bắt đầu ngay bằng cách nhập danh sách profiles từ file JSON hoặc tạo từng profile.
+                  Bắt đầu ngay bằng cách nhập danh sách profiles từ file JSON
+                  hoặc tạo từng profile.
                 </p>
                 <div className="flex gap-3">
                   <Button
@@ -923,7 +1032,8 @@ export const App: React.FC = () => {
                     onClick={() => setIsBulkImportOpen(true)}
                     className="border-sky-300 bg-sky-50/60 hover:bg-sky-100 text-sky-700 text-xs font-semibold"
                   >
-                    <FileJson className="h-3.5 w-3.5 mr-1" /> Nhập Profiles (JSON)
+                    <FileJson className="h-3.5 w-3.5 mr-1" /> Nhập Profiles
+                    (JSON)
                   </Button>
                   <Button
                     variant="default"
@@ -940,7 +1050,8 @@ export const App: React.FC = () => {
               </div>
             ) : filteredProfiles.length === 0 ? (
               <div className="py-16 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">
-                Không tìm thấy profile nào phù hợp với bộ lọc hoặc từ khóa tìm kiếm.
+                Không tìm thấy profile nào phù hợp với bộ lọc hoặc từ khóa tìm
+                kiếm.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
@@ -949,7 +1060,9 @@ export const App: React.FC = () => {
                     key={profile.id}
                     profile={profile}
                     isSelected={selectedProfileIds.has(profile.id)}
-                    onToggleSelect={(selected) => handleToggleSelect(profile.id, selected)}
+                    onToggleSelect={(selected) =>
+                      handleToggleSelect(profile.id, selected)
+                    }
                     onEdit={() => {
                       setEditingProfile(profile);
                       setIsModalOpen(true);
@@ -971,7 +1084,7 @@ export const App: React.FC = () => {
         )}
 
         {/* TAB 2: TIẾN TRÌNH (QUEUE) */}
-        {activeTab === 'queue' && (
+        {activeTab === "queue" && (
           <QueueScreen
             queueStats={queueStats}
             profiles={profiles}
@@ -979,12 +1092,12 @@ export const App: React.FC = () => {
             concurrency={concurrency}
             onUpdateConcurrency={handleUpdateConcurrency}
             onClearLiveLogs={() => setLiveLogs([])}
-            onNavigateToProfiles={() => setActiveTab('profiles')}
+            onNavigateToProfiles={() => setActiveTab("profiles")}
           />
         )}
 
         {/* TAB 3: NHẬT KÝ (LOGS) */}
-        {activeTab === 'logs' && (
+        {activeTab === "logs" && (
           <LogsScreen
             liveLogs={liveLogs}
             onClearLiveLogs={() => setLiveLogs([])}
@@ -992,7 +1105,7 @@ export const App: React.FC = () => {
         )}
 
         {/* TAB 4: CÀI ĐẶT (SETTINGS) */}
-        {activeTab === 'settings' && (
+        {activeTab === "settings" && (
           <SettingsScreen
             concurrency={concurrency}
             onUpdateConcurrency={handleUpdateConcurrency}
@@ -1045,14 +1158,14 @@ export const App: React.FC = () => {
           if (info?.updatedGroups && Array.isArray(info.updatedGroups)) {
             setDbGroups(
               info.updatedGroups
-                .map((g: any) => (typeof g === 'string' ? g : g?.name))
-                .filter(Boolean)
+                .map((g: any) => (typeof g === "string" ? g : g?.name))
+                .filter(Boolean),
             );
           } else {
             loadGroupsList();
           }
           if (info?.renamedFrom && selectedGroup === info.renamedFrom) {
-            setSelectedGroup(info.renamedTo || 'all');
+            setSelectedGroup(info.renamedTo || "all");
           }
         }}
       />
@@ -1088,7 +1201,9 @@ export const App: React.FC = () => {
         totalCount={cooldownBatchData.totalCount}
         onConfirmRunAll={handleConfirmRunAllFromCooldown}
         onConfirmRunSafeOnly={handleConfirmRunSafeOnlyFromCooldown}
-        onClose={() => setCooldownBatchData((prev) => ({ ...prev, isOpen: false }))}
+        onClose={() =>
+          setCooldownBatchData((prev) => ({ ...prev, isOpen: false }))
+        }
       />
 
       {/* Cooldown 24h Guide Modal */}
@@ -1101,7 +1216,9 @@ export const App: React.FC = () => {
       {isProcessing && (
         <div className="fixed bottom-5 right-5 z-50 bg-slate-900/90 text-white px-4 py-2.5 rounded-xl shadow-2xl border border-slate-700/80 backdrop-blur-md flex items-center gap-2.5 text-xs animate-in fade-in slide-in-from-bottom-2">
           <Loader2 className="h-4 w-4 text-sky-400 animate-spin shrink-0" />
-          <span className="font-semibold text-slate-100">{processingMessage || 'Đang xử lý dữ liệu...'}</span>
+          <span className="font-semibold text-slate-100">
+            {processingMessage || "Đang xử lý dữ liệu..."}
+          </span>
         </div>
       )}
     </div>
