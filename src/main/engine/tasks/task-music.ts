@@ -47,7 +47,14 @@ export async function attachFavoriteMusic(
         throw new Error("Không tìm thấy nút Sounds Editor sau khi nạp video.");
       }
 
-      await soundsBtn.click({ force: true });
+      await soundsBtn.scrollIntoViewIfNeeded().catch(() => {});
+      try {
+        await soundsBtn.click({ force: true, timeout: 5000 });
+      } catch (_) {
+        await soundsBtn
+          .evaluate((el: HTMLElement) => el.click())
+          .catch(() => {});
+      }
       log("Đã nhấn nút mở Sounds Editor. Đang tải trình biên tập âm thanh...");
       await page.waitForTimeout(3000);
 
@@ -60,7 +67,14 @@ export async function attachFavoriteMusic(
       if (
         await phoneModeGotIt.isVisible({ timeout: 3500 }).catch(() => false)
       ) {
-        await phoneModeGotIt.click({ force: true }).catch(() => {});
+        await phoneModeGotIt.scrollIntoViewIfNeeded().catch(() => {});
+        try {
+          await phoneModeGotIt.click({ force: true, timeout: 3000 });
+        } catch (_) {
+          await phoneModeGotIt
+            .evaluate((el: HTMLElement) => el.click())
+            .catch(() => {});
+        }
         log("Đã tắt hướng dẫn Phone mode.");
         await page.waitForTimeout(1000);
       }
@@ -76,7 +90,12 @@ export async function attachFavoriteMusic(
         .first();
 
       await favTab.waitFor({ state: "visible", timeout: 10000 });
-      await favTab.click({ force: true });
+      await favTab.scrollIntoViewIfNeeded().catch(() => {});
+      try {
+        await favTab.click({ force: true, timeout: 5000 });
+      } catch (_) {
+        await favTab.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+      }
       await page.waitForTimeout(2500);
 
       // 3. Quét danh sách các nút thêm nhạc "+" trong tab Favorites
@@ -140,7 +159,17 @@ export async function attachFavoriteMusic(
         const count = await volumeInputs.count();
         if (count > 0) {
           const volInput = volumeInputs.first();
-          await volInput.click({ clickCount: 3 });
+          await volInput.scrollIntoViewIfNeeded().catch(() => {});
+          try {
+            await volInput.click({ clickCount: 3, timeout: 3000 });
+          } catch (_) {
+            await volInput
+              .evaluate((el: HTMLInputElement) => {
+                el.focus();
+                el.select();
+              })
+              .catch(() => {});
+          }
           const selectAll =
             process.platform === "darwin" ? "Meta+A" : "Control+A";
           await page.keyboard.press(selectAll);

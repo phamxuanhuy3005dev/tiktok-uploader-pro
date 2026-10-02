@@ -2,86 +2,18 @@ import { Page } from "playwright";
 import { handleCaptchaWait, isCaptchaActive } from "./task-captcha";
 
 /**
- * Đăng ký bộ xử lý tự động ngầm của Playwright (page.addLocatorHandler)
- * Chạy nền liên tục để tự động bấm nút đóng popup/modal ngay khi chúng xuất hiện
- * mà không cần phải chờ hoặc gọi hàm thủ công.
+ * Đăng ký bộ xử lý tự động ngầm (giữ tương thích ngược)
  */
 export function registerAutoDismissHandlers(
-  page: Page,
-  log?: (msg: string) => void,
+  _page: Page,
+  _log?: (msg: string) => void,
 ): void {
-  try {
-    if (typeof page.addLocatorHandler !== "function") return;
-
-    // 1. Tự động đóng popup "Are you sure you want to exit?" -> Click Cancel
-    page.addLocatorHandler(
-      page
-        .locator(
-          'div:has-text("Are you sure you want to exit") button:has-text("Cancel"), [class*="Modal"]:has-text("exit") button:has-text("Cancel"), div[role="dialog"]:has-text("exit") button:has-text("Cancel")',
-        )
-        .first(),
-      async (cancelBtn) => {
-        if (log)
-          log(
-            "[Playwright AutoDismiss] Tự động bấm Cancel để ở lại màn hình upload.",
-          );
-        await cancelBtn.click({ force: true }).catch(() => {});
-      },
-    );
-
-    // 2. Tự động đóng "Turn on automatic content checks" -> Click Cancel
-    page.addLocatorHandler(
-      page
-        .locator(
-          'div[role="dialog"]:has-text("content checks") button:has-text("Cancel"), div:has-text("automatic content checks") button:has-text("Cancel")',
-        )
-        .first(),
-      async (cancelBtn) => {
-        if (log)
-          log(
-            "[Playwright AutoDismiss] Tự động bấm Cancel popup content checks.",
-          );
-        await cancelBtn.click({ force: true }).catch(() => {});
-      },
-    );
-
-    // 3. Tự động đóng Joyride tutorial và Phone mode -> Click Got it
-    page.addLocatorHandler(
-      page
-        .locator(
-          'div:has-text("Phone mode") button:has-text("Got it"), .react-joyride__tooltip button:has-text("Got it"), [class*="tutorial-tooltip"] button:has-text("Got it")',
-        )
-        .first(),
-      async (gotItBtn) => {
-        if (log)
-          log("[Playwright AutoDismiss] Tự động đóng tooltip hướng dẫn.");
-        await gotItBtn.click({ force: true }).catch(() => {});
-      },
-    );
-
-    // 4. Tự động bấm "Allow" trên popup "Allow your video to be saved for scheduled posting?"
-    page.addLocatorHandler(
-      page
-        .locator(
-          'div:has-text("scheduled posting") button:has-text("Allow"), div[role="dialog"]:has-text("scheduled posting") button:has-text("Allow")',
-        )
-        .first(),
-      async (allowBtn) => {
-        if (log)
-          log(
-            '[Playwright AutoDismiss] Tự động bấm "Allow" trên popup cho phép lưu video lên lịch.',
-          );
-        await allowBtn.click({ force: true }).catch(() => {});
-      },
-    );
-  } catch (err: any) {
-    if (log) log(`Không thể đăng ký addLocatorHandler: ${err.message}`);
-  }
+  // Không dùng addLocatorHandler ngầm để tránh trigger gián đoạn và spam log
 }
 
 /**
  * Xử lý tự động đóng tất cả các loại popup/modal/hướng dẫn của TikTok Studio
- * Tuyệt đối không bấm nhầm vào Captcha hoặc nút Discard/Exit làm hỏng video.
+ * Theo cơ chế modal-scoped chuẩn từ upload_tiktok
  */
 export async function dismissPopups(
   page: Page,
@@ -94,89 +26,160 @@ export async function dismissPopups(
     return false;
   }
 
+  const modalSelectors = [
+    'div[role="dialog"]',
+    "div.TUXModal:not(.TUXModal-overlay)",
+    'div[class*="common-modal"]:not([class*="overlay"])',
+    'div[class*="modal"]:not([class*="overlay"])',
+    'div[class*="Modal"]:not([class*="overlay"])',
+    ".react-joyride__tooltip",
+    '[class*="tutorial-tooltip"]',
+    'div[class*="portal"]',
+    'div[class*="dialog"]',
+  ];
+
   let dismissedAny = false;
 
-  try {
-    // 1. Popup "Turn on automatic content checks" -> Luôn chọn Cancel
-    const contentCheckCancel = page
-      .locator(
-        'div[role="dialog"]:has-text("content checks") button:has-text("Cancel"), div:has-text("automatic content checks") button:has-text("Cancel"), div.TUXModal button:has-text("Cancel")',
-      )
-      .first();
+  for (const modalSel of modalSelectors) {
+    try {
+      const modals = await page.$$(modalSel);
+      for (const modal of modals) {
+        try {
+          if (!(await modal.isVisible())) continue;
+          const text = (await modal.innerText().catch(() => "")) || "";
+          if (!text.trim()) continue;
 
-    if (
-      await contentCheckCancel.isVisible({ timeout: 400 }).catch(() => false)
-    ) {
-      await contentCheckCancel.click({ force: true }).catch(() => {});
-      if (log)
-        log('Đã đóng popup: "Turn on automatic content checks" -> Cancel');
-      dismissedAny = true;
-      await page.waitForTimeout(400);
-    }
-
-    // 2. Tutorial Tooltips / Joyride modals (Phone mode, features added, etc.)
-    const tutorialButtons = [
-      'div:has-text("Phone mode") button:has-text("Got it")',
-      '.react-joyride__tooltip button:has-text("Got it")',
-      '.react-joyride__tooltip button:has-text("Next")',
-      '.react-joyride__tooltip button[aria-label="Close"]',
-      '[class*="tutorial-tooltip"] button:has-text("Got it")',
-      '[class*="tutorial-tooltip"] button:has-text("Next")',
-      '[class*="tutorial-tooltip"] button:has-text("Skip")',
-      '[class*="editor-guide"] button:has-text("Got it")',
-      '[class*="joyride"] button:has-text("Got it")',
-      'button:has-text("Got it")',
-      'button:has-text("Not now")',
-      'button:has-text("Skip")',
-      'button:has-text("Allow")',
-    ];
-
-    for (const sel of tutorialButtons) {
-      const btn = page.locator(sel).first();
-      if (await btn.isVisible({ timeout: 250 }).catch(() => false)) {
-        await btn.click({ force: true }).catch(() => {});
-        dismissedAny = true;
-        await page.waitForTimeout(300);
-      }
-    }
-
-    // 3. Popup xác nhận Exit ("Are you sure you want to exit?") -> Luôn chọn Cancel để tiếp tục ở lại trang
-    const exitCancelBtn = page
-      .locator(
-        'div:has-text("Are you sure you want to exit") button:has-text("Cancel"), [class*="Modal"]:has-text("exit") button:has-text("Cancel"), div[role="dialog"]:has-text("exit") button:has-text("Cancel")',
-      )
-      .first();
-    if (await exitCancelBtn.isVisible({ timeout: 250 }).catch(() => false)) {
-      if (log)
-        log(
-          'Đã tự động bấm "Cancel" trên popup "Are you sure you want to exit?" để ở lại trang đăng.',
-        );
-      await exitCancelBtn.click({ force: true }).catch(() => {});
-      dismissedAny = true;
-      await page.waitForTimeout(300);
-    }
-
-    // 5. Dọn dẹp overlay mờ nếu bị kẹt sau khi modal đã đóng (tránh chặn click)
-    await page
-      .evaluate(() => {
-        const overlays = document.querySelectorAll(".TUXModal-overlay");
-        overlays.forEach((o) => {
-          const text = (o as HTMLElement).innerText || "";
-          // Chỉ gỡ nếu không chứa Captcha/Verification và không còn dialog con
+          // 1. Popup "Turn on automatic content checks" -> Cancel
           if (
-            !text.includes("Captcha") &&
-            !text.includes("verify") &&
-            !text.includes("xác minh") &&
-            !o.querySelector('div[role="dialog"]')
+            text.includes("automatic content checks") ||
+            text.includes("content checks") ||
+            text.includes("Turn on automatic")
           ) {
-            try {
-              o.remove();
-            } catch (_) {}
+            const cancelBtn = await modal.$('button:has-text("Cancel")');
+            if (cancelBtn && (await cancelBtn.isVisible())) {
+              await cancelBtn.scrollIntoViewIfNeeded().catch(() => {});
+              try {
+                await cancelBtn.click({ timeout: 3000 });
+              } catch (_) {
+                await cancelBtn
+                  .evaluate((el: HTMLElement) => el.click())
+                  .catch(() => {});
+              }
+              if (log)
+                log(
+                  '[dismissPopups] Đã đóng popup: "Turn on automatic content checks" -> Cancel',
+                );
+              dismissedAny = true;
+              return true;
+            }
           }
-        });
-      })
-      .catch(() => {});
-  } catch (_) {}
+
+          // 2. Popup "Are you sure you want to exit / leave?" -> Cancel / Stay
+          if (
+            text.includes("Are you sure you want to exit") ||
+            text.includes("want to leave") ||
+            text.includes("Leave page")
+          ) {
+            const cancelBtn = await modal.$(
+              'button:has-text("Cancel"), button:has-text("Stay"), button:has-text("No")',
+            );
+            if (cancelBtn && (await cancelBtn.isVisible())) {
+              await cancelBtn.scrollIntoViewIfNeeded().catch(() => {});
+              try {
+                await cancelBtn.click({ timeout: 3000 });
+              } catch (_) {
+                await cancelBtn
+                  .evaluate((el: HTMLElement) => el.click())
+                  .catch(() => {});
+              }
+              if (log)
+                log(
+                  '[dismissPopups] Đã bấm "Cancel" trên popup "Are you sure you want to exit?"',
+                );
+              dismissedAny = true;
+              return true;
+            }
+          }
+
+          // 3. Popup "Allow your video to be saved for scheduled posting?" -> Allow
+          if (
+            text.includes("scheduled posting") ||
+            text.includes("saved for scheduled")
+          ) {
+            const allowBtn = await modal.$(
+              'button:has-text("Allow"), button:has-text("Cho phép")',
+            );
+            if (allowBtn && (await allowBtn.isVisible())) {
+              await allowBtn.scrollIntoViewIfNeeded().catch(() => {});
+              try {
+                await allowBtn.click({ timeout: 3000 });
+              } catch (_) {
+                await allowBtn
+                  .evaluate((el: HTMLElement) => el.click())
+                  .catch(() => {});
+              }
+              if (log)
+                log(
+                  '[dismissPopups] Đã bấm "Allow" trên popup cho phép lưu video lên lịch.',
+                );
+              dismissedAny = true;
+              return true;
+            }
+          }
+
+          // 4. Các popup generic: Got it, Allow, Skip, OK, Close, Not now, Next
+          const genericBtnSelectors = [
+            'button:has-text("Got it")',
+            'button:has-text("Allow")',
+            'button:has-text("Skip")',
+            'button:has-text("OK")',
+            'button:has-text("Okay")',
+            'button:has-text("Close")',
+            'button:has-text("Not now")',
+            'button:has-text("Next")',
+          ];
+
+          for (const btnSel of genericBtnSelectors) {
+            const btn = await modal.$(btnSel);
+            if (btn && (await btn.isVisible())) {
+              await btn.scrollIntoViewIfNeeded().catch(() => {});
+              try {
+                await btn.click({ timeout: 3000 });
+              } catch (_) {
+                await btn
+                  .evaluate((el: HTMLElement) => el.click())
+                  .catch(() => {});
+              }
+              if (log)
+                log(`[dismissPopups] Đã đóng popup hướng dẫn -> ${btnSel}`);
+              dismissedAny = true;
+              return true;
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  // Dọn dẹp overlay mờ nếu bị kẹt sau khi modal đã đóng (tránh chặn click)
+  await page
+    .evaluate(() => {
+      const overlays = document.querySelectorAll(".TUXModal-overlay");
+      overlays.forEach((o) => {
+        const text = (o as HTMLElement).innerText || "";
+        if (
+          !text.includes("Captcha") &&
+          !text.includes("verify") &&
+          !text.includes("xác minh") &&
+          !o.querySelector('div[role="dialog"]')
+        ) {
+          try {
+            o.remove();
+          } catch (_) {}
+        }
+      });
+    })
+    .catch(() => {});
 
   return dismissedAny;
 }

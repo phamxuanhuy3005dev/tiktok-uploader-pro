@@ -7,8 +7,8 @@ import { processCaption, submitAndConfirmPost } from "./tasks/task-finalize";
 import { attachFavoriteMusic } from "./tasks/task-music";
 import {
   attachVideoFile,
+  dismissPopups,
   navigateToUpload,
-  registerAutoDismissHandlers,
 } from "./tasks/task-navigate";
 import { applySchedule } from "./tasks/task-schedule";
 
@@ -99,7 +99,7 @@ export async function runUploadPipeline(
     false,
   );
   let page = initialPage;
-  registerAutoDismissHandlers(page, (m) => log(m));
+  await dismissPopups(page, (m) => log(m));
 
   try {
     // BƯỚC 0: Kiểm tra bài đăng hiện tại & phát hiện mốc thời gian đã lên lịch trước đó
@@ -231,7 +231,7 @@ export async function runUploadPipeline(
         if (page.isClosed()) {
           try {
             page = await context.newPage();
-            registerAutoDismissHandlers(page, (m) => log(m));
+            await dismissPopups(page, (m) => log(m));
           } catch {
             log("Không thể mở lại tab mới, dừng profile này.", "warn");
             break;

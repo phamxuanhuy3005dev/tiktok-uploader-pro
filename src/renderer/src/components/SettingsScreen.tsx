@@ -154,7 +154,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-800">
-                Xử Lý Video Sau Khi Đăng Thành Công (Mặc Định Toàn App)
+                Xử Lý Video Sau Khi Đăng Thành Công
               </h3>
               <p className="mt-0.5 text-xs text-slate-500">
                 Lựa chọn hành động tự động sau khi video được tải lên TikTok

@@ -4,7 +4,6 @@ import {
   Copy,
   Folder,
   Globe,
-  HardDrive,
   KeyRound,
   Mail,
   Music,
@@ -71,9 +70,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [proxy, setProxy] = useState("");
   const [cookies, setCookies] = useState("");
   const [maxVideos, setMaxVideos] = useState<number | string>(50);
-  const [cleanupMode, setCleanupMode] = useState<"default" | "delete" | "done">(
-    "default",
-  );
   const [allowEditSecurity, setAllowEditSecurity] = useState(!initialData);
   const [loading, setLoading] = useState(false);
   const [isTestingProxy, setIsTestingProxy] = useState(false);
@@ -163,7 +159,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setScheduleInterval(initialData.schedule_interval ?? 10);
       setGoldenHours(initialData.golden_hours || "11:30,17:30,20:00");
       setProxy(initialData.proxy || "");
-      setCleanupMode(initialData.cleanup_mode || "default");
       setAllowEditSecurity(false);
     } else {
       setName("");
@@ -186,7 +181,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setScheduleInterval(10);
       setGoldenHours("11:30,17:30,20:00");
       setProxy("");
-      setCleanupMode("default");
       setAllowEditSecurity(true);
     }
   }, [initialData, isOpen]);
@@ -225,7 +219,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         schedule_interval: Number(scheduleInterval) || 10,
         golden_hours: goldenHours.trim(),
         caption_mode: "remove_title",
-        cleanup_mode: cleanupMode,
         proxy: proxy.trim() || null,
         status: initialData?.status || "idle",
         last_run: initialData?.last_run || null,
@@ -699,41 +692,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <p className="mt-1 text-[11px] text-slate-400">
               Mặc định 50. Nhập 0 để upload hết.
             </p>
-          </div>
-        </div>
-
-        {/* Tùy chọn xử lý sau khi đăng (Cleanup Mode) */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-700">
-                <HardDrive className="h-3.5 w-3.5 text-slate-500" /> Xử lý video
-                sau khi đăng
-              </label>
-              <p className="text-[11px] text-slate-500">
-                Tự động xóa để giải phóng dung lượng ổ cứng hoặc lưu trữ lại vào
-                thư mục done/
-              </p>
-            </div>
-            <div className="w-full shrink-0 sm:w-60">
-              <Select
-                value={cleanupMode}
-                onValueChange={(val: any) => setCleanupMode(val)}
-              >
-                <SelectTrigger className="h-8 bg-white text-xs">
-                  <SelectValue placeholder="Chọn hành động" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">
-                    Theo cài đặt chung hệ thống
-                  </SelectItem>
-                  <SelectItem value="delete">🗑️ Xóa video gốc ngay</SelectItem>
-                  <SelectItem value="done">
-                    📁 Chuyển vào thư mục done/
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
         </div>
 

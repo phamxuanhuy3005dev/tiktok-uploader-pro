@@ -100,7 +100,11 @@ async function selectTimeInPicker(
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     // 1. Mở popup timepicker bằng cách click vào timeInput
-    await timeInput.click().catch(() => {});
+    try {
+      await timeInput.click({ force: true, timeout: 3000 });
+    } catch (_) {
+      await timeInput.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+    }
     await page.waitForTimeout(350);
 
     // 2. Tìm và click đúng span của Giờ (.tiktok-timepicker-left) và Phút (.tiktok-timepicker-right)
@@ -155,7 +159,13 @@ async function selectTimeInPicker(
       .catch(() => false);
 
     if (isOpen) {
-      await timeInput.click().catch(() => {});
+      try {
+        await timeInput.click({ force: true, timeout: 2000 });
+      } catch (_) {
+        await timeInput
+          .evaluate((el: HTMLElement) => el.click())
+          .catch(() => {});
+      }
       await page.waitForTimeout(200);
     }
 
@@ -209,7 +219,11 @@ async function selectDateInPicker(
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     // 1. Mở popup calendar
-    await dateInput.click().catch(() => {});
+    try {
+      await dateInput.click({ force: true, timeout: 3000 });
+    } catch (_) {
+      await dateInput.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+    }
     await page.waitForTimeout(400);
 
     // 2. Chọn ngày hợp lệ (.day.valid) trong .calendar-wrapper
@@ -325,7 +339,16 @@ export async function applySchedule(
     log(
       "Cảnh báo: Chưa kiểm tra được radio Schedule đã chọn, thử click trực tiếp radio...",
     );
-    await scheduleRadioInput.check({ force: true }).catch(() => {});
+    await scheduleRadioInput.scrollIntoViewIfNeeded().catch(() => {});
+    await scheduleRadioInput.check({ force: true }).catch(async () => {
+      try {
+        await scheduleRadioInput.click({ force: true, timeout: 3000 });
+      } catch (_) {
+        await scheduleRadioInput
+          .evaluate((el: HTMLElement) => el.click())
+          .catch(() => {});
+      }
+    });
     await page.waitForTimeout(500);
     await checkAndAllowSchedule();
   }

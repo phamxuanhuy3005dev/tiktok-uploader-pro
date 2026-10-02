@@ -160,11 +160,9 @@ export async function submitAndConfirmPost(
     ? `https://www.tiktok.com/@${profile.name}/video/${capturedVideoId}`
     : null;
 
-  // Quyết định hành động dọn dẹp file: Xóa luôn (mặc định) hoặc Di chuyển vào done/
+  // Quyết định hành động dọn dẹp file: Xóa luôn (mặc định) hoặc Di chuyển vào done/ theo cài đặt chung trong Settings
   try {
-    const globalMode = configRepo.get("cleanup_mode", "delete");
-    const profileMode = profile.cleanup_mode || "default";
-    const effectiveMode = profileMode === "default" ? globalMode : profileMode;
+    const effectiveMode = configRepo.get("cleanup_mode", "delete");
     const fileName = path.basename(videoPath);
     const ext = path.extname(videoPath);
     const txtPath = videoPath.slice(0, -ext.length) + ".txt";
