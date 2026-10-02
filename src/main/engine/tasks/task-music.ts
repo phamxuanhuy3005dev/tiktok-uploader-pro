@@ -81,45 +81,91 @@ export async function attachFavoriteMusic(
 
       await dismissPopups(page, log);
 
-      // 2. Chuyển sang Tab "Favorites" (Yêu thích)
+      // 2. Chuyển sang Tab "Favorites" (Yêu thích) và đảm bảo tab đã ACTIVE
       log('Đang mở tab "Favorites"...');
-      const favTab = page
-        .locator(
-          '[role="tab"]:has-text("Favorites"), button:has-text("Favorites"), [role="tab"]:has-text("Yêu thích"), button:has-text("Yêu thích")',
-        )
-        .first();
+      const favTabSelector =
+        'button[role="tab"][aria-controls="panel-favorites"], button[role="tab"]:has-text("Favorites"), button[role="tab"]:has-text("Yêu thích")';
+      const favTab = page.locator(favTabSelector).first();
 
       await favTab.waitFor({ state: "visible", timeout: 15000 });
       await favTab.scrollIntoViewIfNeeded().catch(() => {});
-      try {
-        await favTab.click({ force: true, timeout: 5000 });
-      } catch (_) {
-        await favTab.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+
+      // Kiểm tra và click cho đến khi tab Favorites thực sự ACTIVE (data-state="active" hoặc aria-selected="true")
+      let isFavTabActive = false;
+      for (let t = 0; t < 10; t++) {
+        const state = await favTab.getAttribute("data-state").catch(() => null);
+        const ariaSelected = await favTab
+          .getAttribute("aria-selected")
+          .catch(() => null);
+        if (state === "active" || ariaSelected === "true") {
+          isFavTabActive = true;
+          break;
+        }
+        try {
+          await favTab.click({ force: true, timeout: 3000 });
+        } catch (_) {
+          await favTab
+            .evaluate((el: HTMLElement) => el.click())
+            .catch(() => {});
+        }
+        await page.waitForTimeout(600);
       }
-      await page.waitForTimeout(2500);
 
-      // 3. Quét danh sách các nút thêm nhạc "+" trong tab Favorites
-      // Nút "+" chính xác là button bên trong .MusicPanelMusicItem__operation chứa icon PlusBold
-      const plusButtonSelectors = [
-        ".MusicPanelMusicItem__operation button",
-        '[role="listitem"] button:has([data-icon="PlusBold"])',
-        'button:has([data-icon="plus-bold"])',
-        '.Button__root--shape-rounded[data-shape="rounded"]',
-      ].join(", ");
+      if (!isFavTabActive) {
+        throw new Error(
+          "Không thể chuyển sang tab Favorites (tab chưa kích hoạt).",
+        );
+      }
+      log('Đã kích hoạt tab "Favorites" thành công (active).');
+      await page.waitForTimeout(1000);
 
-      const plusButtons = page.locator(plusButtonSelectors);
-      const totalFavs = await plusButtons.count();
+      // 3. Định vị PANEL Favorites (#panel-favorites) - CHỈ QUÉT BÊN TRONG PANEL NÀY
+      // Tuyệt đối không quét toàn trang để tránh lấy nhầm bài ở tab "For You"
+      const favPanel = page
+        .locator(
+          '#panel-favorites, [role="tabpanel"][id="panel-favorites"], [role="tabpanel"][data-state="active"]',
+        )
+        .first();
+      await favPanel.waitFor({ state: "visible", timeout: 10000 });
+
+      log("Đang quét danh sách bài hát bên trong mục Favorites...");
+      const favItemSelector =
+        ".MusicPanelMusicItem__wrap, .MusicPanelMusicItem__container";
+      const plusButtonInPanelSelector =
+        ".MusicPanelMusicItem__operation button, button.Button__root--type-primary";
+
+      let favItems = favPanel.locator(favItemSelector);
+      let totalFavs = 0;
+
+      for (let waitSec = 0; waitSec < 15; waitSec++) {
+        totalFavs = await favItems.count().catch(() => 0);
+        if (totalFavs > 0) break;
+
+        // Nếu sau 3s hoặc 7s chưa thấy item tải về, nhấp lại tab Favorites để kích hoạt fetch
+        if (waitSec === 3 || waitSec === 7) {
+          log("Đang kích hoạt lại tab Favorites để nạp danh sách bài hát...");
+          await favTab.click({ force: true }).catch(() => {});
+        }
+
+        await page.waitForTimeout(1000);
+      }
 
       log(`Tìm thấy ${totalFavs} bài hát trong mục Favorites của kênh.`);
 
-      // QUY TẮC QUAN TRỌNG: Nếu Favorites rỗng -> HỦY UPLOAD NGAY LẬP TỨC để tránh mất tiền view MMO
+      // Nếu vẫn không có bài hát nào trong mục Favorites
       if (totalFavs === 0) {
-        throw new Error(
-          "MỤC FAVORITES RỖNG: Kênh chưa lưu bài hát nào vào mục Yêu thích! Dừng upload ngay để tránh mất tiền view.",
-        );
+        if (attempt === MAX_RETRY) {
+          throw new Error(
+            "MỤC FAVORITES RỖNG: Kênh chưa lưu bài hát nào vào mục Yêu thích! Dừng upload ngay để tránh mất tiền view.",
+          );
+        } else {
+          throw new Error(
+            `Chưa tìm thấy bài hát Favorites sau 15s chờ ở lần thử ${attempt}. Sẽ thử lại...`,
+          );
+        }
       }
 
-      // Xác định bài hát cần chọn theo chế độ cấu hình
+      // Xác định bài hát cần chọn theo cấu hình profile
       let targetIndex = 0;
       if (profile.music_mode === "favorite_rotate") {
         targetIndex = videoIndex % totalFavs;
@@ -133,8 +179,27 @@ export async function attachFavoriteMusic(
         );
       }
 
-      // Bấm nút "+" để thêm bài nhạc vào Timeline
-      const chosenButton = plusButtons.nth(targetIndex);
+      // Trích xuất thông tin bài hát được chọn để log minh bạch
+      const chosenItem = favItems.nth(targetIndex);
+      const songTitle = await chosenItem
+        .locator(".MusicPanelMusicItem__infoBasicTitle")
+        .first()
+        .innerText()
+        .catch(() => `Bài hát #${targetIndex + 1}`);
+      const songDesc = await chosenItem
+        .locator(".MusicPanelMusicItem__infoBasicDesc")
+        .first()
+        .innerText()
+        .catch(() => "");
+
+      log(
+        `Chuẩn bị thêm bài nhạc Favorites: "${songTitle}" ${songDesc ? `(${songDesc})` : ""}`,
+      );
+
+      // Bấm nút "+" của bài hát đã chọn bên trong panel Favorites
+      const chosenButton = chosenItem
+        .locator(plusButtonInPanelSelector)
+        .first();
       await chosenButton.scrollIntoViewIfNeeded().catch(() => {});
       try {
         await chosenButton.click({ force: true, timeout: 5000 });
@@ -144,7 +209,7 @@ export async function attachFavoriteMusic(
           .catch(() => {});
       }
       log(
-        `Đã thêm bài nhạc #${targetIndex + 1} vào Timeline. Đang chờ bảng thuộc tính âm thanh...`,
+        `Đã thêm bài nhạc "${songTitle}" vào Timeline. Đang chờ bảng thuộc tính âm thanh...`,
       );
       await page.waitForTimeout(3000);
 

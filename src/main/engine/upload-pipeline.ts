@@ -19,34 +19,79 @@ import { applySchedule } from "./tasks/task-schedule";
 
 export interface PipelineProgressEvent {
   profileId: string;
+  profileName: string;
   videoName: string;
+  videoIndex: number;
+  totalVideos: number;
   step: string;
+  stepText: string;
   message: string;
   type?: "info" | "warn" | "error" | "success";
+  uploadedCount: number;
+  failedCount: number;
+}
+
+export function getStepText(step: string): string {
+  switch (step) {
+    case "INIT":
+      return "Khởi tạo";
+    case "LAUNCH_BROWSER":
+      return "Mở trình duyệt";
+    case "CHECKING_CONTENT":
+      return "Kiểm tra lịch có sẵn";
+    case "NAVIGATING":
+      return "Mở trang upload";
+    case "ATTACHING_FILE":
+      return "Nạp file video";
+    case "CLEARING_CAPTION":
+      return "Xóa tiêu đề";
+    case "ATTACHING_MUSIC":
+      return "Chèn nhạc Favorites";
+    case "SCHEDULING":
+      return "Lên lịch đăng";
+    case "SUBMITTING":
+      return "Xuất bản bài viết";
+    case "FINISH":
+      return "Hoàn tất";
+    default:
+      return step;
+  }
 }
 
 export async function runUploadPipeline(
   profile: ProfileRecord,
   onProgress?: (event: PipelineProgressEvent) => void,
 ): Promise<{ uploaded: number; failed: number }> {
+  let uploadedCount = 0;
+  let failedCount = 0;
+  let currentStep = "INIT";
+  let currentVideoName = "";
+  let currentVideoIndex = 0;
+  let totalVideoCount = 0;
+
   const log = (
     message: string,
     type: "info" | "warn" | "error" | "success" = "info",
+    overrideStep?: string,
   ) => {
-    console.log(`[${profile.name}] ${message}`);
+    const activeStep = overrideStep || currentStep;
+    console.log(`[${profile.name}] [${activeStep}] ${message}`);
     if (onProgress) {
       onProgress({
         profileId: profile.id,
+        profileName: profile.name,
         videoName: currentVideoName,
-        step: currentStep,
+        videoIndex: currentVideoIndex,
+        totalVideos: totalVideoCount,
+        step: activeStep,
+        stepText: getStepText(activeStep),
         message,
         type,
+        uploadedCount,
+        failedCount,
       });
     }
   };
-
-  let currentStep = "INIT";
-  let currentVideoName = "";
 
   // 1. Kiểm tra thư mục video
   if (!profile.video_folder || !fs.existsSync(profile.video_folder)) {
@@ -86,10 +131,9 @@ export async function runUploadPipeline(
     );
   }
 
+  totalVideoCount = videoFiles.length;
   profileRepo.updateStatus(profile.id, "uploading");
 
-  let uploadedCount = 0;
-  let failedCount = 0;
   let lastScheduledDate: Date | null = null;
   let hasExistingBatch = false;
 
@@ -126,6 +170,7 @@ export async function runUploadPipeline(
     for (let i = 0; i < videoFiles.length; i++) {
       const videoFileName = videoFiles[i];
       currentVideoName = videoFileName;
+      currentVideoIndex = i + 1;
       const videoPath = path.join(profile.video_folder, videoFileName);
 
       // Nếu file đã bị di chuyển hoặc không còn tồn tại
@@ -167,19 +212,23 @@ export async function runUploadPipeline(
         try {
           // BƯỚC 1: Truy cập trang Upload
           currentStep = "NAVIGATING";
+          log("Đang mở trang upload TikTok Studio...");
           await navigateToUpload(page, profile.name, (m) => log(m));
 
           // BƯỚC 2: Đính kèm file video
           currentStep = "ATTACHING_FILE";
+          log(`Đang nạp file video: ${videoFileName}...`);
           await attachVideoFile(page, videoPath, (m) => log(m));
 
           // BƯỚC 3: Xóa sạch tiêu đề video (Nằm ở đỉnh trang UI, thực hiện trước để tránh cuộn trang lên xuống)
           currentStep = "CLEARING_CAPTION";
+          log("Đang xóa sạch tiêu đề video...");
           await processCaption(page, (m) => log(m));
 
           // BƯỚC 4: GẮN NHẠC FAVORITES (Nếu profile bật tính năng này)
           if (profile.enable_music !== 0) {
             currentStep = "ATTACHING_MUSIC";
+            log("Đang mở editor gắn nhạc Favorites...");
             await attachFavoriteMusic(page, profile, uploadedCount, (m) =>
               log(m),
             );
@@ -191,6 +240,7 @@ export async function runUploadPipeline(
 
           // BƯỚC 5: Cài đặt Lên lịch
           currentStep = "SCHEDULING";
+          log("Đang thiết lập lịch hẹn giờ đăng video...");
           lastScheduledDate = await applySchedule(
             page,
             profile,
@@ -202,6 +252,7 @@ export async function runUploadPipeline(
 
           // BƯỚC 6: Bấm đăng, bắt Video ID và lưu trữ sang done/
           currentStep = "SUBMITTING";
+          log("Đang bấm xuất bản video lên TikTok...");
           const result = await submitAndConfirmPost(
             page,
             profile,

@@ -100,6 +100,9 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE INDEX IF NOT EXISTS idx_upload_logs_created_at ON upload_logs(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_upload_logs_profile_id ON upload_logs(profile_id);
+
   CREATE TABLE IF NOT EXISTS groups (
     id TEXT PRIMARY KEY NOT NULL,
     name TEXT UNIQUE NOT NULL,
@@ -460,6 +463,22 @@ export const logRepo = {
       VALUES (@profile_id, @video_name, @video_id, @video_url, @status, @error_message)
     `,
     ).run(log);
+
+    // Tự động tỉa bớt nếu vượt quá 5,000 bản ghi lịch sử để database luôn nhẹ và sạch
+    logRepo.pruneOldLogs(5000);
+  },
+
+  pruneOldLogs: (keepLimit = 5000): void => {
+    try {
+      db.prepare(
+        `
+        DELETE FROM upload_logs 
+        WHERE id NOT IN (
+          SELECT id FROM upload_logs ORDER BY id DESC LIMIT ?
+        )
+      `,
+      ).run(keepLimit);
+    } catch (_) {}
   },
 
   getByProfile: (profileId: string, limit = 50): UploadLogRecord[] => {

@@ -17,6 +17,10 @@ import {
 import React, { useEffect, useMemo, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { AppHeader, TabType } from "./components/AppHeader";
+import {
+  BatchSummaryModal,
+  BatchVideoResult,
+} from "./components/BatchSummaryModal";
 import { BulkImportModal } from "./components/BulkImportModal";
 import {
   CooldownBatchItem,
@@ -24,6 +28,7 @@ import {
 } from "./components/CooldownBatchModal";
 import { CooldownGuideModal } from "./components/CooldownGuideModal";
 import { DistributeVideosModal } from "./components/DistributeVideosModal";
+import { FloatingProgressWidget } from "./components/FloatingProgressWidget";
 import { FollowersModal } from "./components/FollowersModal";
 import { LogsDrawer } from "./components/LogsDrawer";
 import { LogsScreen } from "./components/LogsScreen";
@@ -90,6 +95,29 @@ export const App: React.FC = () => {
   );
   const [liveLogs, setLiveLogs] = useState<any[]>([]);
   const [queueStats, setQueueStats] = useState<any>({ runningProfiles: [] });
+  const [batchTracking, setBatchTracking] = useState<{
+    isActive: boolean;
+    startTime: Date | null;
+    endTime: Date | null;
+    totalProfilesCount: number;
+    totalVideos: number;
+    processedVideos: number;
+    successVideos: number;
+    failedVideos: number;
+    results: BatchVideoResult[];
+    showSummaryModal: boolean;
+  }>({
+    isActive: false,
+    startTime: null,
+    endTime: null,
+    totalProfilesCount: 0,
+    totalVideos: 0,
+    processedVideos: 0,
+    successVideos: 0,
+    failedVideos: 0,
+    results: [],
+    showSummaryModal: false,
+  });
 
   useEffect(() => {
     loadProfiles();
@@ -98,13 +126,90 @@ export const App: React.FC = () => {
 
     // Lắng nghe sự kiện upload progress từ Main process
     const unsubscribeProgress = window.api.onUploadProgress((event) => {
-      setLiveLogs((prev) => [event, ...prev].slice(0, 100));
+      setLiveLogs((prev) => [event, ...prev].slice(0, 150));
 
       if (event.type === "error") {
-        toast.error(`[${event.step || "Lỗi"}] ${event.message}`);
-      } else if (event.type === "success") {
+        toast.error(
+          `[${event.stepText || event.step || "Lỗi"}] ${event.message}`,
+        );
+      } else if (event.type === "success" && event.step !== "QUEUE_COMPLETED") {
         toast.success(`[Thành công] ${event.message}`);
       }
+
+      setBatchTracking((prev) => {
+        let updatedResults = [...prev.results];
+        let newSuccess = prev.successVideos;
+        let newFailed = prev.failedVideos;
+        let newProcessed = prev.processedVideos;
+        let newTotal = Math.max(prev.totalVideos, event.totalVideos || 0);
+
+        // Bắt sự kiện video hoàn thành
+        if (
+          event.videoName &&
+          event.type === "success" &&
+          (event.message?.includes("Hoàn thành xuất sắc") ||
+            event.step === "SUBMITTING")
+        ) {
+          const alreadyRecorded = updatedResults.some(
+            (r) =>
+              r.profileId === event.profileId &&
+              r.videoName === event.videoName &&
+              r.status === "success",
+          );
+          if (!alreadyRecorded) {
+            updatedResults.push({
+              profileId: event.profileId,
+              profileName: event.profileName || "",
+              videoName: event.videoName,
+              status: "success",
+              timestamp: new Date().toISOString(),
+            });
+            newSuccess++;
+            newProcessed++;
+          }
+        } else if (
+          event.videoName &&
+          event.type === "error" &&
+          (event.message?.includes("Bỏ qua video") || event.failedCount > 0)
+        ) {
+          const alreadyRecorded = updatedResults.some(
+            (r) =>
+              r.profileId === event.profileId &&
+              r.videoName === event.videoName &&
+              r.status === "failed",
+          );
+          if (!alreadyRecorded) {
+            updatedResults.push({
+              profileId: event.profileId,
+              profileName: event.profileName || "",
+              videoName: event.videoName,
+              status: "failed",
+              errorMessage: event.message,
+              timestamp: new Date().toISOString(),
+            });
+            newFailed++;
+            newProcessed++;
+          }
+        }
+
+        const isQueueFinished =
+          event.step === "QUEUE_COMPLETED" || event.step === "QUEUE_STOPPED";
+
+        return {
+          ...prev,
+          isActive: isQueueFinished ? false : prev.isActive,
+          endTime: isQueueFinished ? new Date() : prev.endTime,
+          totalVideos: newTotal,
+          processedVideos: newProcessed,
+          successVideos: newSuccess,
+          failedVideos: newFailed,
+          results: updatedResults,
+          showSummaryModal:
+            isQueueFinished && updatedResults.length > 0
+              ? true
+              : prev.showSummaryModal,
+        };
+      });
 
       loadProfiles();
     });
@@ -258,6 +363,18 @@ export const App: React.FC = () => {
     }
 
     toast.info(`Đã đưa [${profile.name}] vào hàng đợi upload.`);
+    setBatchTracking({
+      isActive: true,
+      startTime: new Date(),
+      endTime: null,
+      totalProfilesCount: 1,
+      totalVideos: 0,
+      processedVideos: 0,
+      successVideos: 0,
+      failedVideos: 0,
+      results: [],
+      showSummaryModal: false,
+    });
     try {
       await window.api.startQueue([profile.id]);
       setActiveTab("queue");
@@ -275,6 +392,18 @@ export const App: React.FC = () => {
     toast.info(`Bắt đầu chạy cho ${ids.length} kênh ${titleContext}...`);
     setIsProcessing(true);
     setProcessingMessage(`Đang chuẩn bị chạy ${ids.length} kênh...`);
+    setBatchTracking({
+      isActive: true,
+      startTime: new Date(),
+      endTime: null,
+      totalProfilesCount: ids.length,
+      totalVideos: 0,
+      processedVideos: 0,
+      successVideos: 0,
+      failedVideos: 0,
+      results: [],
+      showSummaryModal: false,
+    });
     try {
       await window.api.startQueue(ids);
       setActiveTab("queue");
@@ -1179,6 +1308,35 @@ export const App: React.FC = () => {
           </span>
         </div>
       )}
+
+      {/* Floating Mini Progress Widget (khi duyệt ở tab khác mà đang có upload) */}
+      <FloatingProgressWidget
+        isVisible={
+          activeTab !== "queue" &&
+          (batchTracking.isActive || queueStats.runningProfiles?.length > 0)
+        }
+        runningCount={queueStats.runningProfiles?.length || 0}
+        totalVideos={batchTracking.totalVideos}
+        processedVideos={batchTracking.processedVideos}
+        successVideos={batchTracking.successVideos}
+        onClick={() => setActiveTab("queue")}
+      />
+
+      {/* Batch Summary Completion Modal */}
+      <BatchSummaryModal
+        isOpen={batchTracking.showSummaryModal}
+        onClose={() =>
+          setBatchTracking((prev) => ({ ...prev, showSummaryModal: false }))
+        }
+        onViewLogs={() => {
+          setBatchTracking((prev) => ({ ...prev, showSummaryModal: false }));
+          setActiveTab("logs");
+        }}
+        startTime={batchTracking.startTime}
+        endTime={batchTracking.endTime || new Date()}
+        totalProfilesCount={batchTracking.totalProfilesCount || 1}
+        results={batchTracking.results}
+      />
     </div>
   );
 };

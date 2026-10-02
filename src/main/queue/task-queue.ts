@@ -100,13 +100,39 @@ export class UploadQueueManager {
       } catch (err: any) {
         this.emitProgress({
           profileId: profile.id,
+          profileName: profile.name,
           videoName: "",
+          videoIndex: 0,
+          totalVideos: 0,
           step: "ERROR",
+          stepText: "Gặp lỗi",
           message: err.message,
           type: "error",
+          uploadedCount: 0,
+          failedCount: 1,
         });
       } finally {
         this.runningProfiles.delete(profile.id);
+        if (
+          this.runningProfiles.size === 0 &&
+          this.queue.size === 0 &&
+          this.queue.pending === 0
+        ) {
+          this.emitProgress({
+            profileId: "",
+            profileName: "",
+            videoName: "",
+            videoIndex: 0,
+            totalVideos: 0,
+            step: "QUEUE_COMPLETED",
+            stepText: "Hoàn tất hàng đợi",
+            message:
+              "Tất cả các kênh trong hàng đợi đã hoàn thành lượt upload.",
+            type: "success",
+            uploadedCount: 0,
+            failedCount: 0,
+          });
+        }
       }
     });
   }
@@ -128,10 +154,16 @@ export class UploadQueueManager {
 
     this.emitProgress({
       profileId: "",
+      profileName: "",
       videoName: "",
+      videoIndex: 0,
+      totalVideos: 0,
       step: "QUEUE_STOPPED",
+      stepText: "Đã dừng hàng đợi",
       message: `Đã dừng hàng đợi upload theo yêu cầu (Hủy ${stoppedIds.length} kênh đang chạy).`,
       type: "warn",
+      uploadedCount: 0,
+      failedCount: 0,
     });
   }
 
