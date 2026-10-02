@@ -1,6 +1,11 @@
 import fs from "fs";
 import path from "path";
-import { logRepo, ProfileRecord, profileRepo } from "../db/database";
+import {
+  configRepo,
+  logRepo,
+  ProfileRecord,
+  profileRepo,
+} from "../db/database";
 import { closeProfileContext, launchProfileContext } from "./browser-pool";
 import { checkExistingScheduledTime } from "./tasks/task-content";
 import { processCaption, submitAndConfirmPost } from "./tasks/task-finalize";
@@ -67,17 +72,13 @@ export async function runUploadPipeline(
   }
 
   const totalFound = videoFiles.length;
-  const maxLimit =
-    profile.max_videos !== undefined &&
-    profile.max_videos !== null &&
-    !isNaN(Number(profile.max_videos))
-      ? Number(profile.max_videos)
-      : 50;
+  const configMax = Number(configRepo.get("max_videos", "50"));
+  const maxLimit = !isNaN(configMax) ? configMax : 50;
 
   if (maxLimit > 0 && totalFound > maxLimit) {
     videoFiles = videoFiles.slice(0, maxLimit);
     log(
-      `Tìm thấy ${totalFound} video. Áp dụng giới hạn tải lên tối đa ${maxLimit} video cho đợt này.`,
+      `Tìm thấy ${totalFound} video. Áp dụng giới hạn tải lên ${maxLimit} video theo Cài đặt chung.`,
     );
   } else {
     log(
@@ -120,6 +121,8 @@ export async function runUploadPipeline(
       }
     }
 
+    const MAX_RETRIES = 2;
+
     for (let i = 0; i < videoFiles.length; i++) {
       const videoFileName = videoFiles[i];
       currentVideoName = videoFileName;
@@ -128,123 +131,174 @@ export async function runUploadPipeline(
       // Nếu file đã bị di chuyển hoặc không còn tồn tại
       if (!fs.existsSync(videoPath)) continue;
 
-      log(`[Video ${i + 1}/${videoFiles.length}] Đang xử lý: ${videoFileName}`);
+      let videoSuccess = false;
+      let attempt = 0;
 
-      try {
-        // BƯỚC 1: Truy cập trang Upload
-        currentStep = "NAVIGATING";
-        await navigateToUpload(page, profile.name, (m) => log(m));
-
-        // BƯỚC 2: Đính kèm file video
-        currentStep = "ATTACHING_FILE";
-        await attachVideoFile(page, videoPath, (m) => log(m));
-
-        // BƯỚC 3: Xóa sạch tiêu đề video (Nằm ở đỉnh trang UI, thực hiện trước để tránh cuộn trang lên xuống)
-        currentStep = "CLEARING_CAPTION";
-        await processCaption(page, (m) => log(m));
-
-        // BƯỚC 4: GẮN NHẠC FAVORITES (Nếu profile bật tính năng này)
-        if (profile.enable_music !== 0) {
-          currentStep = "ATTACHING_MUSIC";
-          await attachFavoriteMusic(page, profile, uploadedCount, (m) =>
-            log(m),
-          );
-        } else {
+      while (attempt <= MAX_RETRIES && !videoSuccess) {
+        attempt++;
+        if (attempt > 1) {
           log(
-            "Profile cấu hình TẮT chèn nhạc: Bỏ qua editor, giữ nguyên âm thanh gốc của video.",
-          );
-        }
-
-        // BƯỚC 5: Cài đặt Lên lịch
-        currentStep = "SCHEDULING";
-        lastScheduledDate = await applySchedule(
-          page,
-          profile,
-          uploadedCount,
-          (m) => log(m),
-          lastScheduledDate,
-          hasExistingBatch,
-        );
-
-        // BƯỚC 6: Bấm đăng, bắt Video ID và lưu trữ sang done/
-        currentStep = "SUBMITTING";
-        const result = await submitAndConfirmPost(
-          page,
-          profile,
-          videoPath,
-          (m) => log(m),
-        );
-
-        uploadedCount++;
-        logRepo.add({
-          profile_id: profile.id,
-          video_name: videoFileName,
-          video_id: result.videoId,
-          video_url: result.videoUrl,
-          status: "success",
-          error_message: null,
-        });
-
-        log(`Hoàn thành xuất sắc video ${videoFileName}!`, "success");
-        await page.waitForTimeout(3000);
-      } catch (videoError: any) {
-        failedCount++;
-        log(
-          `Lỗi khi xử lý video ${videoFileName}: ${videoError.message}`,
-          "error",
-        );
-
-        logRepo.add({
-          profile_id: profile.id,
-          video_name: videoFileName,
-          video_id: null,
-          video_url: null,
-          status: "failed",
-          error_message: videoError.message,
-        });
-
-        // Nếu lỗi do thiếu nhạc Favorites -> Dừng toàn bộ tiến trình của profile này luôn!
-        if (videoError.message.includes("MỤC FAVORITES RỖNG")) {
-          log(
-            "Dừng toàn bộ hàng đợi vì kênh không có nhạc yêu thích!",
-            "error",
-          );
-          break;
-        }
-
-        // Nếu trình duyệt hoặc context bị đóng (người dùng tắt hoặc crash) -> Dừng luôn profile này, không lặp lỗi 50 lần
-        if (
-          videoError.message.includes(
-            "Target page, context or browser has been closed",
-          ) ||
-          videoError.message.includes("Target closed") ||
-          context.pages().length === 0
-        ) {
-          log(
-            "Trình duyệt của kênh đã bị đóng. Dừng các video còn lại của profile này.",
+            `[Video ${i + 1}/${videoFiles.length}] Đang thử lại lần ${attempt - 1} cho video: ${videoFileName}...`,
             "warn",
           );
-          break;
+
+          if (page.isClosed()) {
+            try {
+              page = await context.newPage();
+              await dismissPopups(page, (m) => log(m));
+            } catch {
+              log("Không thể tạo lại tab mới để thử lại.", "warn");
+              break;
+            }
+          } else {
+            await page
+              .goto("https://www.tiktok.com/tiktokstudio/upload", {
+                waitUntil: "domcontentloaded",
+              })
+              .catch(() => {});
+            await page.waitForTimeout(2000);
+          }
+        } else {
+          log(
+            `[Video ${i + 1}/${videoFiles.length}] Đang xử lý: ${videoFileName}`,
+          );
         }
 
-        // Nếu chỉ tab hiện tại bị crash/đóng nhưng context vẫn còn sống: tạo lại tab mới
-        if (page.isClosed()) {
-          try {
-            page = await context.newPage();
-            await dismissPopups(page, (m) => log(m));
-          } catch {
-            log("Không thể mở lại tab mới, dừng profile này.", "warn");
-            break;
+        try {
+          // BƯỚC 1: Truy cập trang Upload
+          currentStep = "NAVIGATING";
+          await navigateToUpload(page, profile.name, (m) => log(m));
+
+          // BƯỚC 2: Đính kèm file video
+          currentStep = "ATTACHING_FILE";
+          await attachVideoFile(page, videoPath, (m) => log(m));
+
+          // BƯỚC 3: Xóa sạch tiêu đề video (Nằm ở đỉnh trang UI, thực hiện trước để tránh cuộn trang lên xuống)
+          currentStep = "CLEARING_CAPTION";
+          await processCaption(page, (m) => log(m));
+
+          // BƯỚC 4: GẮN NHẠC FAVORITES (Nếu profile bật tính năng này)
+          if (profile.enable_music !== 0) {
+            currentStep = "ATTACHING_MUSIC";
+            await attachFavoriteMusic(page, profile, uploadedCount, (m) =>
+              log(m),
+            );
+          } else {
+            log(
+              "Profile cấu hình TẮT chèn nhạc: Bỏ qua editor, giữ nguyên âm thanh gốc của video.",
+            );
+          }
+
+          // BƯỚC 5: Cài đặt Lên lịch
+          currentStep = "SCHEDULING";
+          lastScheduledDate = await applySchedule(
+            page,
+            profile,
+            uploadedCount,
+            (m) => log(m),
+            lastScheduledDate,
+            hasExistingBatch,
+          );
+
+          // BƯỚC 6: Bấm đăng, bắt Video ID và lưu trữ sang done/
+          currentStep = "SUBMITTING";
+          const result = await submitAndConfirmPost(
+            page,
+            profile,
+            videoPath,
+            (m) => log(m),
+          );
+
+          uploadedCount++;
+          videoSuccess = true;
+          logRepo.add({
+            profile_id: profile.id,
+            video_name: videoFileName,
+            video_id: result.videoId,
+            video_url: result.videoUrl,
+            status: "success",
+            error_message: null,
+          });
+
+          log(`Hoàn thành xuất sắc video ${videoFileName}!`, "success");
+          await page.waitForTimeout(3000);
+        } catch (videoError: any) {
+          log(
+            `Lỗi khi xử lý video ${videoFileName} (lần ${attempt}/${MAX_RETRIES + 1}): ${videoError.message}`,
+            "error",
+          );
+
+          // Nếu lỗi do thiếu nhạc Favorites -> Dừng toàn bộ tiến trình của profile này luôn!
+          if (videoError.message.includes("MỤC FAVORITES RỖNG")) {
+            log(
+              "Dừng toàn bộ hàng đợi vì kênh không có nhạc yêu thích!",
+              "error",
+            );
+            failedCount++;
+            logRepo.add({
+              profile_id: profile.id,
+              video_name: videoFileName,
+              video_id: null,
+              video_url: null,
+              status: "failed",
+              error_message: videoError.message,
+            });
+            return { uploaded: uploadedCount, failed: failedCount };
+          }
+
+          // Nếu trình duyệt hoặc context bị đóng (người dùng tắt hoặc crash) -> Dừng luôn profile này
+          if (
+            videoError.message.includes(
+              "Target page, context or browser has been closed",
+            ) ||
+            videoError.message.includes("Target closed") ||
+            context.pages().length === 0
+          ) {
+            log(
+              "Trình duyệt của kênh đã bị đóng. Dừng các video còn lại của profile này.",
+              "warn",
+            );
+            failedCount++;
+            logRepo.add({
+              profile_id: profile.id,
+              video_name: videoFileName,
+              video_id: null,
+              video_url: null,
+              status: "failed",
+              error_message: videoError.message,
+            });
+            return { uploaded: uploadedCount, failed: failedCount };
+          }
+
+          // Nếu đã hết số lần retry cho video này
+          if (attempt > MAX_RETRIES) {
+            failedCount++;
+            logRepo.add({
+              profile_id: profile.id,
+              video_name: videoFileName,
+              video_id: null,
+              video_url: null,
+              status: "failed",
+              error_message: videoError.message,
+            });
+            log(
+              `Đã thử lại ${MAX_RETRIES} lần nhưng không thành công. Bỏ qua video ${videoFileName}.`,
+              "warn",
+            );
+
+            // Reset trang upload để chuẩn bị video tiếp theo
+            if (!page.isClosed()) {
+              await page
+                .goto("https://www.tiktok.com/tiktokstudio/upload", {
+                  waitUntil: "domcontentloaded",
+                })
+                .catch(() => {});
+              await page.waitForTimeout(2000);
+            }
+          } else {
+            await page.waitForTimeout(3000);
           }
         }
-
-        // Reset trang upload để chuẩn bị video tiếp theo
-        await page
-          .goto("https://www.tiktok.com/tiktokstudio/upload", {
-            waitUntil: "domcontentloaded",
-          })
-          .catch(() => {});
-        await page.waitForTimeout(2000);
       }
     }
   } finally {
@@ -255,6 +309,25 @@ export async function runUploadPipeline(
       last_run: new Date().toISOString(),
     });
     await closeProfileContext(profile.id);
+
+    // Kiểm tra xem trong thư mục nguồn còn video nào chưa được tải không
+    try {
+      if (fs.existsSync(profile.video_folder)) {
+        const remainingVideos = fs
+          .readdirSync(profile.video_folder)
+          .filter((f) => {
+            if (f.startsWith(".")) return false;
+            return validExtensions.includes(path.extname(f).toLowerCase());
+          });
+        if (remainingVideos.length > 0) {
+          log(
+            `Thư mục nguồn vẫn còn ${remainingVideos.length} video chưa được tải lên.`,
+            "warn",
+          );
+        }
+      }
+    } catch (_) {}
+
     log(
       `Tiến trình upload hoàn tất. Thành công: ${uploadedCount}, Thất bại: ${failedCount}.`,
       "info",

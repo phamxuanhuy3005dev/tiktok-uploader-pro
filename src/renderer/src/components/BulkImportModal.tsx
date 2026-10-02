@@ -47,8 +47,6 @@ interface ParsedAccount {
   schedule_mode?: string;
   schedule_interval?: number;
   golden_hours?: string;
-  caption_mode?: string;
-  max_videos?: number;
 }
 
 export const BulkImportModal: React.FC<BulkImportModalProps> = ({
@@ -163,9 +161,6 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                 ? Number(item.schedule_interval)
                 : 10,
             golden_hours: item.golden_hours || "11:30,17:30,20:00",
-            caption_mode: item.caption_mode || "remove_title",
-            max_videos:
-              item.max_videos !== undefined ? Number(item.max_videos) : 50,
           };
         })
         .filter((p) => p.name.length > 0);
@@ -240,8 +235,6 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           schedule_mode: acc.schedule_mode || "auto_increment",
           schedule_interval: acc.schedule_interval || 10,
           golden_hours: acc.golden_hours || "11:30,17:30,20:00",
-          caption_mode: acc.caption_mode || "remove_title",
-          max_videos: acc.max_videos || 50,
         };
       });
 

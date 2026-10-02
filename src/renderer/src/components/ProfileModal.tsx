@@ -69,7 +69,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [goldenHours, setGoldenHours] = useState("11:30,17:30,20:00");
   const [proxy, setProxy] = useState("");
   const [cookies, setCookies] = useState("");
-  const [maxVideos, setMaxVideos] = useState<number | string>(50);
   const [allowEditSecurity, setAllowEditSecurity] = useState(!initialData);
   const [loading, setLoading] = useState(false);
   const [isTestingProxy, setIsTestingProxy] = useState(false);
@@ -138,11 +137,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setName(initialData.name || "");
       setGroupName(initialData.group_name || "Mặc định");
       setVideoFolder(initialData.video_folder || "");
-      setMaxVideos(
-        initialData.max_videos !== undefined && initialData.max_videos !== null
-          ? initialData.max_videos
-          : 50,
-      );
       setAccountId(initialData.account_id || "");
       setPass(initialData.pass || "");
       setTwoFactor(initialData.two_factor || "");
@@ -164,7 +158,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setName("");
       setGroupName("Mặc định");
       setVideoFolder("");
-      setMaxVideos(50);
       setAccountId("");
       setPass("");
       setTwoFactor("");
@@ -203,7 +196,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         name: name.trim(),
         group_name: groupName.trim() || "Mặc định",
         video_folder: videoFolder.trim(),
-        max_videos: maxVideos === "" ? 50 : Math.max(0, Number(maxVideos)),
         account_id: accountId.trim() || null,
         pass: pass.trim() || null,
         two_factor: twoFactor.trim() || null,
@@ -218,7 +210,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         schedule_mode: scheduleMode,
         schedule_interval: Number(scheduleInterval) || 10,
         golden_hours: goldenHours.trim(),
-        caption_mode: "remove_title",
         proxy: proxy.trim() || null,
         status: initialData?.status || "idle",
         last_run: initialData?.last_run || null,
@@ -650,49 +641,30 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
         </div>
 
-        {/* 3. Thư mục Video nguồn & Giới hạn số lượng */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-700">
-              Thư mục Video nguồn
-            </label>
-            <div className="flex gap-2">
-              <Input
-                value={videoFolder}
-                onChange={(e) => setVideoFolder(e.target.value)}
-                placeholder="/Users/username/Videos/Channel1"
-                className="flex-1 font-mono text-xs"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleSelectFolder}
-              >
-                <Folder className="mr-1 h-4 w-4 text-slate-500" /> Chọn Folder
-              </Button>
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              * Video đăng thành công sẽ được xử lý theo tùy chọn bên dưới.
-            </p>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-700">
-              Tối đa video / đợt
-            </label>
+        {/* 3. Thư mục Video nguồn */}
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-700">
+            Thư mục Video nguồn
+          </label>
+          <div className="flex gap-2">
             <Input
-              type="number"
-              min="0"
-              max="999"
-              value={maxVideos}
-              onChange={(e) => setMaxVideos(e.target.value)}
-              placeholder="50"
-              className="h-9 text-xs font-bold text-sky-700"
+              value={videoFolder}
+              onChange={(e) => setVideoFolder(e.target.value)}
+              placeholder="/Users/username/Videos/Channel1"
+              className="flex-1 font-mono text-xs"
             />
-            <p className="mt-1 text-[11px] text-slate-400">
-              Mặc định 50. Nhập 0 để upload hết.
-            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleSelectFolder}
+            >
+              <Folder className="mr-1 h-4 w-4 text-slate-500" /> Chọn Thư Mục
+            </Button>
           </div>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Video đăng thành công sẽ tự động được xử lý theo Cài Đặt chung (Xóa
+            hoặc Lưu vào done/).
+          </p>
         </div>
 
         {/* 4. Khối Gắn Nhạc Favorites */}

@@ -19,11 +19,6 @@ export interface IElectronAPI {
     latencyMs?: number;
     error?: string;
   }>;
-  importFromOldTool: () => Promise<{
-    profiles: any[];
-    importedCount: number;
-    message: string;
-  }>;
   exportJson: (profiles?: any[]) => Promise<{
     success: boolean;
     filePath?: string;
@@ -40,19 +35,17 @@ export interface IElectronAPI {
   importJsonString: (
     content: string,
   ) => Promise<{ success: boolean; count?: number; profiles?: any[] }>;
-  exportTxt: (
-    content: string,
-  ) => Promise<{ success: boolean; filePath?: string; canceled?: boolean }>;
   exportAccounts: (accounts: any[]) => Promise<{
     success: boolean;
     filePath?: string;
     format?: string;
     canceled?: boolean;
   }>;
-  downloadTemplate: () => Promise<{
+  readJsonFile: () => Promise<{
     success: boolean;
+    content?: string;
+    fileName?: string;
     filePath?: string;
-    format?: string;
     canceled?: boolean;
   }>;
   readTxtFile: () => Promise<{
@@ -86,16 +79,15 @@ export interface IElectronAPI {
     updatedProfiles: any[];
     details?: Record<string, number>;
   }>;
-  startQueue: (
-    profileIds: string[],
-    runOptions?: { maxVideos?: number },
-  ) => Promise<any>;
+  startQueue: (profileIds: string[]) => Promise<any>;
   stopQueue: () => Promise<any>;
   getQueueStats: () => Promise<any>;
   setConcurrency: (concurrency: number) => Promise<number>;
   getConcurrency: () => Promise<number>;
   getCleanupMode: () => Promise<string>;
   setCleanupMode: (mode: string) => Promise<string>;
+  getMaxVideos: () => Promise<number>;
+  setMaxVideos: (limit: number) => Promise<number>;
   getLogs: (profileId: string) => Promise<any[]>;
   getAllLogs: () => Promise<any[]>;
   clearLogs: () => Promise<boolean>;

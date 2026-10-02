@@ -52,7 +52,6 @@ export const App: React.FC = () => {
     new Set(),
   );
   const [concurrency, setConcurrency] = useState<number>(2);
-  const [batchMaxVideos, setBatchMaxVideos] = useState<number>(50);
 
   // Trạng thái xử lý tác vụ (tránh cảm giác đơ/treo ứng dụng)
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -258,13 +257,7 @@ export const App: React.FC = () => {
       if (!proceed) return;
     }
 
-    const maxLimit =
-      profile.max_videos !== undefined && profile.max_videos !== null
-        ? profile.max_videos
-        : 50;
-    const limitText =
-      maxLimit > 0 ? ` (Tối đa ${maxLimit} video)` : " (Upload toàn bộ video)";
-    toast.info(`Đã đưa [${profile.name}] vào hàng đợi upload${limitText}.`);
+    toast.info(`Đã đưa [${profile.name}] vào hàng đợi upload.`);
     try {
       await window.api.startQueue([profile.id]);
       setActiveTab("queue");
@@ -279,17 +272,11 @@ export const App: React.FC = () => {
       toast.info("Không có kênh nào để chạy.");
       return;
     }
-    const limitInfo =
-      batchMaxVideos > 0
-        ? ` (Tối đa ${batchMaxVideos} video/kênh)`
-        : " (Upload toàn bộ video)";
-    toast.info(
-      `Bắt đầu chạy cho ${ids.length} kênh ${titleContext}${limitInfo}...`,
-    );
+    toast.info(`Bắt đầu chạy cho ${ids.length} kênh ${titleContext}...`);
     setIsProcessing(true);
     setProcessingMessage(`Đang chuẩn bị chạy ${ids.length} kênh...`);
     try {
-      await window.api.startQueue(ids, { maxVideos: batchMaxVideos });
+      await window.api.startQueue(ids);
       setActiveTab("queue");
     } catch (err: any) {
       toast.error(`Lỗi khởi chạy: ${err.message}`);
@@ -921,32 +908,6 @@ export const App: React.FC = () => {
 
                       <div className="mx-1 h-4 w-[1px] bg-slate-200" />
 
-                      {/* Ô chỉnh giới hạn upload tối đa */}
-                      <div
-                        className="flex items-center gap-1.5 rounded-lg border border-slate-200/90 bg-slate-50 px-2 py-1 text-xs text-slate-600"
-                        title="Số video tối đa upload mỗi kênh trong đợt chạy này. Nhập 0 nếu muốn upload toàn bộ video có trong folder."
-                      >
-                        <span className="text-[11px] font-medium text-slate-500">
-                          Tối đa:
-                        </span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={999}
-                          value={batchMaxVideos}
-                          disabled={isProcessing}
-                          onChange={(e) =>
-                            setBatchMaxVideos(
-                              Math.max(0, parseInt(e.target.value) || 0),
-                            )
-                          }
-                          className="h-6 w-10 rounded border border-slate-200 bg-white text-center text-xs font-bold text-sky-700 focus:border-sky-500 focus:outline-none disabled:opacity-50"
-                        />
-                        <span className="text-[11px] text-slate-400">
-                          vid/kênh
-                        </span>
-                      </div>
-
                       <button
                         onClick={handleClearSelection}
                         disabled={isProcessing}
@@ -973,31 +934,6 @@ export const App: React.FC = () => {
                   ) : (
                     /* Nếu chưa chọn profile nào: Nút chạy toàn bộ nhóm */
                     <>
-                      <div
-                        className="flex items-center gap-1.5 rounded-lg border border-slate-200/90 bg-slate-50 px-2 py-1 text-xs text-slate-600"
-                        title="Số video tối đa upload mỗi kênh trong đợt chạy này. Nhập 0 nếu muốn upload toàn bộ video có trong folder."
-                      >
-                        <span className="text-[11px] font-medium text-slate-500">
-                          Tối đa:
-                        </span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={999}
-                          value={batchMaxVideos}
-                          disabled={isProcessing}
-                          onChange={(e) =>
-                            setBatchMaxVideos(
-                              Math.max(0, parseInt(e.target.value) || 0),
-                            )
-                          }
-                          className="h-6 w-10 rounded border border-slate-200 bg-white text-center text-xs font-bold text-sky-700 focus:border-sky-500 focus:outline-none disabled:opacity-50"
-                        />
-                        <span className="text-[11px] text-slate-400">
-                          vid/kênh
-                        </span>
-                      </div>
-
                       <Button
                         variant="outline"
                         size="sm"
@@ -1192,7 +1128,7 @@ export const App: React.FC = () => {
         }}
       />
 
-      {/* Bulk Import Modal từ file TXT */}
+      {/* Bulk Import Modal từ file JSON */}
       <BulkImportModal
         isOpen={isBulkImportOpen}
         onClose={() => setIsBulkImportOpen(false)}

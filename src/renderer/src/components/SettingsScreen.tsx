@@ -1,13 +1,11 @@
 import {
   CheckCircle2,
-  Clock,
   Cpu,
+  Film,
   FolderCheck,
   HardDrive,
   Info,
-  Music,
   Settings,
-  ShieldCheck,
   Trash2,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
@@ -25,6 +23,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 }) => {
   const [selectedConcurrency, setSelectedConcurrency] = useState(concurrency);
   const [cleanupMode, setCleanupMode] = useState<"delete" | "done">("delete");
+  const [maxVideos, setMaxVideos] = useState<number>(50);
+  const [customMaxVideos, setCustomMaxVideos] = useState<string>("50");
 
   useEffect(() => {
     window.api
@@ -35,7 +35,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         }
       })
       .catch((err) => {
-        console.error("Failed to get cleanup mode:", err);
+        console.error("Lỗi khi tải cleanup mode:", err);
+      });
+
+    window.api
+      .getMaxVideos()
+      .then((limit) => {
+        const val = typeof limit === "number" ? limit : 50;
+        setMaxVideos(val);
+        setCustomMaxVideos(String(val));
+      })
+      .catch((err) => {
+        console.error("Lỗi khi tải max videos:", err);
       });
   }, []);
 
@@ -58,18 +69,33 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
   };
 
+  const handleSaveMaxVideos = async (num: number) => {
+    const validNum = Math.max(0, Math.floor(num));
+    setMaxVideos(validNum);
+    setCustomMaxVideos(String(validNum));
+    try {
+      await window.api.setMaxVideos(validNum);
+      toast.success(
+        validNum === 0
+          ? "Đã lưu cài đặt: Tải lên tất cả video có trong thư mục"
+          : `Đã lưu cài đặt: Giới hạn tối đa ${validNum} video / lần chạy`,
+      );
+    } catch (err: any) {
+      toast.error("Không thể lưu cài đặt: " + err.message);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       {/* Title */}
       <div className="flex items-center justify-between rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
         <div>
           <h2 className="flex items-center gap-2 text-base font-bold text-slate-800">
-            <Settings className="h-5 w-5 text-sky-500" /> Cài Đặt Hệ Thống & Tối
-            Ưu Luồng
+            <Settings className="h-5 w-5 text-sky-500" /> Cài Đặt Hệ Thống
           </h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            Tùy chỉnh số luồng chạy upload đồng thời và kiểm tra các quy chuẩn
-            tự động hóa.
+            Cấu hình số luồng chạy, giới hạn video mỗi đợt upload và cơ chế dọn
+            dẹp file.
           </p>
         </div>
       </div>
@@ -86,8 +112,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 Số Luồng Chạy Đồng Thời (Worker Concurrency)
               </h3>
               <p className="mt-0.5 text-xs text-slate-500">
-                Quy định số lượng trình duyệt mở cùng lúc để upload video, chèn
-                nhạc và lên lịch.
+                Số lượng kênh được mở trình duyệt xử lý video cùng một lúc.
               </p>
             </div>
           </div>
@@ -101,15 +126,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
         <div className="grid grid-cols-2 gap-2.5 pt-2 sm:grid-cols-6">
           {[
-            { count: 1, label: "1 Luồng", desc: "An toàn / Máy yếu" },
-            { count: 2, label: "2 Luồng", desc: "Mặc định (Khuyên dùng)" },
-            { count: 3, label: "3 Luồng", desc: "RAM 16GB+" },
+            { count: 1, label: "1 Luồng", desc: "Máy yếu" },
+            { count: 2, label: "2 Luồng", desc: "Khuyên dùng" },
+            { count: 3, label: "3 Luồng", desc: "RAM 16GB" },
             { count: 4, label: "4 Luồng", desc: "Tốc độ cao" },
-            { count: 5, label: "5 Luồng", desc: "Đa nhiệm mạnh" },
-            { count: 8, label: "8 Luồng", desc: "Máy trạm / Cực mạnh" },
+            { count: 5, label: "5 Luồng", desc: "Đa nhiệm" },
+            { count: 8, label: "8 Luồng", desc: "Máy trạm" },
           ].map((item) => (
             <button
               key={item.count}
+              type="button"
               onClick={() => handleSaveConcurrency(item.count)}
               className={`rounded-xl border p-3 text-left transition-all ${
                 selectedConcurrency === item.count
@@ -137,10 +163,97 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <div className="flex items-start gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs text-slate-500">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-500" />
           <span>
-            <strong>Gợi ý MMO:</strong> Mỗi phiên Chrome giả lập tiêu tốn khoảng
-            300MB - 500MB RAM. Nếu máy của bạn có 8GB RAM, hãy giữ ở mức 1-2
-            luồng. Với 16GB RAM trở lên, bạn có thể chạy 3-5 luồng mượt mà để
-            tăng tốc độ đẩy video.
+            Mỗi trình duyệt tiêu tốn khoảng 300MB - 500MB RAM. Nếu máy 8GB RAM
+            nên dùng 1-2 luồng, máy 16GB RAM trở lên có thể dùng 3-5 luồng.
+          </span>
+        </div>
+      </div>
+
+      {/* Cấu hình Số video tối đa mỗi lần upload */}
+      <div className="space-y-4 rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-violet-100 bg-violet-50 text-violet-600">
+              <Film className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">
+                Số Video Tối Đa Mỗi Lần Upload (Toàn Cục)
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Giới hạn số video tối đa mỗi kênh được upload trong một lần
+                chạy. Áp dụng cho tất cả các profile.
+              </p>
+            </div>
+          </div>
+          <Badge
+            variant="outline"
+            className="border-violet-200 bg-violet-50 font-mono font-bold text-violet-600"
+          >
+            {maxVideos === 0 ? "Tất cả video" : `Tối đa ${maxVideos} video`}
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5 pt-2 sm:grid-cols-5">
+          {[
+            { count: 10, label: "10 Video" },
+            { count: 20, label: "20 Video" },
+            { count: 50, label: "50 Video (Chuẩn)" },
+            { count: 100, label: "100 Video" },
+            { count: 0, label: "Tất cả" },
+          ].map((item) => (
+            <button
+              key={item.count}
+              type="button"
+              onClick={() => handleSaveMaxVideos(item.count)}
+              className={`rounded-xl border p-3 text-left transition-all ${
+                maxVideos === item.count
+                  ? "border-violet-500 bg-violet-50/70 shadow-sm ring-2 ring-violet-500/20"
+                  : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span
+                  className={`text-sm font-bold ${maxVideos === item.count ? "text-violet-700" : "text-slate-700"}`}
+                >
+                  {item.label}
+                </span>
+                {maxVideos === item.count && (
+                  <CheckCircle2 className="h-4 w-4 text-violet-500" />
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-3 pt-1">
+          <span className="text-xs font-semibold text-slate-600">
+            Hoặc nhập số tùy chỉnh:
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="0"
+              value={customMaxVideos}
+              onChange={(e) => setCustomMaxVideos(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSaveMaxVideos(Number(customMaxVideos) || 0);
+                }
+              }}
+              className="w-24 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-800 focus:border-violet-500 focus:outline-none"
+              placeholder="0 = Tất cả"
+            />
+            <button
+              type="button"
+              onClick={() => handleSaveMaxVideos(Number(customMaxVideos) || 0)}
+              className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-violet-700"
+            >
+              Lưu
+            </button>
+          </div>
+          <span className="text-[11px] text-slate-400">
+            (0 = không giới hạn, tải hết video trong thư mục)
           </span>
         </div>
       </div>
@@ -194,9 +307,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               )}
             </div>
             <p className="text-xs leading-relaxed text-slate-500">
-              <strong>Khuyên dùng:</strong> Xóa ngay file video sau khi đăng
-              thành công để giải phóng dung lượng ổ cứng tối đa cho máy tính,
-              tránh đầy ổ khi cày số lượng lớn.
+              Xóa ngay file video sau khi đăng thành công để giải phóng dung
+              lượng ổ cứng.
             </p>
           </button>
 
@@ -219,58 +331,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               )}
             </div>
             <p className="text-xs leading-relaxed text-slate-500">
-              Tạo thư mục con <code>done/</code> bên trong thư mục nguồn và di
-              chuyển video vào đó để lưu trữ lại và kiểm tra đối chiếu sau này.
+              Di chuyển video vào thư mục con <code>done/</code> bên trong thư
+              mục nguồn để lưu trữ lại.
             </p>
           </button>
-        </div>
-
-        <p className="text-[11px] text-slate-400">
-          * Bạn cũng có thể thiết lập riêng cho từng Profile cụ thể trong mục
-          Chỉnh sửa Profile (ghi đè cài đặt chung này).
-        </p>
-      </div>
-
-      {/* Thông Tin Cơ Chế Tự Động */}
-      <div className="space-y-4 rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
-        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800">
-          <ShieldCheck className="h-4 w-4 text-sky-500" /> Quy Chuẩn Tự Động &
-          Chống Spam Đã Kích Hoạt
-        </h3>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="space-y-1 rounded-xl border border-slate-100 bg-slate-50/60 p-3.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-              <Clock className="h-3.5 w-3.5 text-sky-500" /> Giãn Cách Giờ Đăng
-              Chuẩn Xác
-            </div>
-            <p className="text-[11px] text-slate-500">
-              Hệ thống tự động quét các video đã hẹn giờ từ trước trên TikTok
-              Studio Content để nối tiếp chính xác, không trùng lịch.
-            </p>
-          </div>
-
-          <div className="space-y-1 rounded-xl border border-slate-100 bg-slate-50/60 p-3.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-              <Music className="h-3.5 w-3.5 text-sky-500" /> Xoay Vòng Nhạc
-              Favorites -50dB
-            </div>
-            <p className="text-[11px] text-slate-500">
-              Tự động chèn nhạc từ danh sách Yêu thích ở mức âm lượng thấp nhất
-              (-50dB) nhằm gắn Sound kiếm tiền mà vẫn giữ nguyên tiếng gốc.
-            </p>
-          </div>
-
-          <div className="space-y-1 rounded-xl border border-slate-100 bg-slate-50/60 p-3.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-              <ShieldCheck className="h-3.5 w-3.5 text-sky-500" /> Môi Trường
-              en-US & Tự Xử Lý Popup
-            </div>
-            <p className="text-[11px] text-slate-500">
-              Thiết lập ngôn ngữ tiếng Anh chuẩn cho kênh US/Global, tự động
-              đóng các hộp thoại/banner cản trở và tự nạp Cookie đăng nhập.
-            </p>
-          </div>
         </div>
       </div>
     </div>

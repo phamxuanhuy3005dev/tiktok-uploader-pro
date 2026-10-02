@@ -16,10 +16,8 @@ export interface ProfileRecord {
   schedule_mode: "immediate" | "auto_increment" | "golden_hours";
   schedule_interval: number;
   golden_hours: string;
-  caption_mode?: string;
   proxy: string | null;
   cookies: string | null;
-  max_videos?: number;
   account_id?: string | null;
   pass?: string | null;
   two_factor?: string | null;
@@ -77,10 +75,8 @@ db.exec(`
     schedule_mode TEXT DEFAULT 'auto_increment',
     schedule_interval INTEGER DEFAULT 10,
     golden_hours TEXT DEFAULT '11:30,17:30,20:00',
-    caption_mode TEXT DEFAULT 'remove_title',
     proxy TEXT DEFAULT NULL,
     cookies TEXT DEFAULT NULL,
-    max_videos INTEGER DEFAULT 50,
     account_id TEXT DEFAULT NULL,
     pass TEXT DEFAULT NULL,
     two_factor TEXT DEFAULT NULL,
@@ -121,6 +117,15 @@ try {
   db.prepare(
     "INSERT OR IGNORE INTO groups (id, name) VALUES ('default', 'Mặc định')",
   ).run();
+  db.prepare(
+    "INSERT OR IGNORE INTO config (key, value) VALUES ('concurrency', '2')",
+  ).run();
+  db.prepare(
+    "INSERT OR IGNORE INTO config (key, value) VALUES ('max_videos', '50')",
+  ).run();
+  db.prepare(
+    "INSERT OR IGNORE INTO config (key, value) VALUES ('cleanup_mode', 'delete')",
+  ).run();
   const existingGroups = db
     .prepare(
       "SELECT DISTINCT group_name FROM profiles WHERE group_name IS NOT NULL AND group_name != ''",
@@ -139,55 +144,7 @@ try {
   }
 } catch (_) {}
 
-// 2. Safe migration: Đảm bảo các cột mới tồn tại
 try {
-  const tableInfo = db.prepare("PRAGMA table_info(profiles)").all() as any[];
-  const cols = new Set(tableInfo.map((c) => c.name));
-  if (!cols.has("enable_music")) {
-    db.exec("ALTER TABLE profiles ADD COLUMN enable_music INTEGER DEFAULT 1;");
-  }
-  if (!cols.has("group_name")) {
-    db.exec(
-      "ALTER TABLE profiles ADD COLUMN group_name TEXT DEFAULT 'Mặc định';",
-    );
-  }
-  if (!cols.has("max_videos")) {
-    db.exec("ALTER TABLE profiles ADD COLUMN max_videos INTEGER DEFAULT 50;");
-  }
-  const credCols = [
-    "account_id",
-    "pass",
-    "two_factor",
-    "email",
-    "pass_email",
-    "mail_ao",
-  ];
-  for (const c of credCols) {
-    if (!cols.has(c)) {
-      db.exec(`ALTER TABLE profiles ADD COLUMN ${c} TEXT DEFAULT NULL;`);
-    }
-  }
-
-  // Thêm cột theo dõi Followers
-  if (!cols.has("followers_count")) {
-    db.exec(
-      "ALTER TABLE profiles ADD COLUMN followers_count INTEGER DEFAULT 0;",
-    );
-  }
-  if (!cols.has("stats_updated_at")) {
-    db.exec(
-      "ALTER TABLE profiles ADD COLUMN stats_updated_at TEXT DEFAULT NULL;",
-    );
-  }
-  if (cols.has("cleanup_mode")) {
-    try {
-      db.exec("ALTER TABLE profiles DROP COLUMN cleanup_mode;");
-      console.log(
-        "Đã xóa cột cleanup_mode khỏi bảng profiles (chuyển sang thiết lập chung toàn app)",
-      );
-    } catch (_) {}
-  }
-
   // Dọn sạch cookies ẩn danh rác (không chứa sessionid) lưu nhầm từ các phiên trước
   db.exec(`
     UPDATE profiles 
@@ -304,15 +261,8 @@ export const profileRepo = {
           ? Number(profile.schedule_interval)
           : 10,
       golden_hours: profile.golden_hours || "11:30,17:30,20:00",
-      caption_mode: profile.caption_mode || "remove_title",
       proxy: profile.proxy || null,
       cookies: serializedCookies,
-      max_videos:
-        profile.max_videos !== undefined &&
-        profile.max_videos !== null &&
-        profile.max_videos !== ""
-          ? Number(profile.max_videos)
-          : 50,
       account_id: profile.account_id || null,
       pass: profile.pass || null,
       two_factor:
@@ -333,12 +283,12 @@ export const profileRepo = {
       INSERT INTO profiles (
         id, name, group_name, status, video_folder, enable_music, music_mode, favorite_index,
         music_volume, schedule_mode, schedule_interval, golden_hours,
-        caption_mode, proxy, cookies, max_videos, account_id, pass, two_factor, email, pass_email, mail_ao, last_run,
+        proxy, cookies, account_id, pass, two_factor, email, pass_email, mail_ao, last_run,
         followers_count, stats_updated_at
       ) VALUES (
         @id, @name, @group_name, @status, @video_folder, @enable_music, @music_mode, @favorite_index,
         @music_volume, @schedule_mode, @schedule_interval, @golden_hours,
-        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run,
+        @proxy, @cookies, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run,
         @followers_count, @stats_updated_at
       )
     `,
@@ -393,12 +343,12 @@ export const profileRepo = {
       INSERT INTO profiles (
         id, name, group_name, status, video_folder, enable_music, music_mode, favorite_index,
         music_volume, schedule_mode, schedule_interval, golden_hours,
-        caption_mode, proxy, cookies, max_videos, account_id, pass, two_factor, email, pass_email, mail_ao, last_run,
+        proxy, cookies, account_id, pass, two_factor, email, pass_email, mail_ao, last_run,
         followers_count, stats_updated_at
       ) VALUES (
         @id, @name, @group_name, @status, @video_folder, @enable_music, @music_mode, @favorite_index,
         @music_volume, @schedule_mode, @schedule_interval, @golden_hours,
-        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run,
+        @proxy, @cookies, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run,
         @followers_count, @stats_updated_at
       )
       ON CONFLICT(name) DO UPDATE SET
@@ -411,7 +361,6 @@ export const profileRepo = {
         mail_ao = COALESCE(excluded.mail_ao, profiles.mail_ao),
         proxy = COALESCE(excluded.proxy, profiles.proxy),
         cookies = COALESCE(excluded.cookies, profiles.cookies),
-        caption_mode = COALESCE(excluded.caption_mode, profiles.caption_mode),
         followers_count = CASE WHEN excluded.followers_count > 0 THEN excluded.followers_count ELSE profiles.followers_count END,
         stats_updated_at = COALESCE(excluded.stats_updated_at, profiles.stats_updated_at)
     `);
@@ -441,14 +390,12 @@ export const profileRepo = {
               ? Number(p.schedule_interval)
               : 10,
           golden_hours: p.golden_hours || "11:30,17:30,20:00",
-          caption_mode: p.caption_mode || "remove_title",
           proxy: p.proxy || null,
           cookies: p.cookies
             ? typeof p.cookies === "string"
               ? p.cookies
               : JSON.stringify(p.cookies)
             : null,
-          max_videos: p.max_videos !== undefined ? Number(p.max_videos) : 50,
           account_id: p.account_id || null,
           pass: p.pass || null,
           two_factor: p.two_factor || p.two_fa || p["2fa"] || null,

@@ -167,7 +167,6 @@ export async function submitAndConfirmPost(
     const effectiveMode = configRepo.get("cleanup_mode", "delete");
     const fileName = path.basename(videoPath);
     const ext = path.extname(videoPath);
-    const txtPath = videoPath.slice(0, -ext.length) + ".txt";
 
     if (effectiveMode === "delete") {
       // XÓA NGAY LẬP TỨC (mặc định cho nhẹ máy)
@@ -178,13 +177,6 @@ export async function submitAndConfirmPost(
       } catch (delErr: any) {
         log(`Cảnh báo xóa file video: ${delErr.message}`);
       }
-
-      // Xóa kèm file txt nếu có
-      try {
-        if (fs.existsSync(txtPath)) {
-          fs.unlinkSync(txtPath);
-        }
-      } catch (_) {}
 
       log(
         `[Dọn dẹp] Đã xóa video gốc ${fileName} sau khi đăng thành công (Tiết kiệm dung lượng máy).`,
@@ -211,18 +203,6 @@ export async function submitAndConfirmPost(
         } catch (_) {}
       }
       log(`[Lưu trữ] Đã chuyển file ${fileName} sang thư mục "done/" an toàn.`);
-
-      if (fs.existsSync(txtPath)) {
-        const destTxt = path.join(doneDir, path.basename(txtPath));
-        try {
-          fs.renameSync(txtPath, destTxt);
-        } catch {
-          try {
-            fs.copyFileSync(txtPath, destTxt);
-            fs.unlinkSync(txtPath);
-          } catch (_) {}
-        }
-      }
     }
   } catch (cleanErr: any) {
     log(`Cảnh báo xử lý file sau khi đăng: ${cleanErr.message}`);

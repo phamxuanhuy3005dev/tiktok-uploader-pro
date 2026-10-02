@@ -225,18 +225,6 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               <span className="truncate">{profile.account_id}</span>
             </span>
           )}
-
-          <span
-            className="ml-auto shrink-0 rounded border border-slate-200/70 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-500"
-            title="Số video tối đa upload mỗi lần"
-          >
-            Tối đa:{" "}
-            <strong className="text-sky-700">
-              {profile.max_videos !== undefined && profile.max_videos > 0
-                ? `${profile.max_videos} vid`
-                : "Hết"}
-            </strong>
-          </span>
         </div>
 
         {/* Row 3: Folder & Proxy specs */}

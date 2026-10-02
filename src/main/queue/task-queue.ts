@@ -84,10 +84,7 @@ export class UploadQueueManager {
     return this.runningProfiles.has(profileId);
   }
 
-  public async addProfile(
-    profile: ProfileRecord,
-    runOptions?: { maxVideos?: number },
-  ): Promise<void> {
+  public async addProfile(profile: ProfileRecord): Promise<void> {
     if (this.runningProfiles.has(profile.id)) {
       throw new Error(`Profile ${profile.name} đang trong tiến trình chạy.`);
     }
@@ -95,14 +92,9 @@ export class UploadQueueManager {
     this.runningProfiles.add(profile.id);
     profileRepo.updateStatus(profile.id, "queued");
 
-    const effectiveProfile =
-      runOptions?.maxVideos !== undefined
-        ? { ...profile, max_videos: runOptions.maxVideos }
-        : profile;
-
     this.queue.add(async () => {
       try {
-        await runUploadPipeline(effectiveProfile, (event) => {
+        await runUploadPipeline(profile, (event) => {
           this.emitProgress(event);
         });
       } catch (err: any) {

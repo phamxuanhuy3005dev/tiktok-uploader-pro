@@ -89,7 +89,7 @@ export async function attachFavoriteMusic(
         )
         .first();
 
-      await favTab.waitFor({ state: "visible", timeout: 10000 });
+      await favTab.waitFor({ state: "visible", timeout: 15000 });
       await favTab.scrollIntoViewIfNeeded().catch(() => {});
       try {
         await favTab.click({ force: true, timeout: 5000 });

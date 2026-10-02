@@ -20,18 +20,15 @@ export const api = {
   testProxy: (rawProxy: string) => ipcRenderer.invoke("proxy:test", rawProxy),
 
   // Import / Export
-  importFromOldTool: () => ipcRenderer.invoke("profiles:importOld"),
   exportJson: (profiles?: any[]) =>
     ipcRenderer.invoke("profiles:exportJson", profiles),
   importJson: () => ipcRenderer.invoke("profiles:importJson"),
   importJsonString: (content: string) =>
     ipcRenderer.invoke("profiles:importJsonString", content),
-  exportTxt: (content: string) =>
-    ipcRenderer.invoke("profiles:exportTxt", content),
   exportAccounts: (accounts: any[]) =>
     ipcRenderer.invoke("profiles:exportAccounts", accounts),
-  downloadTemplate: () => ipcRenderer.invoke("profiles:downloadTemplate"),
-  readTxtFile: () => ipcRenderer.invoke("profiles:readTxtFile"),
+  readJsonFile: () => ipcRenderer.invoke("profiles:readJsonFile"),
+  readTxtFile: () => ipcRenderer.invoke("profiles:readJsonFile"), // Alias tương thích
   get2FaCode: (secret: string) =>
     ipcRenderer.invoke("profiles:get2FaCode", secret),
 
@@ -46,8 +43,8 @@ export const api = {
   }) => ipcRenderer.invoke("videos:distribute", params),
 
   // Queue & Upload
-  startQueue: (profileIds: string[], runOptions?: { maxVideos?: number }) =>
-    ipcRenderer.invoke("queue:start", profileIds, runOptions),
+  startQueue: (profileIds: string[]) =>
+    ipcRenderer.invoke("queue:start", profileIds),
   stopQueue: () => ipcRenderer.invoke("queue:stop"),
   getQueueStats: () => ipcRenderer.invoke("queue:getStats"),
   setConcurrency: (concurrency: number) =>
@@ -56,6 +53,9 @@ export const api = {
   getCleanupMode: () => ipcRenderer.invoke("config:getCleanupMode"),
   setCleanupMode: (mode: string) =>
     ipcRenderer.invoke("config:setCleanupMode", mode),
+  getMaxVideos: () => ipcRenderer.invoke("config:getMaxVideos"),
+  setMaxVideos: (limit: number) =>
+    ipcRenderer.invoke("config:setMaxVideos", limit),
   getLogs: (profileId: string) =>
     ipcRenderer.invoke("logs:getByProfile", profileId),
   getAllLogs: () => ipcRenderer.invoke("logs:getAll"),

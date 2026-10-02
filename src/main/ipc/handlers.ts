@@ -11,7 +11,6 @@ import {
 } from "../db/database";
 import {
   exportProfilesToJson,
-  importFromOldTool,
   importProfilesFromJson,
   importProfilesFromJsonString,
 } from "../db/migration";
@@ -171,15 +170,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Kiểm tra kết nối Proxy thực tế
   ipcMain.handle("proxy:test", async (_, rawProxy: string) => {
     return testProxyConnection(rawProxy);
-  });
-
-  // Import từ tool cũ tiktok-at
-  ipcMain.handle("profiles:importOld", async () => {
-    const res = importFromOldTool();
-    return {
-      profiles: profileRepo.getAll(),
-      ...res,
-    };
   });
 
   // Export profiles ra file JSON
@@ -395,124 +385,13 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return { success: false, canceled: true };
   });
 
-  // Tải file mẫu danh sách tài khoản (CSV Excel hoặc TXT)
-  ipcMain.handle("profiles:downloadTemplate", async () => {
-    const activeWin = getValidWindow();
-    const options = {
-      title: "Tải File Mẫu Danh Sách Tài Khoản",
-      defaultPath: "tiktok_accounts_template.csv",
-      filters: [
-        { name: "Excel Spreadsheet (*.csv)", extensions: ["csv"] },
-        { name: "Text Document (*.txt)", extensions: ["txt"] },
-        { name: "All Files (*.*)", extensions: ["*"] },
-      ],
-    };
-    const res = activeWin
-      ? await dialog.showSaveDialog(activeWin, options)
-      : await dialog.showSaveDialog(options);
-
-    if (!res.canceled && res.filePath) {
-      const filePath = res.filePath;
-      const isCsv = filePath.toLowerCase().endsWith(".csv");
-
-      if (isCsv) {
-        const header = [
-          "Username",
-          "Password",
-          "2FA",
-          "Email",
-          "Pass_Email",
-          "Mail_Ao",
-          "Proxy",
-          "Cookie",
-          "Nhom",
-        ];
-        const sampleRows = [
-          [
-            "tiktok_user_demo1",
-            "Pass123456",
-            "JBSWY3DPEHPK3PXP",
-            "user01@outlook.com",
-            "PassMail123",
-            "mailao01@gmail.com",
-            "http://user:pass@127.0.0.1:8080",
-            "sessionid=9f8e7d6c5b4a3...",
-            "Nhóm Nuôi US",
-          ],
-          [
-            "tiktok_user_demo2",
-            "Pass654321",
-            "",
-            "user02@gmail.com",
-            "PassMail456",
-            "",
-            "socks5://192.168.1.100:1080",
-            "",
-            "Nhóm Reup Phim",
-          ],
-          [
-            "tiktok_user_demo3",
-            "Pass789xyz",
-            "KRSXG5CTMVRXEZLU",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "Mặc định",
-          ],
-        ].map((row) => row.map(escapeCsvCell).join(","));
-
-        const csvContent =
-          "\uFEFF" + [header.join(","), ...sampleRows].join("\r\n");
-        fs.writeFileSync(filePath, csvContent, "utf-8");
-      } else {
-        const header =
-          "# CẤU TRÚC MMO: Username|Password|2FA|Email|Pass_Email|Mail_Ao|Proxy|Cookie|Nhom";
-        const sampleRows = [
-          "tiktok_user_demo1|Pass123456|JBSWY3DPEHPK3PXP|user01@outlook.com|PassMail123|mailao01@gmail.com|http://user:pass@127.0.0.1:8080|sessionid=9f8e7d6c5b4a3...|Nhóm Nuôi US",
-          "tiktok_user_demo2|Pass654321||user02@gmail.com|PassMail456||socks5://192.168.1.100:1080||Nhóm Reup Phim",
-          "tiktok_user_demo3|Pass789xyz|KRSXG5CTMVRXEZLU||||||Mặc định",
-        ];
-        const txtContent = [header, ...sampleRows].join("\r\n");
-        fs.writeFileSync(filePath, txtContent, "utf-8");
-      }
-      return { success: true, filePath, format: isCsv ? "csv" : "txt" };
-    }
-    return { success: false, canceled: true };
-  });
-
   // Lấy mã OTP 2FA trực tiếp từ chuỗi secret theo thuật toán RFC 6238
   ipcMain.handle("profiles:get2FaCode", async (_, secret: string) => {
     return generateTotp(secret);
   });
 
-  // Export danh sách tài khoản ra file TXT (Legacy)
-  ipcMain.handle("profiles:exportTxt", async (_, content: string) => {
-    const activeWin = getValidWindow();
-    const today = new Date().toISOString().slice(0, 10);
-    const options = {
-      title: "Lưu Danh Sách Tài Khoản Ra File TXT",
-      defaultPath: `tiktok_accounts_${today}.txt`,
-      filters: [
-        { name: "Text Document (*.txt)", extensions: ["txt"] },
-        { name: "CSV File (*.csv)", extensions: ["csv"] },
-        { name: "All Files (*.*)", extensions: ["*"] },
-      ],
-    };
-    const res = activeWin
-      ? await dialog.showSaveDialog(activeWin, options)
-      : await dialog.showSaveDialog(options);
-
-    if (!res.canceled && res.filePath) {
-      fs.writeFileSync(res.filePath, content, "utf-8");
-      return { success: true, filePath: res.filePath };
-    }
-    return { success: false, canceled: true };
-  });
-
-  // Chọn và đọc file JSON từ máy tính
-  ipcMain.handle("profiles:readTxtFile", async () => {
+  // Chọn và đọc file JSON profiles từ máy tính
+  const handleReadJsonFile = async () => {
     const activeWin = getValidWindow();
     const options = {
       title: "Chọn File JSON Profiles",
@@ -533,7 +412,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       return { success: true, content, fileName, filePath };
     }
     return { success: false, canceled: true };
-  });
+  };
+
+  ipcMain.handle("profiles:readJsonFile", handleReadJsonFile);
+  ipcMain.handle("profiles:readTxtFile", handleReadJsonFile); // Tương thích ngược
 
   // Mở trình duyệt đăng nhập thủ công
   ipcMain.handle("profiles:openBrowser", async (_, id: string) => {
@@ -755,18 +637,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   );
 
   // Bắt đầu upload cho danh sách profile
-  ipcMain.handle(
-    "queue:start",
-    async (_, profileIds: string[], runOptions?: { maxVideos?: number }) => {
-      for (const id of profileIds) {
-        const profile = profileRepo.getById(id);
-        if (profile) {
-          await uploadQueue.addProfile(profile, runOptions);
-        }
+  ipcMain.handle("queue:start", async (_, profileIds: string[]) => {
+    for (const id of profileIds) {
+      const profile = profileRepo.getById(id);
+      if (profile) {
+        await uploadQueue.addProfile(profile);
       }
-      return uploadQueue.getStats();
-    },
-  );
+    }
+    return uploadQueue.getStats();
+  });
 
   ipcMain.handle("queue:getStats", async () => {
     return uploadQueue.getStats();
@@ -801,6 +680,17 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const validMode = mode === "done" ? "done" : "delete";
     configRepo.set("cleanup_mode", validMode);
     return validMode;
+  });
+
+  ipcMain.handle("config:getMaxVideos", async () => {
+    const val = configRepo.get("max_videos", "50");
+    return val !== "" && !isNaN(Number(val)) ? Number(val) : 50;
+  });
+
+  ipcMain.handle("config:setMaxVideos", async (_, maxVideos: number) => {
+    const limit = Math.max(0, Math.min(9999, Number(maxVideos) || 0));
+    configRepo.set("max_videos", String(limit));
+    return limit;
   });
 
   ipcMain.handle("logs:getByProfile", async (_, profileId: string) => {
