@@ -847,17 +847,29 @@ export const App: React.FC = () => {
                     Đều Video
                   </Button>
 
-                  {/* Nút Xuất JSON */}
+                  {/* Nút Xuất JSON (Tự động cập nhật số lượng theo kênh đã chọn hoặc kênh đang hiển thị) */}
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={isProcessing || filteredProfiles.length === 0}
+                    disabled={
+                      isProcessing ||
+                      (selectedProfileIds.size === 0 &&
+                        filteredProfiles.length === 0)
+                    }
                     onClick={() => handleExportJson()}
-                    title="Xuất danh sách profiles ra file JSON an toàn, đầy đủ cookies"
+                    title={
+                      selectedProfileIds.size > 0
+                        ? `Xuất ${selectedProfileIds.size} kênh đang chọn ra file JSON`
+                        : `Xuất ${filteredProfiles.length} kênh ra file JSON`
+                    }
                     className="h-8 shrink-0 border-emerald-300 bg-emerald-50/60 px-2.5 text-xs text-emerald-700 hover:bg-emerald-100/80"
                   >
                     <FileJson className="mr-1 h-3.5 w-3.5 text-emerald-600" />{" "}
-                    Xuất JSON ({filteredProfiles.length})
+                    Xuất JSON (
+                    {selectedProfileIds.size > 0
+                      ? selectedProfileIds.size
+                      : filteredProfiles.length}
+                    )
                   </Button>
                 </div>
               </div>
@@ -882,30 +894,14 @@ export const App: React.FC = () => {
                     </span>
                   </button>
 
-                  {/* Số lượng đã chọn & Cảnh báo kênh thiếu folder */}
+                  {/* Số lượng đã chọn */}
                   {selectedProfileIds.size > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge
-                        variant="info"
-                        className="border-sky-200 bg-sky-50 text-xs text-sky-700"
-                      >
-                        Đã chọn {selectedProfileIds.size} profile
-                      </Badge>
-                      {profiles.filter(
-                        (p) => selectedProfileIds.has(p.id) && !p.video_folder,
-                      ).length > 0 && (
-                        <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-600">
-                          ⚠️{" "}
-                          {
-                            profiles.filter(
-                              (p) =>
-                                selectedProfileIds.has(p.id) && !p.video_folder,
-                            ).length
-                          }{" "}
-                          kênh chưa gán folder
-                        </span>
-                      )}
-                    </div>
+                    <Badge
+                      variant="info"
+                      className="border-sky-200 bg-sky-50 text-xs text-sky-700"
+                    >
+                      Đã chọn {selectedProfileIds.size} profile
+                    </Badge>
                   )}
                 </div>
 
@@ -952,25 +948,6 @@ export const App: React.FC = () => {
                       >
                         <Users className="mr-1 h-3.5 w-3.5 text-indigo-600" />
                         Xem Followers ({selectedProfileIds.size})
-                      </Button>
-
-                      {/* Xuất JSON các kênh đang chọn */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={isProcessing}
-                        onClick={() =>
-                          handleExportJson(
-                            profiles.filter((p) =>
-                              selectedProfileIds.has(p.id),
-                            ),
-                          )
-                        }
-                        title="Xuất file JSON an toàn các kênh đang chọn"
-                        className="h-8 border-emerald-300 bg-emerald-50/60 px-2.5 text-xs text-emerald-700 hover:bg-emerald-100/80 disabled:opacity-50"
-                      >
-                        <FileJson className="mr-1 h-3.5 w-3.5 text-emerald-600" />{" "}
-                        Xuất Đã Chọn ({selectedProfileIds.size})
                       </Button>
 
                       {/* Xóa hàng loạt */}

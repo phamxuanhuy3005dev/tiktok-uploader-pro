@@ -172,14 +172,23 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return testProxyConnection(rawProxy);
   });
 
+  // Helper định dạng ngày tháng năm cho tên file xuất (dd-mm-yyyy)
+  const getExportDateStr = (): string => {
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, "0");
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const yyyy = now.getFullYear();
+    return `${dd}-${mm}-${yyyy}`;
+  };
+
   // Export profiles ra file JSON
   ipcMain.handle("profiles:exportJson", async (_, specificProfiles?: any[]) => {
     const activeWin = getValidWindow();
-    const today = new Date().toISOString().slice(0, 10);
+    const count = (specificProfiles || profileRepo.getAll()).length;
     const options = {
-      title: "Xuất Danh Sách Profiles (JSON)",
-      defaultPath: `tiktok_profiles_backup_${today}.json`,
-      filters: [{ name: "JSON Backup Files (*.json)", extensions: ["json"] }],
+      title: "Xuất Danh Sách Kênh (JSON)",
+      defaultPath: `tiktok_profiles_${count}_kenh_${getExportDateStr()}.json`,
+      filters: [{ name: "JSON Files (*.json)", extensions: ["json"] }],
     };
     const res = activeWin
       ? await dialog.showSaveDialog(activeWin, options)
@@ -190,7 +199,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       return {
         success: true,
         filePath: res.filePath,
-        count: (specificProfiles || profileRepo.getAll()).length,
+        count,
       };
     }
     return { success: false, canceled: true };
@@ -304,10 +313,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Export danh sách tài khoản ra file CSV / TXT / JSON với đầy đủ tên cột và nhóm
   ipcMain.handle("profiles:exportAccounts", async (_, accounts: any[]) => {
     const activeWin = getValidWindow();
-    const today = new Date().toISOString().slice(0, 10);
+    const count = (accounts || []).length;
     const options = {
       title: "Xuất Danh Sách Tài Khoản (Excel CSV / TXT / JSON)",
-      defaultPath: `tiktok_accounts_${today}.csv`,
+      defaultPath: `tiktok_accounts_${count}_kenh_${getExportDateStr()}.csv`,
       filters: [
         { name: "Excel Spreadsheet (*.csv)", extensions: ["csv"] },
         { name: "Text Document (*.txt)", extensions: ["txt"] },
