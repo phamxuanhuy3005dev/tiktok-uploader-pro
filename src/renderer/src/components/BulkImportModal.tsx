@@ -13,6 +13,13 @@ import { toast } from "sonner";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { Modal } from "./ui/Modal";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/Select";
 
 interface BulkImportModalProps {
   isOpen: boolean;
@@ -458,17 +465,21 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
             <div className="flex items-center gap-2 pt-1">
               {!isNewGroup ? (
                 <>
-                  <select
+                  <Select
                     value={selectedGroup}
-                    onChange={(e) => setSelectedGroup(e.target.value)}
-                    className="h-8 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-800 focus:border-sky-500 focus:outline-none"
+                    onValueChange={(val) => setSelectedGroup(val)}
                   >
-                    {availableGroups.map((g) => (
-                      <option key={g} value={g}>
-                        {g}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="h-8 flex-1 bg-white text-xs">
+                      <SelectValue placeholder="Chọn nhóm" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableGroups.map((g) => (
+                        <SelectItem key={g} value={g}>
+                          {g}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button
                     type="button"
                     variant="outline"

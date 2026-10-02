@@ -93,6 +93,8 @@ export interface IElectronAPI {
   getQueueStats: () => Promise<any>;
   setConcurrency: (concurrency: number) => Promise<number>;
   getConcurrency: () => Promise<number>;
+  getCleanupMode: () => Promise<string>;
+  setCleanupMode: (mode: string) => Promise<string>;
   getLogs: (profileId: string) => Promise<any[]>;
   getAllLogs: () => Promise<any[]>;
   clearLogs: () => Promise<boolean>;

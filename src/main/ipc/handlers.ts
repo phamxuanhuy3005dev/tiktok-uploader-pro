@@ -780,6 +780,16 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return uploadQueue.getConcurrency();
   });
 
+  ipcMain.handle("config:getCleanupMode", async () => {
+    return configRepo.get("cleanup_mode", "delete");
+  });
+
+  ipcMain.handle("config:setCleanupMode", async (_, mode: string) => {
+    const validMode = mode === "done" ? "done" : "delete";
+    configRepo.set("cleanup_mode", validMode);
+    return validMode;
+  });
+
   ipcMain.handle("logs:getByProfile", async (_, profileId: string) => {
     return logRepo.getByProfile(profileId);
   });

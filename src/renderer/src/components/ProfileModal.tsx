@@ -4,6 +4,7 @@ import {
   Copy,
   Folder,
   Globe,
+  HardDrive,
   KeyRound,
   Mail,
   Music,
@@ -13,8 +14,17 @@ import {
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "./ui/Button";
+import { Checkbox } from "./ui/Checkbox";
 import { Input } from "./ui/Input";
 import { Modal } from "./ui/Modal";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/Select";
+import { cn } from "../lib/utils";
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -61,6 +71,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [proxy, setProxy] = useState("");
   const [cookies, setCookies] = useState("");
   const [maxVideos, setMaxVideos] = useState<number | string>(50);
+  const [cleanupMode, setCleanupMode] = useState<"default" | "delete" | "done">(
+    "default",
+  );
+  const [allowEditSecurity, setAllowEditSecurity] = useState(!initialData);
   const [loading, setLoading] = useState(false);
   const [isTestingProxy, setIsTestingProxy] = useState(false);
   const [proxyTestResult, setProxyTestResult] = useState<{
@@ -69,6 +83,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     latencyMs?: number;
     error?: string;
   } | null>(null);
+
+  const handleCopyField = (text: string, label: string) => {
+    if (!text || !text.trim()) {
+      toast.warning(`Chưa có thông tin ${label} để copy!`);
+      return;
+    }
+    navigator.clipboard.writeText(text.trim());
+    toast.success(`Đã copy ${label}: ${text.trim()}`);
+  };
 
   const handleGenerateOtp = async () => {
     if (!twoFactor.trim()) {
@@ -140,6 +163,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setScheduleInterval(initialData.schedule_interval ?? 10);
       setGoldenHours(initialData.golden_hours || "11:30,17:30,20:00");
       setProxy(initialData.proxy || "");
+      setCleanupMode(initialData.cleanup_mode || "default");
+      setAllowEditSecurity(false);
     } else {
       setName("");
       setGroupName("Mặc định");
@@ -161,6 +186,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setScheduleInterval(10);
       setGoldenHours("11:30,17:30,20:00");
       setProxy("");
+      setCleanupMode("default");
+      setAllowEditSecurity(true);
     }
   }, [initialData, isOpen]);
 
@@ -198,6 +225,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         schedule_interval: Number(scheduleInterval) || 10,
         golden_hours: goldenHours.trim(),
         caption_mode: "remove_title",
+        cleanup_mode: cleanupMode,
         proxy: proxy.trim() || null,
         status: initialData?.status || "idle",
         last_run: initialData?.last_run || null,
@@ -290,28 +318,34 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 </Button>
               </div>
             ) : (
-              <select
+              <Select
                 value={groupName}
-                onChange={(e) => {
-                  if (e.target.value === "__NEW__") {
+                onValueChange={(val) => {
+                  if (val === "__NEW__") {
                     setIsCreatingGroup(true);
                   } else {
-                    setGroupName(e.target.value);
+                    setGroupName(val);
                   }
                 }}
-                className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 focus:border-sky-500 focus:outline-none"
               >
-                {Array.from(
-                  new Set(["Mặc định", ...availableGroups, groupName]),
-                )
-                  .filter(Boolean)
-                  .map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-                <option value="__NEW__">+ Nhập nhóm mới khác...</option>
-              </select>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Chọn nhóm kênh" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from(
+                    new Set(["Mặc định", ...availableGroups, groupName]),
+                  )
+                    .filter(Boolean)
+                    .map((g) => (
+                      <SelectItem key={g} value={g}>
+                        {g}
+                      </SelectItem>
+                    ))}
+                  <SelectItem value="__NEW__">
+                    + Nhập nhóm mới khác...
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             )}
             <p className="mt-1 flex items-center gap-1 text-[10px] text-slate-500">
               <span className="font-bold text-amber-600">💡 Mẹo:</span> Nhóm có
@@ -334,35 +368,90 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
         {/* 2. Thông tin Tài Khoản & Mật Khẩu (Quản lý kênh) */}
         <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-800">
-            <ShieldCheck className="h-4 w-4 text-sky-600" /> Thông Tin Tài Khoản
-            & Bảo Mật
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-2">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-800">
+              <ShieldCheck className="h-4 w-4 text-sky-600" /> Thông Tin Tài
+              Khoản & Bảo Mật
+            </div>
+            {initialData && (
+              <label className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1 shadow-sm transition-colors hover:bg-slate-50">
+                <Checkbox
+                  checked={allowEditSecurity}
+                  onCheckedChange={(checked) =>
+                    setAllowEditSecurity(Boolean(checked))
+                  }
+                />
+                <span className="text-[11px] font-medium text-slate-700">
+                  Cho phép chỉnh sửa thông tin bảo mật
+                </span>
+              </label>
+            )}
           </div>
+
+          {initialData && !allowEditSecurity && (
+            <p className="flex items-center gap-1.5 rounded-lg border border-amber-200/60 bg-amber-50/80 px-2.5 py-1.5 text-[11px] text-amber-700">
+              <span>🔒</span> Đang ở chế độ xem an toàn để tránh sửa nhầm. Tích
+              chọn ô trên nếu bạn muốn chỉnh sửa. Bạn vẫn có thể bôi đen hoặc
+              bấm nút <strong>Copy</strong> để sao chép thông tin.
+            </p>
+          )}
 
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             <div>
-              <label className="mb-0.5 block flex items-center gap-1 text-[11px] font-medium text-slate-600">
-                <KeyRound className="h-3 w-3 text-slate-400" /> Tài khoản TikTok
-                (Username / ID)
-              </label>
+              <div className="mb-0.5 flex items-center justify-between text-[11px] font-medium text-slate-600">
+                <span className="flex items-center gap-1">
+                  <KeyRound className="h-3 w-3 text-slate-400" /> Tài khoản
+                  TikTok (Username / ID)
+                </span>
+                {accountId.trim() && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyField(accountId, "Tài khoản TikTok")
+                    }
+                    className="flex items-center gap-1 text-[10px] font-semibold text-sky-600 hover:text-sky-700 hover:underline"
+                  >
+                    <Copy className="h-2.5 w-2.5" /> Copy
+                  </button>
+                )}
+              </div>
               <Input
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
+                readOnly={!allowEditSecurity}
                 placeholder="User / Phone / ID"
-                className="h-8 text-xs"
+                className={cn(
+                  "h-8 select-all text-xs",
+                  !allowEditSecurity &&
+                    "cursor-default bg-slate-100/90 text-slate-700 focus:border-slate-200 focus:ring-0",
+                )}
               />
             </div>
 
             <div>
-              <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
-                Mật khẩu TikTok
-              </label>
+              <div className="mb-0.5 flex items-center justify-between text-[11px] font-medium text-slate-600">
+                <span>Mật khẩu TikTok</span>
+                {pass.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyField(pass, "Mật khẩu TikTok")}
+                    className="flex items-center gap-1 text-[10px] font-semibold text-sky-600 hover:text-sky-700 hover:underline"
+                  >
+                    <Copy className="h-2.5 w-2.5" /> Copy
+                  </button>
+                )}
+              </div>
               <Input
                 type="text"
                 value={pass}
                 onChange={(e) => setPass(e.target.value)}
+                readOnly={!allowEditSecurity}
                 placeholder="Mật khẩu TikTok"
-                className="h-8 font-mono text-xs"
+                className={cn(
+                  "h-8 select-all font-mono text-xs",
+                  !allowEditSecurity &&
+                    "cursor-default bg-slate-100/90 text-slate-700 focus:border-slate-200 focus:ring-0",
+                )}
               />
             </div>
 
@@ -373,18 +462,29 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   <ShieldCheck className="h-3.5 w-3.5 text-purple-600" /> Mã 2FA
                   (Authenticator Secret Key / 2FA Live)
                 </label>
-                {twoFactor.trim() && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleGenerateOtp}
-                    disabled={isGettingOtp}
-                    className="h-6 border-purple-200 bg-white px-2 text-[10px] text-purple-700 hover:bg-purple-100/70"
-                  >
-                    {isGettingOtp ? "Đang tạo..." : "🔑 Lấy mã OTP 6 số"}
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {twoFactor.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyField(twoFactor, "Khóa 2FA")}
+                      className="flex items-center gap-1 text-[10px] font-semibold text-purple-700 hover:underline"
+                    >
+                      <Copy className="h-2.5 w-2.5" /> Copy Key
+                    </button>
+                  )}
+                  {twoFactor.trim() && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGenerateOtp}
+                      disabled={isGettingOtp}
+                      className="h-6 border-purple-200 bg-white px-2 text-[10px] text-purple-700 hover:bg-purple-100/70"
+                    >
+                      {isGettingOtp ? "Đang tạo..." : "🔑 Lấy mã OTP 6 số"}
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="flex gap-2">
                 <Input
@@ -394,8 +494,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     setTwoFactor(e.target.value);
                     setOtpResult(null);
                   }}
+                  readOnly={!allowEditSecurity}
                   placeholder="Ví dụ: JBSWY3DPEHPK3PXP (Mã bí mật dạng Base32 khi mua acc)"
-                  className="h-8 flex-1 bg-white font-mono text-xs"
+                  className={cn(
+                    "h-8 flex-1 select-all bg-white font-mono text-xs",
+                    !allowEditSecurity &&
+                      "cursor-default bg-slate-100/90 text-slate-700 focus:border-slate-200 focus:ring-0",
+                  )}
                 />
               </div>
               {otpResult && (
@@ -429,41 +534,85 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </div>
 
             <div>
-              <label className="mb-0.5 block flex items-center gap-1 text-[11px] font-medium text-slate-600">
-                <Mail className="h-3 w-3 text-slate-400" /> Email đăng ký
-              </label>
+              <div className="mb-0.5 flex items-center justify-between text-[11px] font-medium text-slate-600">
+                <span className="flex items-center gap-1">
+                  <Mail className="h-3 w-3 text-slate-400" /> Email đăng ký
+                </span>
+                {email.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyField(email, "Email")}
+                    className="flex items-center gap-1 text-[10px] font-semibold text-sky-600 hover:text-sky-700 hover:underline"
+                  >
+                    <Copy className="h-2.5 w-2.5" /> Copy
+                  </button>
+                )}
+              </div>
               <Input
                 type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                readOnly={!allowEditSecurity}
                 placeholder="example@outlook.com"
-                className="h-8 text-xs"
+                className={cn(
+                  "h-8 select-all text-xs",
+                  !allowEditSecurity &&
+                    "cursor-default bg-slate-100/90 text-slate-700 focus:border-slate-200 focus:ring-0",
+                )}
               />
             </div>
 
             <div>
-              <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
-                Mật khẩu Email
-              </label>
+              <div className="mb-0.5 flex items-center justify-between text-[11px] font-medium text-slate-600">
+                <span>Mật khẩu Email</span>
+                {passEmail.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyField(passEmail, "Mật khẩu Email")}
+                    className="flex items-center gap-1 text-[10px] font-semibold text-sky-600 hover:text-sky-700 hover:underline"
+                  >
+                    <Copy className="h-2.5 w-2.5" /> Copy
+                  </button>
+                )}
+              </div>
               <Input
                 type="text"
                 value={passEmail}
                 onChange={(e) => setPassEmail(e.target.value)}
+                readOnly={!allowEditSecurity}
                 placeholder="Mật khẩu hòm thư"
-                className="h-8 font-mono text-xs"
+                className={cn(
+                  "h-8 select-all font-mono text-xs",
+                  !allowEditSecurity &&
+                    "cursor-default bg-slate-100/90 text-slate-700 focus:border-slate-200 focus:ring-0",
+                )}
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
-                Mail ảo / Mail khôi phục
-              </label>
+              <div className="mb-0.5 flex items-center justify-between text-[11px] font-medium text-slate-600">
+                <span>Mail ảo / Mail khôi phục</span>
+                {mailAo.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyField(mailAo, "Mail ảo")}
+                    className="flex items-center gap-1 text-[10px] font-semibold text-sky-600 hover:text-sky-700 hover:underline"
+                  >
+                    <Copy className="h-2.5 w-2.5" /> Copy
+                  </button>
+                )}
+              </div>
               <Input
                 type="text"
                 value={mailAo}
                 onChange={(e) => setMailAo(e.target.value)}
+                readOnly={!allowEditSecurity}
                 placeholder="Mail ảo liên kết..."
-                className="h-8 text-xs"
+                className={cn(
+                  "h-8 select-all text-xs",
+                  !allowEditSecurity &&
+                    "cursor-default bg-slate-100/90 text-slate-700 focus:border-slate-200 focus:ring-0",
+                )}
               />
             </div>
 
@@ -530,8 +679,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </Button>
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
-              * Video đăng thành công sẽ tự động chuyển vào thư mục con{" "}
-              <code className="font-semibold text-slate-700">done/</code>.
+              * Video đăng thành công sẽ được xử lý theo tùy chọn bên dưới.
             </p>
           </div>
 
@@ -554,6 +702,41 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
         </div>
 
+        {/* Tùy chọn xử lý sau khi đăng (Cleanup Mode) */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-700">
+                <HardDrive className="h-3.5 w-3.5 text-slate-500" /> Xử lý video
+                sau khi đăng
+              </label>
+              <p className="text-[11px] text-slate-500">
+                Tự động xóa để giải phóng dung lượng ổ cứng hoặc lưu trữ lại vào
+                thư mục done/
+              </p>
+            </div>
+            <div className="w-full shrink-0 sm:w-60">
+              <Select
+                value={cleanupMode}
+                onValueChange={(val: any) => setCleanupMode(val)}
+              >
+                <SelectTrigger className="h-8 bg-white text-xs">
+                  <SelectValue placeholder="Chọn hành động" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">
+                    Theo cài đặt chung hệ thống
+                  </SelectItem>
+                  <SelectItem value="delete">🗑️ Xóa video gốc ngay</SelectItem>
+                  <SelectItem value="done">
+                    📁 Chuyển vào thư mục done/
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
         {/* 4. Khối Gắn Nhạc Favorites */}
         <div className="space-y-2.5 rounded-xl border border-sky-100 bg-sky-50/30 p-3.5">
           <div className="flex items-center justify-between">
@@ -562,11 +745,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               Favorites
             </div>
             <label className="flex cursor-pointer select-none items-center gap-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={enableMusic}
-                onChange={(e) => setEnableMusic(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                onCheckedChange={(checked) => setEnableMusic(Boolean(checked))}
               />
               <span className="text-xs font-medium text-slate-700">
                 {enableMusic ? "Đang Bật" : "Tắt (Giữ tiếng gốc)"}
@@ -581,18 +762,22 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
                     Chế độ chọn bài
                   </label>
-                  <select
+                  <Select
                     value={musicMode}
-                    onChange={(e: any) => setMusicMode(e.target.value)}
-                    className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 focus:border-sky-500 focus:outline-none"
+                    onValueChange={(val: any) => setMusicMode(val)}
                   >
-                    <option value="favorite_rotate">
-                      Xoay vòng các bài trong Favorites (Mặc định)
-                    </option>
-                    <option value="favorite_single">
-                      Cố định 1 bài hát chỉ định
-                    </option>
-                  </select>
+                    <SelectTrigger className="h-8 bg-white text-xs">
+                      <SelectValue placeholder="Chọn chế độ" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="favorite_rotate">
+                        Xoay vòng các bài trong Favorites (Mặc định)
+                      </SelectItem>
+                      <SelectItem value="favorite_single">
+                        Cố định 1 bài hát chỉ định
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {musicMode === "favorite_single" ? (
@@ -668,17 +853,25 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <label className="mb-0.5 block text-[11px] font-medium text-slate-600">
                 Chế độ lịch
               </label>
-              <select
+              <Select
                 value={scheduleMode}
-                onChange={(e: any) => setScheduleMode(e.target.value)}
-                className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 focus:border-sky-500 focus:outline-none"
+                onValueChange={(val: any) => setScheduleMode(val)}
               >
-                <option value="auto_increment">
-                  Nối tiếp lịch cũ (+ khoảng cách phút)
-                </option>
-                <option value="golden_hours">Rải theo Khung Giờ Vàng</option>
-                <option value="immediate">Đăng ngay lập tức (Public)</option>
-              </select>
+                <SelectTrigger className="h-8 bg-white text-xs">
+                  <SelectValue placeholder="Chọn chế độ lịch" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto_increment">
+                    Nối tiếp lịch cũ (+ khoảng cách phút)
+                  </SelectItem>
+                  <SelectItem value="golden_hours">
+                    Rải theo Khung Giờ Vàng
+                  </SelectItem>
+                  <SelectItem value="immediate">
+                    Đăng ngay lập tức (Public)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {scheduleMode === "auto_increment" && (

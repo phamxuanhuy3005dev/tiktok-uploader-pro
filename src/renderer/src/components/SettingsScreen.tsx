@@ -2,12 +2,16 @@ import {
   CheckCircle2,
   Clock,
   Cpu,
+  FolderCheck,
+  HardDrive,
   Info,
   Music,
   Settings,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Badge } from "./ui/Badge";
 
 interface SettingsScreenProps {
@@ -20,10 +24,38 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onUpdateConcurrency,
 }) => {
   const [selectedConcurrency, setSelectedConcurrency] = useState(concurrency);
+  const [cleanupMode, setCleanupMode] = useState<"delete" | "done">("delete");
+
+  useEffect(() => {
+    window.api
+      .getCleanupMode()
+      .then((mode) => {
+        if (mode === "done" || mode === "delete") {
+          setCleanupMode(mode);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to get cleanup mode:", err);
+      });
+  }, []);
 
   const handleSaveConcurrency = (num: number) => {
     setSelectedConcurrency(num);
     onUpdateConcurrency(num);
+  };
+
+  const handleSaveCleanupMode = async (mode: "delete" | "done") => {
+    setCleanupMode(mode);
+    try {
+      await window.api.setCleanupMode(mode);
+      toast.success(
+        mode === "delete"
+          ? "Đã lưu cài đặt: Tự động xóa video gốc sau khi đăng"
+          : "Đã lưu cài đặt: Chuyển video gốc vào thư mục done/",
+      );
+    } catch (err: any) {
+      toast.error("Không thể lưu cài đặt: " + err.message);
+    }
   };
 
   return (
@@ -111,6 +143,92 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             tăng tốc độ đẩy video.
           </span>
         </div>
+      </div>
+
+      {/* Cấu hình Xử lý Video sau khi Upload */}
+      <div className="space-y-4 rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-100 bg-amber-50 text-amber-600">
+              <HardDrive className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">
+                Xử Lý Video Sau Khi Đăng Thành Công (Mặc Định Toàn App)
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Lựa chọn hành động tự động sau khi video được tải lên TikTok
+                Studio thành công.
+              </p>
+            </div>
+          </div>
+          <Badge
+            variant="outline"
+            className={
+              cleanupMode === "delete"
+                ? "border-rose-200 bg-rose-50 font-bold text-rose-600"
+                : "border-sky-200 bg-sky-50 font-bold text-sky-600"
+            }
+          >
+            {cleanupMode === "delete" ? "Xóa video ngay" : "Lưu vào done/"}
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => handleSaveCleanupMode("delete")}
+            className={`rounded-xl border p-4 text-left transition-all ${
+              cleanupMode === "delete"
+                ? "border-rose-500 bg-rose-50/60 shadow-sm ring-2 ring-rose-500/20"
+                : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60"
+            }`}
+          >
+            <div className="mb-1.5 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                <Trash2 className="h-4 w-4 text-rose-500" />
+                <span>Xóa video gốc ngay lập tức</span>
+              </div>
+              {cleanupMode === "delete" && (
+                <CheckCircle2 className="h-4 w-4 text-rose-500" />
+              )}
+            </div>
+            <p className="text-xs leading-relaxed text-slate-500">
+              <strong>Khuyên dùng:</strong> Xóa ngay file video (và file .txt mô
+              tả kèm theo) để giải phóng dung lượng ổ cứng tối đa cho máy tính,
+              tránh đầy ổ khi cày số lượng lớn.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSaveCleanupMode("done")}
+            className={`rounded-xl border p-4 text-left transition-all ${
+              cleanupMode === "done"
+                ? "border-sky-500 bg-sky-50/60 shadow-sm ring-2 ring-sky-500/20"
+                : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60"
+            }`}
+          >
+            <div className="mb-1.5 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                <FolderCheck className="h-4 w-4 text-sky-500" />
+                <span>Chuyển vào thư mục done/</span>
+              </div>
+              {cleanupMode === "done" && (
+                <CheckCircle2 className="h-4 w-4 text-sky-500" />
+              )}
+            </div>
+            <p className="text-xs leading-relaxed text-slate-500">
+              Tạo thư mục con <code>done/</code> bên trong thư mục nguồn và di
+              chuyển video vào đó để lưu trữ lại và kiểm tra đối chiếu sau này.
+            </p>
+          </button>
+        </div>
+
+        <p className="text-[11px] text-slate-400">
+          * Bạn cũng có thể thiết lập riêng cho từng Profile cụ thể trong mục
+          Chỉnh sửa Profile (ghi đè cài đặt chung này).
+        </p>
       </div>
 
       {/* Thông Tin Cơ Chế Tự Động */}

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { Page, Response } from "playwright";
-import { ProfileRecord } from "../../db/database";
+import { configRepo, ProfileRecord } from "../../db/database";
 import { handleCaptchaWait } from "./task-captcha";
 import { dismissPopups } from "./task-navigate";
 
@@ -106,7 +106,14 @@ export async function submitAndConfirmPost(
       try {
         await targetBtn.click({ timeout: 5000 });
       } catch (_) {
-        await targetBtn.click({ force: true }).catch(() => {});
+        try {
+          await targetBtn.click({ force: true, timeout: 5000 });
+        } catch (_) {
+          // Fallback an toàn qua DOM click nếu bị lỗi Element is out of view khi cửa sổ thu nhỏ
+          await targetBtn
+            .evaluate((node: HTMLElement) => node.click())
+            .catch(() => {});
+        }
       }
       await page.waitForTimeout(2000);
       await dismissPopups(page, log);
@@ -153,49 +160,72 @@ export async function submitAndConfirmPost(
     ? `https://www.tiktok.com/@${profile.name}/video/${capturedVideoId}`
     : null;
 
-  // Di chuyển file sang thư mục "done"
+  // Quyết định hành động dọn dẹp file: Xóa luôn (mặc định) hoặc Di chuyển vào done/
   try {
-    const videoDir = path.dirname(videoPath);
-    const doneDir = path.join(videoDir, "done");
-    if (!fs.existsSync(doneDir)) fs.mkdirSync(doneDir, { recursive: true });
-
+    const globalMode = configRepo.get("cleanup_mode", "delete");
+    const profileMode = profile.cleanup_mode || "default";
+    const effectiveMode = profileMode === "default" ? globalMode : profileMode;
     const fileName = path.basename(videoPath);
-    let destPath = path.join(doneDir, fileName);
-
-    // Xử lý nếu tên file đã tồn tại trong done/
-    if (fs.existsSync(destPath)) {
-      const ext = path.extname(fileName);
-      const base = path.basename(fileName, ext);
-      destPath = path.join(doneDir, `${base}_${Date.now()}${ext}`);
-    }
-
-    try {
-      fs.renameSync(videoPath, destPath);
-    } catch {
-      // Fallback trên Windows khi file bị lock hoặc khác ổ đĩa
-      fs.copyFileSync(videoPath, destPath);
-      try {
-        fs.unlinkSync(videoPath);
-      } catch (_) {}
-    }
-    log(`[Lưu trữ] Đã chuyển file ${fileName} sang thư mục "done/" an toàn.`);
-
-    // Nếu có file text đi kèm thì chuyển luôn
     const ext = path.extname(videoPath);
     const txtPath = videoPath.slice(0, -ext.length) + ".txt";
-    if (fs.existsSync(txtPath)) {
-      const destTxt = path.join(doneDir, path.basename(txtPath));
+
+    if (effectiveMode === "delete") {
+      // XÓA NGAY LẬP TỨC (mặc định cho nhẹ máy)
       try {
-        fs.renameSync(txtPath, destTxt);
-      } catch {
-        try {
-          fs.copyFileSync(txtPath, destTxt);
+        if (fs.existsSync(videoPath)) {
+          fs.unlinkSync(videoPath);
+        }
+      } catch (delErr: any) {
+        log(`Cảnh báo xóa file video: ${delErr.message}`);
+      }
+
+      // Xóa kèm file txt nếu có
+      try {
+        if (fs.existsSync(txtPath)) {
           fs.unlinkSync(txtPath);
+        }
+      } catch (_) {}
+
+      log(
+        `[Dọn dẹp] Đã xóa video gốc ${fileName} sau khi đăng thành công (Tiết kiệm dung lượng máy).`,
+      );
+    } else {
+      // GIỮ VÀ CHUYỂN VÀO THƯ MỤC done/
+      const videoDir = path.dirname(videoPath);
+      const doneDir = path.join(videoDir, "done");
+      if (!fs.existsSync(doneDir)) fs.mkdirSync(doneDir, { recursive: true });
+
+      let destPath = path.join(doneDir, fileName);
+
+      if (fs.existsSync(destPath)) {
+        const base = path.basename(fileName, ext);
+        destPath = path.join(doneDir, `${base}_${Date.now()}${ext}`);
+      }
+
+      try {
+        fs.renameSync(videoPath, destPath);
+      } catch {
+        fs.copyFileSync(videoPath, destPath);
+        try {
+          fs.unlinkSync(videoPath);
         } catch (_) {}
       }
+      log(`[Lưu trữ] Đã chuyển file ${fileName} sang thư mục "done/" an toàn.`);
+
+      if (fs.existsSync(txtPath)) {
+        const destTxt = path.join(doneDir, path.basename(txtPath));
+        try {
+          fs.renameSync(txtPath, destTxt);
+        } catch {
+          try {
+            fs.copyFileSync(txtPath, destTxt);
+            fs.unlinkSync(txtPath);
+          } catch (_) {}
+        }
+      }
     }
-  } catch (mvErr: any) {
-    log(`Cảnh báo di chuyển file: ${mvErr.message}`);
+  } catch (cleanErr: any) {
+    log(`Cảnh báo xử lý file sau khi đăng: ${cleanErr.message}`);
   }
 
   return { videoId: capturedVideoId, videoUrl };

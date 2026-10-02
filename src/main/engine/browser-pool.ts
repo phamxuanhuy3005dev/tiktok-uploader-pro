@@ -24,14 +24,10 @@ const CLEAN_CHROME_ARGS = [
   "--disable-default-apps",
   "--disable-component-update",
   "--lang=en-US",
+  "--window-size=1280,800",
 ];
 
-const LOCK_FILES = [
-  "SingletonLock",
-  "SingletonCookie",
-  "SingletonSocket",
-  "lockfile",
-];
+const LOCK_FILES = ["SingletonLock", "SingletonSocket", "lockfile"];
 
 /**
  * Quét danh sách PID của Chromium/Chrome đang chạy trên thư mục UserDataDir này
@@ -96,35 +92,47 @@ export async function releaseProfileLocks(
     } catch (_) {}
   }
 
-  // Nếu không có bất kỳ file lock nào, không cần quét tiến trình ngầm (tăng tốc độ 100x)
+  // Nếu không có bất kỳ file lock nào, hoàn thành ngay lập tức
   if (foundLocks.length === 0) return;
 
-  // 1. Kill toàn bộ process Chrome cũ đang giữ thư mục này
-  const pids = await getProfilePids(userDataDir);
-  if (pids.length > 0) {
-    console.log(
-      `[${profileName}] Phát hiện ${pids.length} tiến trình Chrome cũ còn chạy ngầm. Đang dọn sạch...`,
-    );
-    for (const pid of pids) {
-      try {
-        if (process.platform === "win32") {
-          await execAsync(`taskkill /F /T /PID ${pid}`).catch(() => {});
-        } else {
-          process.kill(pid, "SIGKILL");
-        }
-      } catch (_) {}
-    }
-    await new Promise((r) => setTimeout(r, 100));
-  }
-
-  // 2. Unlink lock files
+  // Thử unlink trực tiếp trước: nếu file không bị tiến trình nào giữ thì xóa được ngay (<1ms)
+  let hasLockedFile = false;
   for (const lockPath of foundLocks) {
     try {
       fs.unlinkSync(lockPath);
-    } catch (_) {}
+    } catch (err: any) {
+      if (err.code === "EBUSY" || err.code === "EPERM") {
+        hasLockedFile = true;
+      }
+    }
   }
 
-  await new Promise((r) => setTimeout(r, 100));
+  // Chỉ khi file thực sự đang bị khóa bởi tiến trình Chrome còn sống thì mới tìm và kill PID
+  if (hasLockedFile) {
+    const pids = await getProfilePids(userDataDir);
+    if (pids.length > 0) {
+      console.log(
+        `[${profileName}] Phát hiện ${pids.length} tiến trình Chrome cũ còn chạy ngầm. Đang dọn sạch...`,
+      );
+      for (const pid of pids) {
+        try {
+          if (process.platform === "win32") {
+            await execAsync(`taskkill /F /T /PID ${pid}`).catch(() => {});
+          } else {
+            process.kill(pid, "SIGKILL");
+          }
+        } catch (_) {}
+      }
+      await new Promise((r) => setTimeout(r, 60));
+    }
+
+    // Thử unlink lại sau khi kill
+    for (const lockPath of foundLocks) {
+      try {
+        fs.unlinkSync(lockPath);
+      } catch (_) {}
+    }
+  }
 }
 
 /**
@@ -622,9 +630,9 @@ export async function launchProfileContext(
 
   const launchOptions: any = {
     headless,
-    viewport: null, // Full màn hình
+    viewport: { width: 1280, height: 800 },
     args: [...CLEAN_CHROME_ARGS],
-    ignoreDefaultArgs: ["--no-sandbox"],
+    ignoreDefaultArgs: ["--enable-automation", "--no-sandbox"],
     locale: "en-US",
     extraHTTPHeaders: {
       "Accept-Language": "en-US,en;q=0.9",
@@ -649,6 +657,80 @@ export async function launchProfileContext(
     userDataDir,
     launchOptions,
   );
+
+  // Cơ chế chống phát hiện Bot / Automation cho TikTok Studio
+  await context
+    .addInitScript(() => {
+      // 1. Gỡ bỏ cờ navigator.webdriver
+      Object.defineProperty(navigator, "webdriver", {
+        get: () => undefined,
+      });
+
+      // 2. Giả lập đối tượng window.chrome chuẩn của Google Chrome
+      if (!(window as any).chrome) {
+        (window as any).chrome = {};
+      }
+      (window as any).chrome.runtime = (window as any).chrome.runtime || {
+        PlatformOs: {
+          MAC: "mac",
+          WIN: "win",
+          ANDROID: "android",
+          CROS: "cros",
+          LINUX: "linux",
+          OPENBSD: "openbsd",
+        },
+        PlatformArch: {
+          ARM: "arm",
+          X86_32: "x86-32",
+          X86_64: "x86-64",
+          MIPS: "mips",
+          MIPS64: "mips64",
+        },
+        PlatformNaclArch: {
+          ARM: "arm",
+          X86_32: "x86-32",
+          X86_64: "x86-64",
+          MIPS: "mips",
+          MIPS64: "mips64",
+        },
+      };
+      (window as any).chrome.loadTimes =
+        (window as any).chrome.loadTimes || function () {};
+      (window as any).chrome.csi = (window as any).chrome.csi || function () {};
+      (window as any).chrome.app = (window as any).chrome.app || {
+        isInstalled: false,
+        InstallState: {
+          DISABLED: "disabled",
+          INSTALLED: "installed",
+          NOT_INSTALLED: "not_installed",
+        },
+        RunningState: {
+          CANNOT_RUN: "cannot_run",
+          READY_TO_RUN: "ready_to_run",
+          RUNNING: "running",
+        },
+      };
+
+      // 3. Giả lập languages và plugins phong phú của người dùng thật
+      Object.defineProperty(navigator, "languages", {
+        get: () => ["en-US", "en"],
+      });
+      Object.defineProperty(navigator, "plugins", {
+        get: () => [1, 2, 3, 4, 5],
+      });
+
+      // 4. Giả lập permissions.query tránh bị TikTok SDK phát hiện automation
+      const originalQuery = window.navigator.permissions?.query;
+      if (originalQuery) {
+        window.navigator.permissions.query = (parameters: any) =>
+          parameters.name === "notifications"
+            ? Promise.resolve({
+                state: Notification.permission,
+              } as PermissionStatus)
+            : originalQuery(parameters);
+      }
+    })
+    .catch(() => {});
 
   // Nạp cookies thông minh nếu có (hỗ trợ JSON, Base64, string header sessionid=...)
   if (profile.cookies) {
@@ -942,7 +1024,7 @@ export async function openManualBrowser(
     return "unknown";
   };
 
-  // 1. Quét định kỳ mỗi 2 giây trong khi người dùng duyệt web
+  // 1. Quét định kỳ mỗi 5 giây trong khi người dùng duyệt web (nhẹ nhàng, không gây giật lag trình duyệt)
   // Tự động nhận diện ĐĂNG NHẬP THÀNH CÔNG hoặc ĐĂNG XUẤT trong thời gian thực!
   const syncInterval = setInterval(async () => {
     if (isCleanedUp) {
@@ -950,11 +1032,6 @@ export async function openManualBrowser(
       return;
     }
     try {
-      const currentCookies = await context.cookies().catch(() => []);
-      if (currentCookies.length > 0) {
-        lastCookies = currentCookies;
-      }
-
       const status = await checkPageAuth();
       if (status === "unknown") return;
 
@@ -963,11 +1040,13 @@ export async function openManualBrowser(
       if (status === "logged_in") {
         if (!isSynced) {
           isSynced = true;
-          const freshCookies =
-            currentCookies.length > 0 ? currentCookies : lastCookies;
+          const freshCookies = await context.cookies().catch(() => []);
+          if (freshCookies.length > 0) {
+            lastCookies = freshCookies;
+          }
           profileRepo.update({
             id: profile.id,
-            cookies: JSON.stringify(freshCookies),
+            cookies: JSON.stringify(lastCookies),
           });
           console.log(
             `[${profile.name}] 🟢 Phát hiện đăng nhập TikTok thành công trong lúc duyệt web!`,
@@ -988,7 +1067,7 @@ export async function openManualBrowser(
         }
       }
     } catch (_) {}
-  }, 2000);
+  }, 5000);
 
   const handleClose = async () => {
     if (isCleanedUp) return;

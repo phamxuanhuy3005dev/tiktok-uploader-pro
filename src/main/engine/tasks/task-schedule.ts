@@ -309,7 +309,13 @@ export async function applySchedule(
       )
       .last();
     await scheduleLabel.scrollIntoViewIfNeeded().catch(() => {});
-    await scheduleLabel.click({ force: true }).catch(() => {});
+    try {
+      await scheduleLabel.click({ force: true, timeout: 3000 });
+    } catch (_) {
+      await scheduleLabel
+        .evaluate((el: HTMLElement) => el.click())
+        .catch(() => {});
+    }
     await page.waitForTimeout(600);
     await checkAndAllowSchedule();
     isChecked = await scheduleRadioInput.isChecked().catch(() => false);

@@ -117,7 +117,13 @@ export async function attachFavoriteMusic(
       // Bấm nút "+" để thêm bài nhạc vào Timeline
       const chosenButton = plusButtons.nth(targetIndex);
       await chosenButton.scrollIntoViewIfNeeded().catch(() => {});
-      await chosenButton.click({ force: true });
+      try {
+        await chosenButton.click({ force: true, timeout: 5000 });
+      } catch (_) {
+        await chosenButton
+          .evaluate((el: HTMLElement) => el.click())
+          .catch(() => {});
+      }
       log(
         `Đã thêm bài nhạc #${targetIndex + 1} vào Timeline. Đang chờ bảng thuộc tính âm thanh...`,
       );
@@ -160,7 +166,11 @@ export async function attachFavoriteMusic(
         .first();
 
       await saveBtn.waitFor({ state: "visible", timeout: 10000 });
-      await saveBtn.click({ force: true });
+      try {
+        await saveBtn.click({ force: true, timeout: 5000 });
+      } catch (_) {
+        await saveBtn.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+      }
 
       // Đợi trở về màn hình Upload form
       log("Đang chờ trình duyệt lưu và quay lại màn hình đăng video...");

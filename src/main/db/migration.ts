@@ -143,6 +143,7 @@ export function exportProfilesToJson(
       schedule_interval: p.schedule_interval || 10,
       golden_hours: p.golden_hours || "11:30,17:30,20:00",
       caption_mode: p.caption_mode || "remove_title",
+      cleanup_mode: p.cleanup_mode || "default",
       max_videos: p.max_videos || 50,
       followers_count: p.followers_count || 0,
       stats_updated_at: p.stats_updated_at || null,
@@ -249,6 +250,7 @@ export function importProfilesFromJsonString(content: string): number {
             ? Number(item.schedule_interval)
             : existing.schedule_interval,
         golden_hours: item.golden_hours || existing.golden_hours,
+        cleanup_mode: item.cleanup_mode || existing.cleanup_mode || "default",
       });
       count++;
     }

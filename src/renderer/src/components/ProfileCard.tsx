@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { getCooldownStatus } from "../utils/cooldown";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
+import { Checkbox } from "./ui/Checkbox";
 
 interface ProfileCardProps {
   profile: any;
@@ -60,12 +61,6 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   );
 
   const handleUploadWithCooldownCheck = () => {
-    if (cooldown.isUnderCooldown) {
-      const confirmed = window.confirm(
-        `⚠️ CẢNH BÁO KÊNH ĐANG NUÔI:\n\nKênh "${profile.name}" mới đăng video cách đây ${cooldown.elapsedHours} giờ (còn ${cooldown.remainingText} nữa mới đủ 24h an toàn).\n\nĐăng sớm có thể bị thuật toán TikTok giảm tương tác hoặc dính lỗi spam.\n\nBạn có chắc chắn muốn TIẾP TỤC ĐĂNG ngay không?`,
-      );
-      if (!confirmed) return;
-    }
     onRunUpload();
   };
 
@@ -123,11 +118,10 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         <div className="mb-1.5 flex items-center justify-between gap-1.5">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             {onToggleSelect && (
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={isSelected}
-                onChange={(e) => onToggleSelect(e.target.checked)}
-                className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded border-slate-300 text-sky-600 focus:ring-sky-500/20"
+                onCheckedChange={(checked) => onToggleSelect(Boolean(checked))}
+                className="shrink-0 cursor-pointer"
               />
             )}
             <h3

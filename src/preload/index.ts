@@ -52,6 +52,9 @@ export const api = {
   setConcurrency: (concurrency: number) =>
     ipcRenderer.invoke("queue:setConcurrency", concurrency),
   getConcurrency: () => ipcRenderer.invoke("queue:getConcurrency"),
+  getCleanupMode: () => ipcRenderer.invoke("config:getCleanupMode"),
+  setCleanupMode: (mode: string) =>
+    ipcRenderer.invoke("config:setCleanupMode", mode),
   getLogs: (profileId: string) =>
     ipcRenderer.invoke("logs:getByProfile", profileId),
   getAllLogs: () => ipcRenderer.invoke("logs:getAll"),

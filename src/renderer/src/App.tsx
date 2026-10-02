@@ -34,6 +34,13 @@ import { QueueScreen } from "./components/QueueScreen";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { Badge } from "./components/ui/Badge";
 import { Button } from "./components/ui/Button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./components/ui/Select";
 import { getCooldownStatus, isNurturingGroup } from "./utils/cooldown";
 
 export const App: React.FC = () => {
@@ -645,7 +652,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
-      <Toaster position="top-right" theme="light" richColors />
+      <Toaster position="top-right" theme="light" richColors closeButton />
 
       {/* Header with Navigation Tabs & Luồng Quick Picker */}
       <AppHeader
@@ -691,26 +698,32 @@ export const App: React.FC = () => {
 
                 {/* Group Selector Dropdown & Chia Đều Video */}
                 <div className="flex shrink-0 items-center gap-2">
-                  <div className="flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-500">
-                    <Filter className="h-3.5 w-3.5 text-sky-500" />
-                    <span>Nhóm:</span>
-                    <select
+                  <div className="flex items-center">
+                    <Select
                       value={selectedGroup}
-                      onChange={(e) => setSelectedGroup(e.target.value)}
-                      className="cursor-pointer bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
+                      onValueChange={(val) => setSelectedGroup(val)}
                     >
-                      <option value="all">Tất cả ({profiles.length})</option>
-                      {groups.map((grp) => {
-                        const count = profiles.filter(
-                          (p) => (p.group_name || "Mặc định") === grp,
-                        ).length;
-                        return (
-                          <option key={grp} value={grp}>
-                            {grp} ({count})
-                          </option>
-                        );
-                      })}
-                    </select>
+                      <SelectTrigger className="h-8 min-w-[140px] border-slate-200 bg-slate-50 text-xs">
+                        <Filter className="mr-1.5 h-3.5 w-3.5 shrink-0 text-sky-500" />
+                        <span className="mr-1 text-slate-500">Nhóm:</span>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">
+                          Tất cả ({profiles.length})
+                        </SelectItem>
+                        {groups.map((grp) => {
+                          const count = profiles.filter(
+                            (p) => (p.group_name || "Mặc định") === grp,
+                          ).length;
+                          return (
+                            <SelectItem key={grp} value={grp}>
+                              {grp} ({count})
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Huy hiệu cảnh báo nhóm nuôi nếu đang lọc nhóm nuôi */}
@@ -830,31 +843,31 @@ export const App: React.FC = () => {
                   {selectedProfileIds.size > 0 ? (
                     <>
                       {/* Chuyển nhóm hàng loạt */}
-                      <div className="flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs">
-                        <FolderInput className="h-3.5 w-3.5 text-slate-400" />
-                        <span className="hidden font-medium text-slate-500 sm:inline">
-                          Chuyển sang:
-                        </span>
-                        <select
-                          defaultValue=""
+                      <div className="flex items-center">
+                        <Select
+                          value=""
                           disabled={isProcessing}
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              handleBulkChangeGroup(e.target.value);
-                              e.target.value = "";
+                          onValueChange={(val) => {
+                            if (val) {
+                              handleBulkChangeGroup(val);
                             }
                           }}
-                          className="cursor-pointer bg-transparent text-xs font-bold text-slate-800 focus:outline-none disabled:opacity-50"
                         >
-                          <option value="" disabled>
-                            Nhóm...
-                          </option>
-                          {groups.map((g) => (
-                            <option key={g} value={g}>
-                              {g}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger className="h-8 border-slate-200 bg-slate-50 text-xs">
+                            <FolderInput className="mr-1.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+                            <span className="mr-1 hidden font-medium text-slate-500 sm:inline">
+                              Chuyển sang:
+                            </span>
+                            <SelectValue placeholder="Nhóm..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {groups.map((g) => (
+                              <SelectItem key={g} value={g}>
+                                {g}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       {/* Xem Followers & 1K Milestone của các kênh đã chọn */}

@@ -4,6 +4,13 @@ import { toast } from "sonner";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { Modal } from "./ui/Modal";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/Select";
 
 interface DistributeVideosModalProps {
   isOpen: boolean;
@@ -226,22 +233,26 @@ export const DistributeVideosModal: React.FC<DistributeVideosModalProps> = ({
 
           {targetType === "group" && (
             <div className="pt-1">
-              <select
+              <Select
                 value={targetGroup}
-                onChange={(e) => setTargetGroup(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-800 focus:border-sky-500 focus:outline-none"
+                onValueChange={(val) => setTargetGroup(val)}
               >
-                {groups.map((grp) => {
-                  const count = profiles.filter(
-                    (p) => (p.group_name || "Mặc định") === grp,
-                  ).length;
-                  return (
-                    <option key={grp} value={grp}>
-                      Nhóm: {grp} ({count} kênh)
-                    </option>
-                  );
-                })}
-              </select>
+                <SelectTrigger className="w-full bg-white text-xs">
+                  <SelectValue placeholder="Chọn nhóm" />
+                </SelectTrigger>
+                <SelectContent>
+                  {groups.map((grp) => {
+                    const count = profiles.filter(
+                      (p) => (p.group_name || "Mặc định") === grp,
+                    ).length;
+                    return (
+                      <SelectItem key={grp} value={grp}>
+                        Nhóm: {grp} ({count} kênh)
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </div>
           )}
         </div>

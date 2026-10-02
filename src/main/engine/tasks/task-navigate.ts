@@ -140,39 +140,10 @@ export async function dismissPopups(
       }
     }
 
-    // 3. Banner bản nháp cũ chưa lưu ("A video you were editing wasn't saved")
-    const draftBannerDiscard = page
-      .locator(
-        'div:has-text("wasn’t saved") button:has-text("Discard"), div:has-text("wasn\'t saved") button:has-text("Discard")',
-      )
-      .first();
-    if (
-      await draftBannerDiscard.isVisible({ timeout: 250 }).catch(() => false)
-    ) {
-      if (log)
-        log(
-          "Phát hiện bản nháp chưa lưu từ lần trước. Đang bấm Discard để làm sạch form...",
-        );
-      await draftBannerDiscard.click({ force: true }).catch(() => {});
-      await page.waitForTimeout(400);
-
-      const confirmDiscard = page
-        .locator(
-          'div[role="dialog"]:has-text("Discard") button:has-text("Discard")',
-        )
-        .first();
-      if (await confirmDiscard.isVisible({ timeout: 800 }).catch(() => false)) {
-        await confirmDiscard.click({ force: true }).catch(() => {});
-        if (log) log("Đã xác nhận xoá bản nháp cũ thành công.");
-        await page.waitForTimeout(500);
-      }
-      dismissedAny = true;
-    }
-
-    // 4. Popup xác nhận Exit ("Are you sure you want to exit?") -> Luôn chọn Cancel để tiếp tục ở lại trang
+    // 3. Popup xác nhận Exit ("Are you sure you want to exit?") -> Luôn chọn Cancel để tiếp tục ở lại trang
     const exitCancelBtn = page
       .locator(
-        'div:has-text("Are you sure you want to exit") button:has-text("Cancel"), [class*="Modal"]:has-text("exit") button:has-text("Cancel"), div[role="dialog"]:has-text("exit") button:has-text("Cancel"), div[role="dialog"]:has-text("Discard") button:has-text("Cancel"), div[role="dialog"]:has-text("Discard") button:has-text("Not now")',
+        'div:has-text("Are you sure you want to exit") button:has-text("Cancel"), [class*="Modal"]:has-text("exit") button:has-text("Cancel"), div[role="dialog"]:has-text("exit") button:has-text("Cancel")',
       )
       .first();
     if (await exitCancelBtn.isVisible({ timeout: 250 }).catch(() => false)) {
@@ -281,6 +252,34 @@ export async function navigateToUpload(
     );
   }
 
+  // Kiểm tra và dọn dẹp bản nháp cũ chưa lưu (chỉ làm 1 lần lúc vào trang)
+  try {
+    const draftBannerDiscard = page
+      .locator(
+        'div:has-text("wasn’t saved") button:has-text("Discard"), div:has-text("wasn\'t saved") button:has-text("Discard")',
+      )
+      .first();
+    if (
+      await draftBannerDiscard.isVisible({ timeout: 500 }).catch(() => false)
+    ) {
+      log("Phát hiện bản nháp chưa lưu từ lần trước. Đang làm sạch form...");
+      await draftBannerDiscard.click({ force: true }).catch(() => {});
+      await page.waitForTimeout(400);
+
+      const confirmDiscard = page
+        .locator(
+          'div[role="dialog"]:has-text("Discard") button:has-text("Discard")',
+        )
+        .first();
+      if (
+        await confirmDiscard.isVisible({ timeout: 1000 }).catch(() => false)
+      ) {
+        await confirmDiscard.click({ force: true }).catch(() => {});
+        await page.waitForTimeout(400);
+      }
+    }
+  } catch (_) {}
+
   log("Giao diện Upload đã sẵn sàng.");
 }
 
@@ -305,7 +304,16 @@ export async function attachVideoFile(
       );
       const [fileChooser] = await Promise.all([
         page.waitForEvent("filechooser", { timeout: 20000 }),
-        replaceBtn.click(),
+        (async () => {
+          await replaceBtn.scrollIntoViewIfNeeded().catch(() => {});
+          try {
+            await replaceBtn.click({ force: true, timeout: 3000 });
+          } catch (_) {
+            await replaceBtn
+              .evaluate((b: HTMLElement) => b.click())
+              .catch(() => {});
+          }
+        })(),
       ]);
       await fileChooser.setFiles(videoPath);
       attached = true;
@@ -334,7 +342,16 @@ export async function attachVideoFile(
           log(`Tìm thấy nút tải video: ${sel}. Đang mở hộp thoại chọn file...`);
           const [fileChooser] = await Promise.all([
             page.waitForEvent("filechooser", { timeout: 20000 }),
-            el.click(),
+            (async () => {
+              await el.scrollIntoViewIfNeeded().catch(() => {});
+              try {
+                await el.click({ force: true, timeout: 3000 });
+              } catch (_) {
+                await el
+                  .evaluate((b: HTMLElement) => b.click())
+                  .catch(() => {});
+              }
+            })(),
           ]);
           await fileChooser.setFiles(videoPath);
           attached = true;

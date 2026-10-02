@@ -17,6 +17,7 @@ export interface ProfileRecord {
   schedule_interval: number;
   golden_hours: string;
   caption_mode: "remove_title" | "from_txt_file";
+  cleanup_mode?: "default" | "delete" | "done";
   proxy: string | null;
   cookies: string | null;
   max_videos?: number;
@@ -78,6 +79,7 @@ db.exec(`
     schedule_interval INTEGER DEFAULT 10,
     golden_hours TEXT DEFAULT '11:30,17:30,20:00',
     caption_mode TEXT DEFAULT 'remove_title',
+    cleanup_mode TEXT DEFAULT 'default',
     proxy TEXT DEFAULT NULL,
     cookies TEXT DEFAULT NULL,
     max_videos INTEGER DEFAULT 50,
@@ -177,6 +179,11 @@ try {
   if (!cols.has("stats_updated_at")) {
     db.exec(
       "ALTER TABLE profiles ADD COLUMN stats_updated_at TEXT DEFAULT NULL;",
+    );
+  }
+  if (!cols.has("cleanup_mode")) {
+    db.exec(
+      "ALTER TABLE profiles ADD COLUMN cleanup_mode TEXT DEFAULT 'default';",
     );
   }
 
@@ -321,6 +328,7 @@ export const profileRepo = {
           : 10,
       golden_hours: profile.golden_hours || "11:30,17:30,20:00",
       caption_mode: profile.caption_mode || "remove_title",
+      cleanup_mode: profile.cleanup_mode || "default",
       proxy: profile.proxy || null,
       cookies: serializedCookies,
       max_videos:
@@ -349,12 +357,12 @@ export const profileRepo = {
       INSERT INTO profiles (
         id, name, group_name, status, video_folder, enable_music, music_mode, favorite_index,
         music_volume, schedule_mode, schedule_interval, golden_hours,
-        caption_mode, proxy, cookies, max_videos, account_id, pass, two_factor, email, pass_email, mail_ao, last_run,
+        caption_mode, cleanup_mode, proxy, cookies, max_videos, account_id, pass, two_factor, email, pass_email, mail_ao, last_run,
         followers_count, stats_updated_at
       ) VALUES (
         @id, @name, @group_name, @status, @video_folder, @enable_music, @music_mode, @favorite_index,
         @music_volume, @schedule_mode, @schedule_interval, @golden_hours,
-        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run,
+        @caption_mode, @cleanup_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run,
         @followers_count, @stats_updated_at
       )
     `,
@@ -397,12 +405,12 @@ export const profileRepo = {
       INSERT INTO profiles (
         id, name, group_name, status, video_folder, enable_music, music_mode, favorite_index,
         music_volume, schedule_mode, schedule_interval, golden_hours,
-        caption_mode, proxy, cookies, max_videos, account_id, pass, two_factor, email, pass_email, mail_ao, last_run,
+        caption_mode, cleanup_mode, proxy, cookies, max_videos, account_id, pass, two_factor, email, pass_email, mail_ao, last_run,
         followers_count, stats_updated_at
       ) VALUES (
         @id, @name, @group_name, @status, @video_folder, @enable_music, @music_mode, @favorite_index,
         @music_volume, @schedule_mode, @schedule_interval, @golden_hours,
-        @caption_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run,
+        @caption_mode, @cleanup_mode, @proxy, @cookies, @max_videos, @account_id, @pass, @two_factor, @email, @pass_email, @mail_ao, @last_run,
         @followers_count, @stats_updated_at
       )
       ON CONFLICT(name) DO UPDATE SET
@@ -445,6 +453,7 @@ export const profileRepo = {
               : 10,
           golden_hours: p.golden_hours || "11:30,17:30,20:00",
           caption_mode: p.caption_mode || "remove_title",
+          cleanup_mode: p.cleanup_mode || "default",
           proxy: p.proxy || null,
           cookies: p.cookies
             ? typeof p.cookies === "string"
