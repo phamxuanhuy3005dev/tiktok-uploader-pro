@@ -7,10 +7,9 @@ import { dismissPopups } from "./task-navigate";
 
 export async function processCaption(
   page: Page,
-  videoPath: string,
-  profile: ProfileRecord,
   log: (msg: string) => void,
 ): Promise<void> {
+  log("Tiến hành xóa sạch tiêu đề video (để trống tiêu đề)...");
   const captionLocator = page
     .locator(
       '.public-DraftEditor-content, [contenteditable="true"], textarea[placeholder*="caption" i], [role="textbox"]',
@@ -21,7 +20,7 @@ export async function processCaption(
     .waitFor({ state: "visible", timeout: 10000 })
     .catch(() => {});
   if (!(await captionLocator.isVisible().catch(() => false))) {
-    log("Không tìm thấy ô nhập Caption. Tiếp tục bước tiếp theo.");
+    log("Không tìm thấy ô nhập Caption. Bỏ qua bước xóa tiêu đề.");
     return;
   }
 
@@ -29,8 +28,8 @@ export async function processCaption(
   const selectAll = process.platform === "darwin" ? "Meta+A" : "Control+A";
   await page.keyboard.press(selectAll);
   await page.keyboard.press("Backspace");
-  log("Đã xóa sạch tiêu đề video (để trống).");
 
+  log("Đã xóa sạch tiêu đề video (để trống tiêu đề).");
   await page.waitForTimeout(1000);
 }
 
@@ -155,9 +154,12 @@ export async function submitAndConfirmPost(
     );
   }
 
-  // Tạo URL video nếu có ID
+  // Tạo URL video nếu có ID (ưu tiên account_id thật của kênh)
+  const cleanUsername = profile.account_id
+    ? profile.account_id.replace(/^@/, "").trim()
+    : profile.name.trim();
   const videoUrl = capturedVideoId
-    ? `https://www.tiktok.com/@${profile.name}/video/${capturedVideoId}`
+    ? `https://www.tiktok.com/@${encodeURIComponent(cleanUsername)}/video/${capturedVideoId}`
     : null;
 
   // Quyết định hành động dọn dẹp file: Xóa luôn (mặc định) hoặc Di chuyển vào done/ theo cài đặt chung trong Settings

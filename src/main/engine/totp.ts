@@ -14,7 +14,7 @@ function base32ToBuffer(base32: string): Buffer {
   }
   const bytes: number[] = [];
   for (let i = 0; i + 8 <= bits.length; i += 8) {
-    bytes.push(parseInt(bits.substr(i, 8), 2));
+    bytes.push(parseInt(bits.substring(i, i + 8), 2));
   }
   return Buffer.from(bytes);
 }

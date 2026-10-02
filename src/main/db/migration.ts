@@ -85,7 +85,7 @@ export function importFromOldTool(
         : "immediate",
       schedule_interval: oldP.schedule_interval || 10,
       golden_hours: "11:30,17:30,20:00",
-      caption_mode: oldP.remove_title ? "remove_title" : "from_txt_file",
+      caption_mode: "remove_title",
       proxy: null,
       cookies: oldP.cookies || null,
       account_id: oldP.account_id || null,

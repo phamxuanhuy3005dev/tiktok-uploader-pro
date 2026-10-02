@@ -139,7 +139,11 @@ export async function runUploadPipeline(
         currentStep = "ATTACHING_FILE";
         await attachVideoFile(page, videoPath, (m) => log(m));
 
-        // BƯỚC 3: GẮN NHẠC FAVORITES (Nếu profile bật tính năng này)
+        // BƯỚC 3: Xóa sạch tiêu đề video (Nằm ở đỉnh trang UI, thực hiện trước để tránh cuộn trang lên xuống)
+        currentStep = "CLEARING_CAPTION";
+        await processCaption(page, (m) => log(m));
+
+        // BƯỚC 4: GẮN NHẠC FAVORITES (Nếu profile bật tính năng này)
         if (profile.enable_music !== 0) {
           currentStep = "ATTACHING_MUSIC";
           await attachFavoriteMusic(page, profile, uploadedCount, (m) =>
@@ -150,10 +154,6 @@ export async function runUploadPipeline(
             "Profile cấu hình TẮT chèn nhạc: Bỏ qua editor, giữ nguyên âm thanh gốc của video.",
           );
         }
-
-        // BƯỚC 4: Xử lý Caption / Hashtag
-        currentStep = "PROCESSING_CAPTION";
-        await processCaption(page, videoPath, profile, (m) => log(m));
 
         // BƯỚC 5: Cài đặt Lên lịch
         currentStep = "SCHEDULING";

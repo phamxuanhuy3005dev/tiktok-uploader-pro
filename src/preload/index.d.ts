@@ -90,6 +90,7 @@ export interface IElectronAPI {
     profileIds: string[],
     runOptions?: { maxVideos?: number },
   ) => Promise<any>;
+  stopQueue: () => Promise<any>;
   getQueueStats: () => Promise<any>;
   setConcurrency: (concurrency: number) => Promise<number>;
   getConcurrency: () => Promise<number>;

@@ -194,8 +194,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               )}
             </div>
             <p className="text-xs leading-relaxed text-slate-500">
-              <strong>Khuyên dùng:</strong> Xóa ngay file video (và file .txt mô
-              tả kèm theo) để giải phóng dung lượng ổ cứng tối đa cho máy tính,
+              <strong>Khuyên dùng:</strong> Xóa ngay file video sau khi đăng
+              thành công để giải phóng dung lượng ổ cứng tối đa cho máy tính,
               tránh đầy ổ khi cày số lượng lớn.
             </p>
           </button>

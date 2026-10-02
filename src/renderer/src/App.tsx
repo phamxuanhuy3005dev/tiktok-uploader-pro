@@ -1106,6 +1106,15 @@ export const App: React.FC = () => {
             onUpdateConcurrency={handleUpdateConcurrency}
             onClearLiveLogs={() => setLiveLogs([])}
             onNavigateToProfiles={() => setActiveTab("profiles")}
+            onStopQueue={async () => {
+              try {
+                await window.api.stopQueue();
+                toast.success("Đã dừng hàng đợi upload thành công.");
+                await loadProfiles();
+              } catch (err: any) {
+                toast.error(`Lỗi khi dừng hàng đợi: ${err.message}`);
+              }
+            }}
           />
         )}
 

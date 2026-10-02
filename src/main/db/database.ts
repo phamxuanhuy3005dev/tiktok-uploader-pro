@@ -16,7 +16,7 @@ export interface ProfileRecord {
   schedule_mode: "immediate" | "auto_increment" | "golden_hours";
   schedule_interval: number;
   golden_hours: string;
-  caption_mode: "remove_title" | "from_txt_file";
+  caption_mode?: string;
   proxy: string | null;
   cookies: string | null;
   max_videos?: number;
@@ -206,39 +206,15 @@ try {
   `);
 } catch (_) {}
 
-// 3. Tự động sync tài khoản, pass, email từ DB tiktok-at cũ nếu có
+// 3. Reset các trạng thái kẹt (zombie status) từ phiên trước nếu app bị tắt đột ngột
 try {
-  const oldDbPath = "/Users/fanboyrose/Desktop/tiktok-at/data/tiktok.db";
-  if (fs.existsSync(oldDbPath)) {
-    const oldDb = new Database(oldDbPath, { readonly: true });
-    const oldProfiles = oldDb
-      .prepare(
-        "SELECT name, account_id, pass, email, pass_email, mail_ao FROM profiles",
-      )
-      .all() as any[];
-    const updateStmt = db.prepare(`
-      UPDATE profiles 
-      SET account_id = coalesce(account_id, ?),
-          pass = coalesce(pass, ?),
-          email = coalesce(email, ?),
-          pass_email = coalesce(pass_email, ?),
-          mail_ao = coalesce(mail_ao, ?)
-      WHERE name = ?
-    `);
-    for (const op of oldProfiles) {
-      if (op.name) {
-        updateStmt.run(
-          op.account_id || null,
-          op.pass || null,
-          op.email || null,
-          op.pass_email || null,
-          op.mail_ao || null,
-          op.name,
-        );
-      }
-    }
-    oldDb.close();
-  }
+  db.prepare(
+    `
+    UPDATE profiles 
+    SET status = 'idle' 
+    WHERE status IN ('uploading', 'queued', 'manual_session')
+  `,
+  ).run();
 } catch (_) {}
 
 // 4. Tạo Index
@@ -396,6 +372,18 @@ export const profileRepo = {
     db.prepare("UPDATE profiles SET status = ? WHERE id = ?").run(status, id);
   },
 
+  resetZombieStatuses: (): void => {
+    try {
+      db.prepare(
+        `
+        UPDATE profiles 
+        SET status = 'idle' 
+        WHERE status IN ('uploading', 'queued', 'manual_session')
+      `,
+      ).run();
+    } catch (_) {}
+  },
+
   delete: (id: string): void => {
     db.prepare("DELETE FROM profiles WHERE id = ?").run(id);
   },
@@ -423,6 +411,7 @@ export const profileRepo = {
         mail_ao = COALESCE(excluded.mail_ao, profiles.mail_ao),
         proxy = COALESCE(excluded.proxy, profiles.proxy),
         cookies = COALESCE(excluded.cookies, profiles.cookies),
+        caption_mode = COALESCE(excluded.caption_mode, profiles.caption_mode),
         followers_count = CASE WHEN excluded.followers_count > 0 THEN excluded.followers_count ELSE profiles.followers_count END,
         stats_updated_at = COALESCE(excluded.stats_updated_at, profiles.stats_updated_at)
     `);

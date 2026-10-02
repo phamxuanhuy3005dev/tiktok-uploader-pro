@@ -3,11 +3,12 @@ import {
   ArrowRight,
   Clock,
   Folder,
+  OctagonAlert,
   Sparkles,
   Terminal,
   Zap,
 } from "lucide-react";
-import React from "react";
+import React, { useState } from "react";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 
@@ -21,6 +22,7 @@ interface QueueScreenProps {
   onUpdateConcurrency: (concurrency: number) => void;
   onClearLiveLogs: () => void;
   onNavigateToProfiles: () => void;
+  onStopQueue?: () => Promise<void> | void;
 }
 
 export const QueueScreen: React.FC<QueueScreenProps> = ({
@@ -31,7 +33,9 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
   onUpdateConcurrency,
   onClearLiveLogs,
   onNavigateToProfiles,
+  onStopQueue,
 }) => {
+  const [stopping, setStopping] = useState(false);
   const runningProfiles = profiles.filter((p) =>
     queueStats.runningProfiles?.includes(p.id),
   );
@@ -73,27 +77,56 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
           </div>
         </div>
 
-        {/* Luồng chạy (Concurrency) Selector */}
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-slate-50 px-3.5 py-2">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-            <Zap className="h-4 w-4 text-sky-500" />
-            <span>Số luồng chạy:</span>
-          </div>
-          <div className="flex items-center gap-1">
-            {[1, 2, 3, 4, 5, 8].map((num) => (
-              <button
-                key={num}
-                onClick={() => onUpdateConcurrency(num)}
-                className={`h-7 w-7 rounded-lg text-xs font-bold transition-all ${
-                  concurrency === num
-                    ? "bg-sky-500 text-white shadow-sm shadow-sky-500/30"
-                    : "text-slate-600 hover:bg-slate-200/70"
-                }`}
-                title={`Đặt số luồng chạy đồng thời là ${num}`}
-              >
-                {num}
-              </button>
-            ))}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Nút Dừng Hàng Đợi nếu đang có tiến trình chạy */}
+          {isRunning && (
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={stopping}
+              onClick={async () => {
+                if (
+                  window.confirm(
+                    "Bạn có chắc chắn muốn DỪNG TẤT CẢ các kênh đang upload trong hàng đợi không?",
+                  )
+                ) {
+                  setStopping(true);
+                  try {
+                    await onStopQueue?.();
+                  } finally {
+                    setStopping(false);
+                  }
+                }
+              }}
+              className="h-8 gap-1.5 px-3 text-xs font-bold shadow-sm shadow-rose-500/20"
+            >
+              <OctagonAlert className="h-3.5 w-3.5" />
+              <span>{stopping ? "Đang dừng..." : "Dừng Hàng Đợi"}</span>
+            </Button>
+          )}
+
+          {/* Luồng chạy (Concurrency) Selector */}
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200/80 bg-slate-50 px-3.5 py-2">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+              <Zap className="h-4 w-4 text-sky-500" />
+              <span>Số luồng chạy:</span>
+            </div>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4, 5, 8].map((num) => (
+                <button
+                  key={num}
+                  onClick={() => onUpdateConcurrency(num)}
+                  className={`h-7 w-7 rounded-lg text-xs font-bold transition-all ${
+                    concurrency === num
+                      ? "bg-sky-500 text-white shadow-sm shadow-sky-500/30"
+                      : "text-slate-600 hover:bg-slate-200/70"
+                  }`}
+                  title={`Đặt số luồng chạy đồng thời là ${num}`}
+                >
+                  {num}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

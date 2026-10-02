@@ -430,6 +430,35 @@ export async function attachVideoFile(
     await page.waitForTimeout(2000);
     await dismissPopups(page, log);
 
+    // Kiểm tra phát hiện lỗi upload sớm từ TikTok (tránh treo chờ 10 phút)
+    const uploadErrorText = await page
+      .evaluate(() => {
+        const errNodes = Array.from(
+          document.querySelectorAll(
+            '.upload-error-tip, [class*="upload-error"], [class*="error-tip"], div[class*="error-card"], .feedback-error',
+          ),
+        );
+        for (const node of errNodes) {
+          const txt = (node as HTMLElement).innerText?.trim();
+          if (
+            txt &&
+            (txt.includes("not supported") ||
+              txt.includes("failed") ||
+              txt.includes("exceeds") ||
+              txt.includes("error") ||
+              txt.includes("không hỗ trợ"))
+          ) {
+            return txt;
+          }
+        }
+        return null;
+      })
+      .catch(() => null);
+
+    if (uploadErrorText) {
+      throw new Error(`TikTok báo lỗi video: "${uploadErrorText}"`);
+    }
+
     // Kiểm tra xem đã xuất hiện nút Sounds / Edit video hoặc nút Post chưa
     const hasEditorOrPost = await page
       .locator(

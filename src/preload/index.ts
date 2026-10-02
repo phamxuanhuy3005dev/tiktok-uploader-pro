@@ -48,6 +48,7 @@ export const api = {
   // Queue & Upload
   startQueue: (profileIds: string[], runOptions?: { maxVideos?: number }) =>
     ipcRenderer.invoke("queue:start", profileIds, runOptions),
+  stopQueue: () => ipcRenderer.invoke("queue:stop"),
   getQueueStats: () => ipcRenderer.invoke("queue:getStats"),
   setConcurrency: (concurrency: number) =>
     ipcRenderer.invoke("queue:setConcurrency", concurrency),

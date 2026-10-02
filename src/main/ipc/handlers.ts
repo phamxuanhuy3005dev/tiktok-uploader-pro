@@ -51,6 +51,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   }
   isIpcRegistered = true;
 
+  // Tự động giải phóng các profile bị kẹt trạng thái từ phiên trước do crash/kill app
+  profileRepo.resetZombieStatuses();
+
   // Đăng ký listener cập nhật tiến độ upload gửi về UI
   uploadQueue.onProgress((event) => {
     const activeWin = getValidWindow();
@@ -766,6 +769,16 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   );
 
   ipcMain.handle("queue:getStats", async () => {
+    return uploadQueue.getStats();
+  });
+
+  ipcMain.handle("queue:stop", async () => {
+    await uploadQueue.stop();
+    const updated = profileRepo.getAll();
+    const activeWin = getValidWindow();
+    if (activeWin && !activeWin.isDestroyed()) {
+      activeWin.webContents.send("profiles:updated", updated);
+    }
     return uploadQueue.getStats();
   });
 

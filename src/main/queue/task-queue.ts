@@ -1,4 +1,5 @@
 import { ProfileRecord, profileRepo } from "../db/database";
+import { closeAllActiveContexts } from "../engine/browser-pool";
 import {
   PipelineProgressEvent,
   runUploadPipeline,
@@ -37,6 +38,14 @@ class SimpleAsyncQueue {
         this.next();
       });
     }
+  }
+
+  public get concurrencyLimit(): number {
+    return this.concurrency;
+  }
+
+  public clear(): void {
+    this.queue = [];
   }
 
   public get size(): number {
@@ -110,8 +119,32 @@ export class UploadQueueManager {
     });
   }
 
+  /**
+   * Dừng toàn bộ hàng đợi đang chờ và reset trạng thái các kênh
+   */
+  public async stop(): Promise<void> {
+    this.queue.clear();
+    const stoppedIds = Array.from(this.runningProfiles);
+    this.runningProfiles.clear();
+
+    profileRepo.resetZombieStatuses();
+
+    // Đóng các browser context đang chạy dở
+    try {
+      await closeAllActiveContexts().catch(() => {});
+    } catch (_) {}
+
+    this.emitProgress({
+      profileId: "",
+      videoName: "",
+      step: "QUEUE_STOPPED",
+      message: `Đã dừng hàng đợi upload theo yêu cầu (Hủy ${stoppedIds.length} kênh đang chạy).`,
+      type: "warn",
+    });
+  }
+
   public getConcurrency(): number {
-    return (this.queue as any).concurrency || 2;
+    return this.queue.concurrencyLimit;
   }
 
   public getStats() {
