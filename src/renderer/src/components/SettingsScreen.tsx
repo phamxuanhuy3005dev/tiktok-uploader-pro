@@ -6,6 +6,7 @@ import {
   HardDrive,
   Info,
   Settings,
+  ShieldAlert,
   Trash2,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
@@ -25,6 +26,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [cleanupMode, setCleanupMode] = useState<"delete" | "done">("delete");
   const [maxVideos, setMaxVideos] = useState<number>(50);
   const [customMaxVideos, setCustomMaxVideos] = useState<string>("50");
+  const [circuitBreakerLimit, setCircuitBreakerLimit] = useState<number>(2);
 
   useEffect(() => {
     window.api
@@ -48,6 +50,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       .catch((err) => {
         console.error("Lỗi khi tải max videos:", err);
       });
+
+    window.api
+      .getCircuitBreakerLimit?.()
+      .then((val) => setCircuitBreakerLimit(val ?? 2))
+      .catch(() => {});
   }, []);
 
   const handleSaveConcurrency = (num: number) => {
@@ -82,6 +89,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       );
     } catch (err: any) {
       toast.error("Không thể lưu cài đặt: " + err.message);
+    }
+  };
+
+  const handleSaveCircuitBreakerLimit = async (limit: number) => {
+    const validLimit = Math.max(0, Math.floor(limit));
+    setCircuitBreakerLimit(validLimit);
+    try {
+      await window.api.setCircuitBreakerLimit?.(validLimit);
+      toast.success(
+        validLimit === 0
+          ? "Đã tắt tự động tạm dừng (luôn cố gắng tải hết)"
+          : `Đã lưu: Tự động tạm dừng kênh nếu gặp lỗi liên tiếp ${validLimit} video`,
+      );
+    } catch (err: any) {
+      toast.error("Lỗi lưu cấu hình bảo vệ tài khoản: " + err.message);
     }
   };
 
@@ -335,6 +357,70 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               mục nguồn để lưu trữ lại.
             </p>
           </button>
+        </div>
+      </div>
+
+      {/* Cấu hình Bảo Vệ Tài Khoản (Circuit Breaker) */}
+      <div className="space-y-4 rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600">
+              <ShieldAlert className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">
+                Bảo Vệ Tài Khoản Tự Động (Circuit Breaker)
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Tự động tạm dừng kênh nếu gặp lỗi liên tiếp để tránh bị TikTok
+                quét spam hoặc checkpoint.
+              </p>
+            </div>
+          </div>
+          <Badge
+            variant="outline"
+            className="border-rose-200 bg-rose-50 font-mono font-bold text-rose-600"
+          >
+            {circuitBreakerLimit === 0
+              ? "Tắt bảo vệ"
+              : `Lỗi ${circuitBreakerLimit} lần liên tiếp`}
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5 pt-1 sm:grid-cols-4">
+          {[
+            { limit: 1, label: "1 Video lỗi", desc: "Nghiêm ngặt nhất" },
+            { limit: 2, label: "2 Video lỗi", desc: "Chuẩn MMO (Khuyên dùng)" },
+            { limit: 3, label: "3 Video lỗi", desc: "Thoải mái hơn" },
+            { limit: 0, label: "Tắt tự dừng", desc: "Luôn cố gắng thử hết" },
+          ].map((item) => (
+            <button
+              key={item.limit}
+              type="button"
+              onClick={() => handleSaveCircuitBreakerLimit(item.limit)}
+              className={`rounded-xl border p-3.5 text-left transition-all ${
+                circuitBreakerLimit === item.limit
+                  ? "border-rose-500 bg-rose-50/70 shadow-sm ring-2 ring-rose-500/20"
+                  : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60"
+              }`}
+            >
+              <div className="mb-1 flex items-center justify-between">
+                <span
+                  className={`text-sm font-bold ${
+                    circuitBreakerLimit === item.limit
+                      ? "text-rose-700"
+                      : "text-slate-700"
+                  }`}
+                >
+                  {item.label}
+                </span>
+                {circuitBreakerLimit === item.limit && (
+                  <CheckCircle2 className="h-4 w-4 text-rose-500" />
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400">{item.desc}</p>
+            </button>
+          ))}
         </div>
       </div>
     </div>

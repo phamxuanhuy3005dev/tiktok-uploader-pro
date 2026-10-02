@@ -128,14 +128,6 @@ export const App: React.FC = () => {
     const unsubscribeProgress = window.api.onUploadProgress((event) => {
       setLiveLogs((prev) => [event, ...prev].slice(0, 150));
 
-      if (event.type === "error") {
-        toast.error(
-          `[${event.stepText || event.step || "Lỗi"}] ${event.message}`,
-        );
-      } else if (event.type === "success" && event.step !== "QUEUE_COMPLETED") {
-        toast.success(`[Thành công] ${event.message}`);
-      }
-
       setBatchTracking((prev) => {
         let updatedResults = [...prev.results];
         let newSuccess = prev.successVideos;
@@ -638,30 +630,6 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleImportJson = async () => {
-    try {
-      setIsProcessing(true);
-      setProcessingMessage("Đang nạp danh sách profiles từ file JSON...");
-      const res = await window.api.importJson();
-      if (res.success) {
-        toast.success(
-          `Đã nạp thành công ${res.count || 0} profiles từ file JSON!`,
-        );
-        if (res.profiles) {
-          setProfiles(res.profiles);
-        } else {
-          await loadProfiles();
-        }
-        await loadGroupsList();
-      }
-    } catch (err: any) {
-      toast.error(`Lỗi nhập JSON: ${err.message}`);
-    } finally {
-      setIsProcessing(false);
-      setProcessingMessage("");
-    }
-  };
-
   const handleQuickSelectFolder = async (profile: any) => {
     try {
       const folder = await window.api.selectFolder();
@@ -877,19 +845,6 @@ export const App: React.FC = () => {
                   >
                     <Shuffle className="mr-1 h-3.5 w-3.5 text-sky-600" /> Chia
                     Đều Video
-                  </Button>
-
-                  {/* Nút Nhập JSON */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isProcessing}
-                    onClick={() => setIsBulkImportOpen(true)}
-                    title="Nhập danh sách profiles từ file JSON hoặc dán JSON"
-                    className="h-8 shrink-0 border-sky-300 bg-sky-50/60 px-2.5 text-xs text-sky-700 hover:bg-sky-100/80"
-                  >
-                    <FileJson className="mr-1 h-3.5 w-3.5 text-sky-600" /> Nhập
-                    JSON
                   </Button>
 
                   {/* Nút Xuất JSON */}

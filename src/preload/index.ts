@@ -56,6 +56,10 @@ export const api = {
   getMaxVideos: () => ipcRenderer.invoke("config:getMaxVideos"),
   setMaxVideos: (limit: number) =>
     ipcRenderer.invoke("config:setMaxVideos", limit),
+  getCircuitBreakerLimit: () =>
+    ipcRenderer.invoke("config:getCircuitBreakerLimit"),
+  setCircuitBreakerLimit: (limit: number) =>
+    ipcRenderer.invoke("config:setCircuitBreakerLimit", limit),
   getLogs: (profileId: string) =>
     ipcRenderer.invoke("logs:getByProfile", profileId),
   getAllLogs: () => ipcRenderer.invoke("logs:getAll"),

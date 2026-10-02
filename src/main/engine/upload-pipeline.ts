@@ -166,6 +166,9 @@ export async function runUploadPipeline(
     }
 
     const MAX_RETRIES = 2;
+    const rawLimit = Number(configRepo.get("circuit_breaker_limit", "2"));
+    const circuitBreakerLimit = !isNaN(rawLimit) ? rawLimit : 2;
+    let consecutiveFails = 0;
 
     for (let i = 0; i < videoFiles.length; i++) {
       const videoFileName = videoFiles[i];
@@ -324,6 +327,7 @@ export async function runUploadPipeline(
           // Nếu đã hết số lần retry cho video này
           if (attempt > MAX_RETRIES) {
             failedCount++;
+            consecutiveFails++;
             logRepo.add({
               profile_id: profile.id,
               video_name: videoFileName,
@@ -336,6 +340,31 @@ export async function runUploadPipeline(
               `Đã thử lại ${MAX_RETRIES} lần nhưng không thành công. Bỏ qua video ${videoFileName}.`,
               "warn",
             );
+
+            // Kiểm tra Circuit Breaker: Tự động ngắt kênh nếu lỗi liên tiếp chạm ngưỡng
+            if (
+              circuitBreakerLimit > 0 &&
+              consecutiveFails >= circuitBreakerLimit
+            ) {
+              log(
+                `[BẢO VỆ TÀI KHOẢN] Kênh ${profile.name} đã gặp lỗi liên tiếp ${consecutiveFails} video. Tự động tạm dừng kênh này ngay lập tức để tránh checkpoint/khóa nick! Các kênh khác vẫn tiếp tục chạy bình thường.`,
+                "error",
+              );
+              break; // Thoát vòng lặp video của kênh này
+            }
+
+            // Nếu lỗi do mất phiên đăng nhập -> Tạm dừng kênh này ngay lập tức, không cố thử các video sau
+            if (
+              videoError.message.toLowerCase().includes("đăng nhập") ||
+              videoError.message.toLowerCase().includes("login") ||
+              videoError.message.toLowerCase().includes("session")
+            ) {
+              log(
+                `[MẤT PHIÊN ĐĂNG NHẬP] Kênh ${profile.name} cần đăng nhập lại. Tạm dừng kênh này để các kênh khác tiếp tục chạy!`,
+                "error",
+              );
+              break;
+            }
 
             // Reset trang upload để chuẩn bị video tiếp theo
             if (!page.isClosed()) {
@@ -350,6 +379,10 @@ export async function runUploadPipeline(
             await page.waitForTimeout(3000);
           }
         }
+      }
+
+      if (videoSuccess) {
+        consecutiveFails = 0; // Reset chuỗi lỗi khi có 1 video upload thành công
       }
     }
   } finally {

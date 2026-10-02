@@ -88,6 +88,8 @@ export interface IElectronAPI {
   setCleanupMode: (mode: string) => Promise<string>;
   getMaxVideos: () => Promise<number>;
   setMaxVideos: (limit: number) => Promise<number>;
+  getCircuitBreakerLimit: () => Promise<number>;
+  setCircuitBreakerLimit: (limit: number) => Promise<number>;
   getLogs: (profileId: string) => Promise<any[]>;
   getAllLogs: () => Promise<any[]>;
   clearLogs: () => Promise<boolean>;

@@ -129,6 +129,9 @@ try {
   db.prepare(
     "INSERT OR IGNORE INTO config (key, value) VALUES ('cleanup_mode', 'delete')",
   ).run();
+  db.prepare(
+    "INSERT OR IGNORE INTO config (key, value) VALUES ('circuit_breaker_limit', '2')",
+  ).run();
   const existingGroups = db
     .prepare(
       "SELECT DISTINCT group_name FROM profiles WHERE group_name IS NOT NULL AND group_name != ''",

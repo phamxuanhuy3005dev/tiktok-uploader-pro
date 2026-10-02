@@ -693,6 +693,21 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return limit;
   });
 
+  // Cấu hình Circuit Breaker (Số lần lỗi liên tiếp để tạm dừng kênh)
+  ipcMain.handle("config:getCircuitBreakerLimit", async () => {
+    const val = configRepo.get("circuit_breaker_limit", "2");
+    return !isNaN(Number(val)) ? Number(val) : 2;
+  });
+
+  ipcMain.handle("config:setCircuitBreakerLimit", async (_, limit: number) => {
+    const validLimit = Math.max(
+      0,
+      Math.min(10, Math.floor(Number(limit) || 0)),
+    );
+    configRepo.set("circuit_breaker_limit", String(validLimit));
+    return validLimit;
+  });
+
   ipcMain.handle("logs:getByProfile", async (_, profileId: string) => {
     return logRepo.getByProfile(profileId);
   });
