@@ -33,12 +33,120 @@ export async function processCaption(
   await page.waitForTimeout(1000);
 }
 
+/**
+ * Đợi video tải lên và hoàn tất xử lý 100% trên TikTok Studio trước khi bấm nút đăng
+ */
+export async function waitForUploadCompletion(
+  page: Page,
+  log: (msg: string) => void,
+): Promise<void> {
+  log("Đang kiểm tra và đợi video tải lên hoàn tất 100%...");
+
+  const maxWaitMs = 180 * 1000; // Tối đa 3 phút cho video ngắn TikTok
+  const startTime = Date.now();
+  let lastLoggedProgress = "";
+
+  while (Date.now() - startTime < maxWaitMs) {
+    // Kiểm tra trực tiếp bằng evaluate trong DOM (tức thì <5ms thay vì chờ timeout locator)
+    const checkResult = await page
+      .evaluate(() => {
+        // Nút Post / Schedule
+        const buttons = Array.from(
+          document.querySelectorAll<HTMLButtonElement>("button"),
+        );
+        let postReady = false;
+
+        for (const btn of buttons) {
+          const txt = (btn.innerText || "").trim();
+          const e2e = btn.getAttribute("data-e2e") || "";
+          const isPostOrSchedule =
+            e2e === "post_video_button" ||
+            btn.classList.contains("common-button-post-video") ||
+            txt === "Post" ||
+            txt === "Schedule" ||
+            txt === "Lên lịch";
+
+          if (isPostOrSchedule && !txt.toLowerCase().includes("draft")) {
+            const rect = btn.getBoundingClientRect();
+            const isVisible = rect.width > 0 && rect.height > 0;
+            const isDisabled =
+              btn.disabled ||
+              btn.getAttribute("disabled") !== null ||
+              btn.getAttribute("aria-disabled") === "true";
+
+            if (isVisible && !isDisabled) {
+              postReady = true;
+              break;
+            }
+          }
+        }
+
+        // Nút Cancel của tiến trình upload
+        const cancelBtns = Array.from(
+          document.querySelectorAll<HTMLButtonElement>(
+            '.upload-progress button, [class*="upload-progress"] button, .upload-stage button',
+          ),
+        );
+        let uploadCancelVisible = false;
+        for (const b of cancelBtns) {
+          if ((b.innerText || "").includes("Cancel")) {
+            const r = b.getBoundingClientRect();
+            if (r.width > 0 && r.height > 0) {
+              uploadCancelVisible = true;
+              break;
+            }
+          }
+        }
+
+        // Text tiến trình
+        const progressEl = document.querySelector(
+          '[class*="upload-progress"], [class*="progress-num"], [class*="file-info-header"]',
+        );
+        const progressText = (
+          (progressEl as HTMLElement)?.innerText || ""
+        ).trim();
+
+        return { postReady, uploadCancelVisible, progressText };
+      })
+      .catch(() => ({
+        postReady: false,
+        uploadCancelVisible: false,
+        progressText: "",
+      }));
+
+    if (checkResult.postReady && !checkResult.uploadCancelVisible) {
+      log("Video đã tải lên và xử lý 100% hoàn tất. Bấm đăng ngay!");
+      return;
+    }
+
+    if (
+      checkResult.progressText &&
+      checkResult.progressText !== lastLoggedProgress &&
+      (checkResult.progressText.includes("%") ||
+        checkResult.progressText.toLowerCase().includes("upload") ||
+        checkResult.progressText.toLowerCase().includes("tải"))
+    ) {
+      lastLoggedProgress = checkResult.progressText;
+      log(
+        `Tiến độ tải video: ${checkResult.progressText.replace(/\n+/g, " ")}`,
+      );
+    }
+
+    await page.waitForTimeout(500); // Polling mỗi 500ms cực nhanh
+  }
+
+  log("Đã hết thời gian chờ (3 phút). Tiếp tục quy trình đăng...");
+}
+
 export async function submitAndConfirmPost(
   page: Page,
   profile: ProfileRecord,
   videoPath: string,
   log: (msg: string) => void,
 ): Promise<{ videoId: string | null; videoUrl: string | null }> {
+  // Đợi video hoàn tất tải lên và xử lý 100% trước khi bấm đăng
+  await waitForUploadCompletion(page, log);
+
   log("Bắt đầu nhấn nút Xuất bản (Post / Schedule)...");
 
   let capturedVideoId: string | null = null;

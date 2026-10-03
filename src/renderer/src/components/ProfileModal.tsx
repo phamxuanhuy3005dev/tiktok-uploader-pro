@@ -373,11 +373,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
 
           {initialData && !allowEditSecurity && (
-            <p className="flex items-center gap-1.5 rounded-lg border border-amber-200/60 bg-amber-50/80 px-2.5 py-1.5 text-[11px] text-amber-700">
-              <span>🔒</span> Đang ở chế độ xem an toàn để tránh sửa nhầm. Tích
-              chọn ô trên nếu bạn muốn chỉnh sửa. Bạn vẫn có thể bôi đen hoặc
-              bấm nút <strong>Copy</strong> để sao chép thông tin.
-            </p>
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200/80 bg-amber-50/80 p-2.5 text-[11px] text-amber-800">
+              <span className="mt-0.5 shrink-0 text-xs">🔒</span>
+              <div className="leading-relaxed">
+                Đang ở chế độ xem an toàn để tránh sửa nhầm. Tích chọn ô{" "}
+                <strong>Cho phép chỉnh sửa</strong> ở góc phải nếu bạn muốn thay
+                đổi. Bạn vẫn có thể bôi đen hoặc bấm nút <strong>Copy</strong>{" "}
+                để sao chép thông tin.
+              </div>
+            </div>
           )}
 
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
@@ -456,18 +460,16 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                       <Copy className="h-2.5 w-2.5" /> Copy Key
                     </button>
                   )}
-                  {twoFactor.trim() && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleGenerateOtp}
-                      disabled={isGettingOtp}
-                      className="h-6 border-purple-200 bg-white px-2 text-[10px] text-purple-700 hover:bg-purple-100/70"
-                    >
-                      {isGettingOtp ? "Đang tạo..." : "🔑 Lấy mã OTP 6 số"}
-                    </Button>
-                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGenerateOtp}
+                    disabled={!twoFactor.trim() || isGettingOtp}
+                    className="h-6 border-purple-200 bg-white px-2 text-[10px] text-purple-700 hover:bg-purple-100/70 disabled:opacity-50"
+                  >
+                    {isGettingOtp ? "Đang tạo..." : "🔑 Lấy mã OTP 6 số"}
+                  </Button>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -650,15 +652,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <Input
               value={videoFolder}
               onChange={(e) => setVideoFolder(e.target.value)}
-              placeholder="/Users/username/Videos/Channel1"
+              placeholder="C:\Users\username\Videos\Channel1"
               className="flex-1 font-mono text-xs"
             />
             <Button
               type="button"
               variant="secondary"
               onClick={handleSelectFolder}
+              className="shrink-0 text-xs"
             >
-              <Folder className="mr-1 h-4 w-4 text-slate-500" /> Chọn Thư Mục
+              <Folder className="mr-1 h-3.5 w-3.5 text-slate-500" /> Chọn Thư
+              Mục
             </Button>
           </div>
           <p className="mt-1 text-[11px] text-slate-500">

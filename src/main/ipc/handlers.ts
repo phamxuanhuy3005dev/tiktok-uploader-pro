@@ -647,6 +647,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Bắt đầu upload cho danh sách profile
   ipcMain.handle("queue:start", async (_, profileIds: string[]) => {
+    uploadQueue.startBatch(profileIds);
     for (const id of profileIds) {
       const profile = profileRepo.getById(id);
       if (profile) {

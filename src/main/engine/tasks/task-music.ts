@@ -25,7 +25,8 @@ export async function attachFavoriteMusic(
       const soundsBtn = page.locator(soundsSelector).first();
 
       let soundsVisible = false;
-      for (let waitSec = 0; waitSec < 25; waitSec++) {
+      log("Đang kiểm tra và đợi nút Sounds Editor sẵn sàng...");
+      for (let waitSec = 0; waitSec < 120; waitSec++) {
         await page
           .evaluate(() => {
             const btn = document.querySelector(
@@ -287,13 +288,27 @@ export async function attachFavoriteMusic(
         throw err;
       }
 
-      // Đóng modal/editor nếu còn mở để chuẩn bị retry
+      // Đóng modal/editor nếu còn mở để chuẩn bị retry (TUYỆT ĐỐI KHÔNG CLICK CANCEL TOÀN TRANG TRÁNH CANCEL UPLOAD)
       try {
-        const cancelBtn = page
-          .locator('button:has-text("Cancel"), button:has-text("Exit")')
+        const editorCloseBtn = page
+          .locator(
+            '.editor-header button:has-text("Cancel"), .editor-header button:has-text("Exit"), [class*="MusicPanel"] button:has-text("Cancel"), [class*="MusicPanel"] [aria-label="Close"], button.music-panel-close',
+          )
           .first();
-        if (await cancelBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-          await cancelBtn.click({ force: true }).catch(() => {});
+        if (
+          await editorCloseBtn.isVisible({ timeout: 1000 }).catch(() => false)
+        ) {
+          await editorCloseBtn.click({ force: true }).catch(() => {});
+        } else {
+          // Nếu editor đang mở dạng dialog, bấm Escape để thoát nhẹ nhàng
+          const isEditorOpen = await page
+            .locator('[role="dialog"], [class*="MusicPanel"]')
+            .first()
+            .isVisible()
+            .catch(() => false);
+          if (isEditorOpen) {
+            await page.keyboard.press("Escape").catch(() => {});
+          }
         }
       } catch (_) {}
 

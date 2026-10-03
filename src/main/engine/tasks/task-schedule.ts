@@ -319,20 +319,22 @@ export async function applySchedule(
   if (!isChecked) {
     const scheduleLabel = page
       .locator(
-        'label.Radio__root:has(input[value="schedule"]), label:has-text("Schedule"), *:has-text("Schedule")',
+        'label.Radio__root:has(input[value="schedule"]), label:has(input[value="schedule"]), [class*="Radio"]:has(input[value="schedule"])',
       )
-      .last();
-    await scheduleLabel.scrollIntoViewIfNeeded().catch(() => {});
-    try {
-      await scheduleLabel.click({ force: true, timeout: 3000 });
-    } catch (_) {
-      await scheduleLabel
-        .evaluate((el: HTMLElement) => el.click())
-        .catch(() => {});
+      .first();
+    if (await scheduleLabel.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await scheduleLabel.scrollIntoViewIfNeeded().catch(() => {});
+      try {
+        await scheduleLabel.click({ force: true, timeout: 3000 });
+      } catch (_) {
+        await scheduleLabel
+          .evaluate((el: HTMLElement) => el.click())
+          .catch(() => {});
+      }
+      await page.waitForTimeout(600);
+      await checkAndAllowSchedule();
+      isChecked = await scheduleRadioInput.isChecked().catch(() => false);
     }
-    await page.waitForTimeout(600);
-    await checkAndAllowSchedule();
-    isChecked = await scheduleRadioInput.isChecked().catch(() => false);
   }
 
   if (!isChecked) {

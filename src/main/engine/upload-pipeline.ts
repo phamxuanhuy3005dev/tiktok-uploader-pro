@@ -29,6 +29,10 @@ export interface PipelineProgressEvent {
   type?: "info" | "warn" | "error" | "success";
   uploadedCount: number;
   failedCount: number;
+  batchTotalVideos?: number;
+  batchProcessedVideos?: number;
+  batchSuccessVideos?: number;
+  batchFailedVideos?: number;
 }
 
 export function getStepText(step: string): string {

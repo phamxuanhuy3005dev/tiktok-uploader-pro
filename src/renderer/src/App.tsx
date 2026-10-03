@@ -133,7 +133,22 @@ export const App: React.FC = () => {
         let newSuccess = prev.successVideos;
         let newFailed = prev.failedVideos;
         let newProcessed = prev.processedVideos;
-        let newTotal = Math.max(prev.totalVideos, event.totalVideos || 0);
+        let newTotal =
+          event.batchTotalVideos !== undefined && event.batchTotalVideos > 0
+            ? event.batchTotalVideos
+            : prev.totalVideos > 0
+              ? prev.totalVideos
+              : event.totalVideos || 0;
+
+        if (event.batchProcessedVideos !== undefined) {
+          newProcessed = Math.max(newProcessed, event.batchProcessedVideos);
+        }
+        if (event.batchSuccessVideos !== undefined) {
+          newSuccess = Math.max(newSuccess, event.batchSuccessVideos);
+        }
+        if (event.batchFailedVideos !== undefined) {
+          newFailed = Math.max(newFailed, event.batchFailedVideos);
+        }
 
         // Bắt sự kiện video hoàn thành
         if (
@@ -1248,9 +1263,17 @@ export const App: React.FC = () => {
           (batchTracking.isActive || queueStats.runningProfiles?.length > 0)
         }
         runningCount={queueStats.runningProfiles?.length || 0}
-        totalVideos={batchTracking.totalVideos}
-        processedVideos={batchTracking.processedVideos}
-        successVideos={batchTracking.successVideos}
+        totalVideos={queueStats?.batchTotalVideos || batchTracking.totalVideos}
+        processedVideos={
+          queueStats?.batchProcessedVideos !== undefined
+            ? queueStats.batchProcessedVideos
+            : batchTracking.processedVideos
+        }
+        successVideos={
+          queueStats?.batchSuccessVideos !== undefined
+            ? queueStats.batchSuccessVideos
+            : batchTracking.successVideos
+        }
         onClick={() => setActiveTab("queue")}
       />
 

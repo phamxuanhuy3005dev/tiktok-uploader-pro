@@ -24,6 +24,10 @@ import { Button } from "./ui/Button";
 interface QueueScreenProps {
   queueStats: {
     runningProfiles: string[];
+    batchTotalVideos?: number;
+    batchProcessedVideos?: number;
+    batchSuccessVideos?: number;
+    batchFailedVideos?: number;
   };
   profiles: any[];
   liveLogs: any[];
@@ -93,13 +97,26 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
     return map;
   }, [liveLogs]);
 
-  // Tính toán số liệu tổng thể đợt chạy
+  // Tính toán số liệu tổng thể đợt chạy (Batch)
   const {
     totalVideosInBatch,
     processedVideosInBatch,
     totalSuccess,
     totalFailed,
   } = useMemo(() => {
+    // Ưu tiên số liệu batch chính xác được Backend tính toán toàn diện cho tất cả profile
+    if (
+      queueStats?.batchTotalVideos !== undefined &&
+      queueStats?.batchTotalVideos > 0
+    ) {
+      return {
+        totalVideosInBatch: queueStats.batchTotalVideos,
+        processedVideosInBatch: queueStats.batchProcessedVideos || 0,
+        totalSuccess: queueStats.batchSuccessVideos || 0,
+        totalFailed: queueStats.batchFailedVideos || 0,
+      };
+    }
+
     let totalVideos = 0;
     let processed = 0;
     let success = 0;
@@ -120,7 +137,7 @@ export const QueueScreen: React.FC<QueueScreenProps> = ({
       totalSuccess: success,
       totalFailed: failed,
     };
-  }, [runningProfiles, profileProgressMap]);
+  }, [queueStats, runningProfiles, profileProgressMap]);
 
   const batchPercent =
     totalVideosInBatch > 0

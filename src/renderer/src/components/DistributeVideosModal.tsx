@@ -1,4 +1,4 @@
-import { Folder, Loader2, Shuffle, Sparkles } from "lucide-react";
+import { Folder, Loader2, RotateCw, Shuffle, Sparkles, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "./ui/Badge";
@@ -55,8 +55,24 @@ export const DistributeVideosModal: React.FC<DistributeVideosModalProps> = ({
         setTargetType("group");
         if (groups.length > 0) setTargetGroup(groups[0]);
       }
+
+      // Luôn quét lại số lượng video thực tế trong thư mục nguồn khi mở modal
+      if (sourceFolder) {
+        window.api
+          .scanVideoFolder(sourceFolder)
+          .then((scan) => {
+            const count =
+              scan.totalCount ??
+              scan.count ??
+              (scan.videoFiles || scan.files || []).length;
+            setVideoCount(count);
+          })
+          .catch(() => {
+            setVideoCount(0);
+          });
+      }
     }
-  }, [isOpen, selectedProfileIds, initialSelectedGroup, groups]);
+  }, [isOpen, selectedProfileIds, initialSelectedGroup, groups, sourceFolder]);
 
   const handleSelectSourceFolder = async () => {
     try {
@@ -80,6 +96,31 @@ export const DistributeVideosModal: React.FC<DistributeVideosModalProps> = ({
     } catch (err: any) {
       toast.error(`Lỗi chọn thư mục: ${err.message}`);
     }
+  };
+
+  const handleRefreshSourceFolder = async () => {
+    if (!sourceFolder) return;
+    try {
+      const scan = await window.api.scanVideoFolder(sourceFolder);
+      const count =
+        scan.totalCount ??
+        scan.count ??
+        (scan.videoFiles || scan.files || []).length;
+      setVideoCount(count);
+      if (count === 0) {
+        toast.warning("Thư mục hiện tại đang trống (0 video).");
+      } else {
+        toast.success(`Đã quét lại: ${count} video hợp lệ.`);
+      }
+    } catch (err: any) {
+      toast.error(`Lỗi quét lại thư mục: ${err.message}`);
+      setVideoCount(0);
+    }
+  };
+
+  const handleClearSourceFolder = () => {
+    setSourceFolder("");
+    setVideoCount(0);
   };
 
   // Tính toán danh sách profile mục tiêu
@@ -128,6 +169,26 @@ export const DistributeVideosModal: React.FC<DistributeVideosModalProps> = ({
       toast.success(
         `Đã chia đều thành công ${assignedCount} video cho ${targetProfiles.length} kênh!`,
       );
+
+      // Nếu chế độ di chuyển (move), toàn bộ video đã được chuyển vào các kênh
+      // -> reset thư mục nguồn về trống để tránh hiểu nhầm ở lần mở tiếp theo
+      if (mode === "move") {
+        setSourceFolder("");
+        setVideoCount(0);
+      } else {
+        // Nếu copy, quét lại thực tế
+        try {
+          const scan = await window.api.scanVideoFolder(sourceFolder);
+          const count =
+            scan.totalCount ??
+            scan.count ??
+            (scan.videoFiles || scan.files || []).length;
+          setVideoCount(count);
+        } catch {
+          setVideoCount(0);
+        }
+      }
+
       const updated = await window.api.getProfiles();
       onSuccess(updated);
       onClose();
@@ -159,11 +220,18 @@ export const DistributeVideosModal: React.FC<DistributeVideosModalProps> = ({
               <Folder className="h-4 w-4 text-sky-500" /> 1. Chọn Thư Mục Video
               Nguồn
             </span>
-            {videoCount > 0 && (
-              <Badge variant="success" className="text-[11px]">
-                {videoCount} video hợp lệ
-              </Badge>
-            )}
+            <div className="flex items-center gap-1.5">
+              {sourceFolder && videoCount > 0 && (
+                <Badge variant="success" className="text-[11px]">
+                  {videoCount} video hợp lệ
+                </Badge>
+              )}
+              {sourceFolder && videoCount === 0 && (
+                <Badge variant="destructive" className="text-[11px]">
+                  0 video (Thư mục trống)
+                </Badge>
+              )}
+            </div>
           </label>
 
           <div className="flex gap-2">
@@ -173,6 +241,18 @@ export const DistributeVideosModal: React.FC<DistributeVideosModalProps> = ({
               value={sourceFolder || "Chưa chọn thư mục nào..."}
               className="flex-1 truncate rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700"
             />
+            {sourceFolder && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshSourceFolder}
+                title="Quét lại thư mục này"
+                className="shrink-0 bg-white px-2.5 text-xs text-slate-600 hover:text-slate-900"
+              >
+                <RotateCw className="h-3.5 w-3.5" />
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -180,8 +260,20 @@ export const DistributeVideosModal: React.FC<DistributeVideosModalProps> = ({
               onClick={handleSelectSourceFolder}
               className="shrink-0 bg-white text-xs"
             >
-              Chọn Thư Mục
+              {sourceFolder ? "Đổi Thư Mục" : "Chọn Thư Mục"}
             </Button>
+            {sourceFolder && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleClearSourceFolder}
+                title="Bỏ chọn thư mục"
+                className="shrink-0 px-2 text-xs text-slate-400 hover:text-rose-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
         </div>
 

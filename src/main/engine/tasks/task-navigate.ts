@@ -29,13 +29,11 @@ export async function dismissPopups(
   const modalSelectors = [
     'div[role="dialog"]',
     "div.TUXModal:not(.TUXModal-overlay)",
-    'div[class*="common-modal"]:not([class*="overlay"])',
-    'div[class*="modal"]:not([class*="overlay"])',
-    'div[class*="Modal"]:not([class*="overlay"])',
+    'div[class*="common-modal"]:not([class*="overlay"]):not([class*="portal"])',
+    'div[class*="modal"]:not([class*="overlay"]):not([class*="portal"])',
+    'div[class*="Modal"]:not([class*="overlay"]):not([class*="portal"])',
     ".react-joyride__tooltip",
     '[class*="tutorial-tooltip"]',
-    'div[class*="portal"]',
-    'div[class*="dialog"]',
   ];
 
   let dismissedAny = false;
@@ -46,17 +44,37 @@ export async function dismissPopups(
       for (const modal of modals) {
         try {
           if (!(await modal.isVisible())) continue;
+
+          // BẢO VỆ TUYỆT ĐỐI: Bỏ qua nếu element này là container chứa form/video chính
+          const isMainForm = await modal.$(
+            'button[data-e2e="post_video_button"], [class*="upload-progress"], input[type="file"], .caption-editor, [contenteditable="true"], button:has-text("Save draft"), button:has-text("Discard")',
+          );
+          if (isMainForm) continue;
+
           const text = (await modal.innerText().catch(() => "")) || "";
           if (!text.trim()) continue;
 
           // 1. Popup "Turn on automatic content checks" -> Cancel
+          // (Chỉ match đúng popup hệ thống yêu cầu bật kiểm tra, không match phần Content check lite trên form chính)
           if (
-            text.includes("automatic content checks") ||
-            text.includes("content checks") ||
-            text.includes("Turn on automatic")
+            (text.includes("Turn on automatic") && text.includes("check")) ||
+            text.includes("Turn on automatic content checks")
           ) {
-            const cancelBtn = await modal.$('button:has-text("Cancel")');
+            const cancelBtn = await modal.$(
+              'button:has-text("Cancel"), button:has-text("Not now")',
+            );
             if (cancelBtn && (await cancelBtn.isVisible())) {
+              // Tuyệt đối không click nếu là nút Cancel của thanh tải video
+              const isUploadCancel = await cancelBtn
+                .evaluate(
+                  (el: HTMLElement) =>
+                    !!el.closest(
+                      '.upload-progress, [class*="upload"], .upload-stage, .file-info',
+                    ),
+                )
+                .catch(() => false);
+              if (isUploadCancel) continue;
+
               await cancelBtn.scrollIntoViewIfNeeded().catch(() => {});
               try {
                 await cancelBtn.click({ timeout: 3000 });
@@ -142,6 +160,19 @@ export async function dismissPopups(
           for (const btnSel of genericBtnSelectors) {
             const btn = await modal.$(btnSel);
             if (btn && (await btn.isVisible())) {
+              // Bỏ qua nếu là các nút tác vụ chính
+              const btnText = (
+                (await btn.innerText().catch(() => "")) || ""
+              ).toLowerCase();
+              if (
+                btnText.includes("post") ||
+                btnText.includes("schedule") ||
+                btnText.includes("draft") ||
+                btnText.includes("discard")
+              ) {
+                continue;
+              }
+
               await btn.scrollIntoViewIfNeeded().catch(() => {});
               try {
                 await btn.click({ timeout: 3000 });
