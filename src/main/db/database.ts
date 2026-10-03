@@ -367,8 +367,25 @@ export const profileRepo = {
         mail_ao = COALESCE(excluded.mail_ao, profiles.mail_ao),
         proxy = COALESCE(excluded.proxy, profiles.proxy),
         cookies = COALESCE(excluded.cookies, profiles.cookies),
+        video_folder = CASE
+          WHEN profiles.video_folder IS NOT NULL AND trim(profiles.video_folder) != '' THEN profiles.video_folder
+          ELSE COALESCE(excluded.video_folder, profiles.video_folder)
+        END,
+        enable_music = COALESCE(excluded.enable_music, profiles.enable_music),
+        music_mode = COALESCE(excluded.music_mode, profiles.music_mode),
+        favorite_index = COALESCE(excluded.favorite_index, profiles.favorite_index),
+        music_volume = COALESCE(excluded.music_volume, profiles.music_volume),
+        schedule_mode = COALESCE(excluded.schedule_mode, profiles.schedule_mode),
+        schedule_interval = COALESCE(excluded.schedule_interval, profiles.schedule_interval),
+        golden_hours = COALESCE(excluded.golden_hours, profiles.golden_hours),
         followers_count = CASE WHEN excluded.followers_count > 0 THEN excluded.followers_count ELSE profiles.followers_count END,
-        stats_updated_at = COALESCE(excluded.stats_updated_at, profiles.stats_updated_at)
+        stats_updated_at = COALESCE(excluded.stats_updated_at, profiles.stats_updated_at),
+        last_run = CASE
+          WHEN excluded.last_run IS NULL THEN profiles.last_run
+          WHEN profiles.last_run IS NULL THEN excluded.last_run
+          WHEN COALESCE(datetime(excluded.last_run), excluded.last_run) > COALESCE(datetime(profiles.last_run), profiles.last_run) THEN excluded.last_run
+          ELSE profiles.last_run
+        END
     `);
 
     const tx = db.transaction((items: any[]) => {

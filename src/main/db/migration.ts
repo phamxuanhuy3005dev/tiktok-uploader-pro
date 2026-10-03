@@ -116,9 +116,11 @@ export function importProfilesFromJsonString(content: string): number {
           item.pass_email !== undefined ? item.pass_email : existing.pass_email,
         mail_ao: item.mail_ao !== undefined ? item.mail_ao : existing.mail_ao,
         video_folder:
-          item.video_folder !== undefined
-            ? item.video_folder
-            : existing.video_folder,
+          existing.video_folder && existing.video_folder.trim()
+            ? existing.video_folder
+            : item.video_folder !== undefined
+              ? item.video_folder
+              : existing.video_folder,
         proxy: item.proxy !== undefined ? item.proxy : existing.proxy,
         enable_music:
           item.enable_music !== undefined
@@ -147,8 +149,18 @@ export function importProfilesFromJsonString(content: string): number {
           item.stats_updated_at !== undefined
             ? item.stats_updated_at
             : existing.stats_updated_at,
-        last_run:
-          item.last_run !== undefined ? item.last_run : existing.last_run,
+        last_run: (() => {
+          if (!item.last_run) return existing.last_run;
+          if (!existing.last_run) return item.last_run;
+          try {
+            const itemTime = new Date(item.last_run).getTime();
+            const existTime = new Date(existing.last_run).getTime();
+            if (!isNaN(itemTime) && !isNaN(existTime)) {
+              return itemTime > existTime ? item.last_run : existing.last_run;
+            }
+          } catch (_) {}
+          return item.last_run || existing.last_run;
+        })(),
       });
       count++;
     }

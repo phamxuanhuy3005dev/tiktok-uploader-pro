@@ -58,4 +58,45 @@ describe("getCooldownStatus", () => {
     expect(status.isUnderCooldown).toBe(false);
     expect(status.isNurturing).toBe(false);
   });
+
+  it("Đồng bộ giữa 2 máy: Khi import kênh từ máy A có last_run 4h trước sang máy B thì máy B phải giữ nguyên cooldown còn ~20h", () => {
+    // Mô phỏng máy A vừa chạy xong 4 tiếng trước
+    const fourHoursAgo = new Date(Date.now() - 4 * 3600 * 1000).toISOString();
+    const exportedProfileFromMachineA = {
+      name: "kenh_nuoi_us_01",
+      group_name: "Nuôi US",
+      last_run: fourHoursAgo,
+    };
+
+    // Mô phỏng máy B import JSON profile này
+    const importedOnMachineB = { ...exportedProfileFromMachineA };
+    const statusOnMachineB = getCooldownStatus(
+      importedOnMachineB.last_run,
+      importedOnMachineB.group_name,
+    );
+
+    expect(statusOnMachineB.isUnderCooldown).toBe(true);
+    expect(statusOnMachineB.remainingHours).toBeGreaterThanOrEqual(19);
+    expect(statusOnMachineB.remainingHours).toBeLessThanOrEqual(20);
+    expect(statusOnMachineB.remainingText).toMatch(/(19|20)h/);
+  });
+
+  it("Cơ chế giải quyết xung đột: Luôn giữ mốc last_run mới nhất giữa 2 máy", () => {
+    const timeMachineA = new Date(Date.now() - 2 * 3600 * 1000).toISOString(); // 2h trước (mới hơn)
+    const timeMachineB = new Date(Date.now() - 10 * 3600 * 1000).toISOString(); // 10h trước (cũ hơn)
+
+    const resolveLastRun = (importedTime: string | null, existingTime: string | null) => {
+      if (!importedTime) return existingTime;
+      if (!existingTime) return importedTime;
+      return new Date(importedTime).getTime() > new Date(existingTime).getTime()
+        ? importedTime
+        : existingTime;
+    };
+
+    // Trường hợp 1: File import từ máy A mới hơn dữ liệu cũ trên máy B -> Chọn mốc máy A
+    expect(resolveLastRun(timeMachineA, timeMachineB)).toBe(timeMachineA);
+
+    // Trường hợp 2: File import từ máy A cũ hơn dữ liệu vừa chạy trên máy B -> Giữ mốc máy B
+    expect(resolveLastRun(timeMachineB, timeMachineA)).toBe(timeMachineA);
+  });
 });

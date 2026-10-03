@@ -1,6 +1,7 @@
 import {
   AlertCircle,
   CheckCircle2,
+  Clock,
   FileCode2,
   FolderOpen,
   Globe,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { getCooldownStatus } from "../utils/cooldown";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { Modal } from "./ui/Modal";
@@ -47,6 +49,9 @@ interface ParsedAccount {
   schedule_mode?: string;
   schedule_interval?: number;
   golden_hours?: string;
+  last_run?: string | null;
+  followers_count?: number;
+  stats_updated_at?: string | null;
 }
 
 export const BulkImportModal: React.FC<BulkImportModalProps> = ({
@@ -161,6 +166,12 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                 ? Number(item.schedule_interval)
                 : 10,
             golden_hours: item.golden_hours || "11:30,17:30,20:00",
+            last_run: item.last_run || null,
+            followers_count:
+              item.followers_count !== undefined
+                ? Number(item.followers_count)
+                : 0,
+            stats_updated_at: item.stats_updated_at || null,
           };
         })
         .filter((p) => p.name.length > 0);
@@ -178,6 +189,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
   const stats = useMemo(() => {
     let withCookies = 0;
     let withProxy = 0;
+    let underCooldown = 0;
     for (const acc of parsedAccounts) {
       if (
         acc.cookies &&
@@ -188,11 +200,16 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
       if (acc.proxy && acc.proxy.trim().length > 0) {
         withProxy++;
       }
+      const cd = getCooldownStatus(acc.last_run, acc.group_name);
+      if (cd.isUnderCooldown) {
+        underCooldown++;
+      }
     }
     return {
       total: parsedAccounts.length,
       withCookies,
       withProxy,
+      underCooldown,
     };
   }, [parsedAccounts]);
 
@@ -235,6 +252,9 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           schedule_mode: acc.schedule_mode || "auto_increment",
           schedule_interval: acc.schedule_interval || 10,
           golden_hours: acc.golden_hours || "11:30,17:30,20:00",
+          last_run: acc.last_run || null,
+          followers_count: acc.followers_count || 0,
+          stats_updated_at: acc.stats_updated_at || null,
         };
       });
 
@@ -356,16 +376,22 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                     <Globe className="h-3.5 w-3.5" /> {stats.withProxy} có Proxy
                   </span>
                 )}
+                {stats.underCooldown > 0 && (
+                  <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-600">
+                    <Clock className="h-3.5 w-3.5" /> {stats.underCooldown} kênh đang Cooldown
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Bảng xem trước tối đa 5 profiles */}
+            {/* Bảng xem trước tối đa 8 profiles */}
             <div className="max-h-36 overflow-y-auto rounded-lg border border-slate-200 bg-white">
               <table className="w-full text-left text-[11px]">
                 <thead className="sticky top-0 border-b border-slate-100 bg-slate-50 font-semibold text-slate-600">
                   <tr>
                     <th className="px-3 py-1.5">Tên Kênh (Profile)</th>
                     <th className="px-3 py-1.5">Nhóm</th>
+                    <th className="px-3 py-1.5">Lần Chạy Cuối</th>
                     <th className="px-3 py-1.5">Cookie Phiên</th>
                     <th className="px-3 py-1.5">Proxy</th>
                   </tr>
@@ -376,6 +402,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                       acc.cookies &&
                       (acc.cookies.includes("sessionid") ||
                         acc.cookies.includes("sid_tt"));
+                    const cd = getCooldownStatus(acc.last_run, acc.group_name);
                     return (
                       <tr key={idx} className="hover:bg-slate-50">
                         <td className="px-3 py-1.5 font-bold text-slate-800">
@@ -387,6 +414,31 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                               ? newGroupName.trim()
                               : selectedGroup
                             : acc.group_name || "Mặc định"}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {acc.last_run ? (
+                            cd.isUnderCooldown ? (
+                              <span
+                                className="inline-flex items-center gap-1 font-semibold text-amber-600"
+                                title={`Lần chạy cuối: ${cd.lastRunFormatted}. Cần chờ thêm ${cd.remainingText}`}
+                              >
+                                <Clock className="h-3 w-3 animate-pulse" />
+                                <span>Chờ {cd.remainingText}</span>
+                              </span>
+                            ) : (
+                              <span
+                                className="inline-flex items-center gap-1 font-medium text-emerald-600"
+                                title={`Lần chạy trước: ${cd.lastRunFormatted}`}
+                              >
+                                <CheckCircle2 className="h-3 w-3" />
+                                <span>Đã đủ 24h</span>
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-slate-400">
+                              Chưa từng chạy
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-1.5">
                           {hasSession ? (
