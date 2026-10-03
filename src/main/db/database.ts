@@ -460,12 +460,16 @@ export const profileRepo = {
 
 export const logRepo = {
   add: (log: UploadLogRecord): void => {
+    const createdAt = log.created_at || new Date().toISOString();
     db.prepare(
       `
-      INSERT INTO upload_logs (profile_id, video_name, video_id, video_url, status, error_message)
-      VALUES (@profile_id, @video_name, @video_id, @video_url, @status, @error_message)
+      INSERT INTO upload_logs (profile_id, video_name, video_id, video_url, status, error_message, created_at)
+      VALUES (@profile_id, @video_name, @video_id, @video_url, @status, @error_message, @created_at)
     `,
-    ).run(log);
+    ).run({
+      ...log,
+      created_at: createdAt,
+    });
 
     // Tự động tỉa bớt nếu vượt quá 5,000 bản ghi lịch sử để database luôn nhẹ và sạch
     logRepo.pruneOldLogs(5000);

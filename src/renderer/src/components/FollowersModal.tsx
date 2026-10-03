@@ -2,6 +2,7 @@ import { Crown, Folder, Loader2, RefreshCw, Users, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "./ui/Button";
+import { parseDate } from "../utils/date";
 
 interface FollowersModalProps {
   isOpen: boolean;
@@ -113,11 +114,12 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({
   const formatUpdatedAt = (isoString?: string | null) => {
     if (!isoString) return "Chưa quét";
     try {
-      const date = new Date(isoString);
-      if (isNaN(date.getTime())) return "Chưa quét";
+      const date = parseDate(isoString);
+      if (!date || isNaN(date.getTime())) return "Chưa quét";
       return date.toLocaleTimeString("vi-VN", {
         hour: "2-digit",
         minute: "2-digit",
+        second: "2-digit",
         day: "2-digit",
         month: "2-digit",
       });

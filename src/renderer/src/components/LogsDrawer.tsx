@@ -11,6 +11,7 @@ import React, { useEffect, useState } from "react";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { Modal } from "./ui/Modal";
+import { formatDateTime } from "../utils/date";
 
 interface LogsDrawerProps {
   isOpen: boolean;
@@ -147,9 +148,7 @@ export const LogsDrawer: React.FC<LogsDrawerProps> = ({
                       ) : (
                         <p className="flex items-center gap-1.5 font-mono text-[11px] text-slate-400">
                           <Clock className="h-3 w-3 shrink-0 text-slate-400" />
-                          <span>
-                            {new Date(log.created_at).toLocaleString("vi-VN")}
-                          </span>
+                          <span>{formatDateTime(log.created_at)}</span>
                         </p>
                       )}
                     </div>

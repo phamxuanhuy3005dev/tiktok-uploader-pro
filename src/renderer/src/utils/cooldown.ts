@@ -29,6 +29,8 @@ export interface CooldownStatus {
   lastRunFormatted: string;
 }
 
+import { parseDate } from "./date";
+
 export function getCooldownStatus(
   lastRun?: string | null,
   groupName?: string | null,
@@ -48,8 +50,8 @@ export function getCooldownStatus(
     };
   }
 
-  const lastTime = new Date(lastRun).getTime();
-  if (isNaN(lastTime)) {
+  const lastRunDate = parseDate(lastRun);
+  if (!lastRunDate) {
     return {
       isNurturing,
       isUnderCooldown: false,
@@ -62,6 +64,7 @@ export function getCooldownStatus(
     };
   }
 
+  const lastTime = lastRunDate.getTime();
   const elapsedMs = Date.now() - lastTime;
   const cooldownDuration = 24 * 60 * 60 * 1000; // 24 giờ
   const remainingMs = cooldownDuration - elapsedMs;
@@ -78,10 +81,10 @@ export function getCooldownStatus(
     ? `${remainingHours}h ${remainingMinutes}m`
     : "Đã đủ 24h";
 
-  const lastRunDate = new Date(lastRun);
   const lastRunFormatted = lastRunDate.toLocaleTimeString("vi-VN", {
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     day: "2-digit",
     month: "2-digit",
   });

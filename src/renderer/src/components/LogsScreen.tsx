@@ -18,6 +18,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
+import { formatDateTime, formatTime } from "../utils/date";
 
 interface LogsScreenProps {
   liveLogs?: any[];
@@ -393,8 +394,7 @@ export const LogsScreen: React.FC<LogsScreenProps> = () => {
                         )}
                       </div>
                       <p className="mt-0.5 text-xs text-slate-400">
-                        Đăng gần nhất:{" "}
-                        {new Date(channel.lastRunTime).toLocaleString("vi-VN")}
+                        Đăng gần nhất: {formatDateTime(channel.lastRunTime)}
                       </p>
                     </div>
                   </div>
@@ -438,10 +438,7 @@ export const LogsScreen: React.FC<LogsScreenProps> = () => {
                               {vid.video_name}
                             </span>
                             <span className="text-[11px] text-slate-400">
-                              •{" "}
-                              {new Date(vid.created_at).toLocaleTimeString(
-                                "vi-VN",
-                              )}
+                              • {formatTime(vid.created_at)}
                             </span>
                           </div>
 
@@ -513,7 +510,7 @@ export const LogsScreen: React.FC<LogsScreenProps> = () => {
                     className="transition-colors hover:bg-slate-50/60"
                   >
                     <td className="whitespace-nowrap px-4 py-3 font-mono text-[11px] text-slate-400">
-                      {new Date(log.created_at).toLocaleString("vi-VN")}
+                      {formatDateTime(log.created_at)}
                     </td>
 
                     <td className="whitespace-nowrap px-4 py-3">
