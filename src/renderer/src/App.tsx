@@ -46,9 +46,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./components/ui/Select";
+import appIcon from "./assets/icon.png";
 import { getCooldownStatus, isNurturingGroup } from "./utils/cooldown";
 
 export const App: React.FC = () => {
+  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>("profiles");
   const [selectedGroup, setSelectedGroup] = useState<string>("all");
@@ -120,9 +122,39 @@ export const App: React.FC = () => {
   });
 
   useEffect(() => {
-    loadProfiles();
-    loadGroupsList();
-    loadConcurrency();
+    // Tải toàn bộ dữ liệu quan trọng ban đầu trước khi hiển thị giao diện
+    const initApp = async () => {
+      try {
+        const [profilesData, groupsData, concurrencyData, statsData] =
+          await Promise.all([
+            window.api.getProfiles().catch(() => []),
+            window.api.getGroups().catch(() => []),
+            window.api.getConcurrency().catch(() => 2),
+            window.api.getQueueStats().catch(() => ({ runningProfiles: [] })),
+          ]);
+
+        setProfiles(profilesData || []);
+        if (Array.isArray(groupsData)) {
+          setDbGroups(
+            groupsData
+              .map((g: any) => (typeof g === "string" ? g : g?.name))
+              .filter(Boolean),
+          );
+        }
+        if (typeof concurrencyData === "number" && concurrencyData > 0) {
+          setConcurrency(concurrencyData);
+        }
+        if (statsData) {
+          setQueueStats(statsData);
+        }
+      } catch (err) {
+        console.error("Lỗi khởi tạo ứng dụng:", err);
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
+
+    initApp();
 
     // Lắng nghe sự kiện upload progress từ Main process
     const unsubscribeProgress = window.api.onUploadProgress((event) => {
@@ -748,6 +780,26 @@ export const App: React.FC = () => {
   };
 
   const runningCount = queueStats.runningProfiles?.length || 0;
+
+  if (isInitialLoading) {
+    return (
+      <div className="flex h-screen w-screen select-none flex-col items-center justify-center bg-slate-50">
+        <div className="relative mb-5 flex h-20 w-20 items-center justify-center rounded-3xl border border-slate-200/80 bg-white shadow-lg shadow-slate-200/50">
+          <img src={appIcon} alt="Logo" className="h-12 w-12 object-contain" />
+        </div>
+        <h1 className="text-xl font-bold tracking-tight text-slate-800">
+          TikTok Uploader Pro
+        </h1>
+        <p className="mt-1 text-xs text-slate-500">
+          Hệ thống Quản lý Kênh & Tự động Đăng Video
+        </p>
+        <div className="mt-8 flex items-center gap-3 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-xs font-medium text-slate-600 shadow-sm">
+          <Loader2 className="h-4 w-4 animate-spin text-sky-500" />
+          <span>Đang nạp dữ liệu hệ thống...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
