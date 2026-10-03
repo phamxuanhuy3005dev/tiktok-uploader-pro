@@ -139,6 +139,16 @@ export function importProfilesFromJsonString(content: string): number {
             ? Number(item.schedule_interval)
             : existing.schedule_interval,
         golden_hours: item.golden_hours || existing.golden_hours,
+        followers_count:
+          item.followers_count !== undefined
+            ? Number(item.followers_count)
+            : existing.followers_count,
+        stats_updated_at:
+          item.stats_updated_at !== undefined
+            ? item.stats_updated_at
+            : existing.stats_updated_at,
+        last_run:
+          item.last_run !== undefined ? item.last_run : existing.last_run,
       });
       count++;
     }
